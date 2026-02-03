@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Кабинет покупателя - Цветочный B2B</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="assets/mock-data.js"></script>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="text-2xl font-bold text-gray-800">Цветочный B2B</div>
+                <nav class="hidden md:flex space-x-6">
+                    <a href="index.html" class="text-gray-600 hover:text-indigo-600">Витрина</a>
+                    <a href="buyer.html" class="text-indigo-600 font-medium">Кабинет покупателя</a>
+                    <a href="seller.html" class="text-gray-600 hover:text-indigo-600">Кабинет продавца</a>
+                </nav>
+                <button class="bg-emerald-500 text-white px-4 py-2 rounded-lg hover:bg-emerald-600">Регистрация</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">Личный кабинет покупателя</h1>
+        <p class="text-gray-600 mb-8">Мульти-корзина и управление заказами</p>
+
+        <!-- Cart Section -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">Корзина</h2>
+                <button class="text-gray-600 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50">📄 Загрузить список покупок</button>
+            </div>
+
+            <div id="cart-container"></div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-gradient-to-r from-indigo-500 to-purple-500 rounded-lg p-6 text-white">
+                <div class="text-sm opacity-90 mb-2">Общая сумма</div>
+                <div id="total-spent" class="text-3xl font-bold">0 ₽</div>
+            </div>
+            <div class="bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg p-6 text-white">
+                <div class="text-sm opacity-90 mb-2">Ваша экономия</div>
+                <div class="text-3xl font-bold">0 ₽</div>
+            </div>
+            <div class="bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg p-6 text-white">
+                <div class="text-sm opacity-90 mb-2">Количество заказов</div>
+                <div id="orders-count" class="text-3xl font-bold">0 шт.</div>
+            </div>
+        </div>
+
+        <!-- Order History -->
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">История заказов</h2>
+            <div id="orders-container"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            renderCart();
+            renderOrders();
+            updateStats();
+        });
+
+        function renderCart() {
+            const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+            const container = document.getElementById('cart-container');
+
+            if (cart.length === 0) {
+                container.innerHTML = '<div class="text-center py-12 text-gray-500">Корзина пуста</div>';
+                return;
+            }
+
+            container.innerHTML = cart.map((supplier, idx) => {
+                const total = supplier.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+                const totalItems = supplier.items.reduce((sum, item) => sum + item.quantity, 0);
+
+                return `
+                    <div class="mb-8 border-b pb-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">${supplier.supplier_name}</h3>
+                        ${supplier.items.map((item, itemIdx) => `
+                            <div class="flex items-center gap-4 mb-4 pb-4 border-b">
+                                <div class="w-16 h-16 bg-gray-200 rounded flex items-center justify-center text-2xl">🌸</div>
+                                <div class="flex-1">
+                                    <h4 class="font-semibold text-gray-800">${item.name}</h4>
+                                    <div class="text-sm text-gray-500">${item.price} ₽ / шт • Остаток: ${item.stock} шт</div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="updateCartQuantity(${idx}, ${itemIdx}, -1)" class="w-8 h-8 bg-gray-200 rounded hover:bg-gray-300">−</button>
+                                    <input type="number" value="${item.quantity}" min="1" max="${item.stock}" class="w-16 text-center border rounded" readonly>
+                                    <button onclick="updateCartQuantity(${idx}, ${itemIdx}, 1)" class="w-8 h-8 bg-gray-200 rounded hover:bg-gray-300">+</button>
+                                </div>
+                                <div class="text-xl font-bold text-gray-800 w-32 text-right">${(item.price * item.quantity).toLocaleString()} ₽</div>
+                                <button onclick="removeFromCart(${idx}, ${itemIdx})" class="text-red-500 hover:text-red-700">✕</button>
+                            </div>
+                        `).join('')}
+                        <div class="flex justify-between items-center mt-4">
+                            <div class="text-gray-600">
+                                Товаров: ${totalItems} • Время в пути: ~15 мин
+                            </div>
+                            <div class="text-right">
+                                <div class="text-2xl font-bold text-gray-800 mb-2">Итого: ${total.toLocaleString()} ₽</div>
+                                <button onclick="placeOrder(${idx})" class="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 font-semibold">Оформить заказ</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateCartQuantity(supplierIdx, itemIdx, delta) {
+            const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+            const item = cart[supplierIdx].items[itemIdx];
+            const newQty = item.quantity + delta;
+
+            if (newQty >= 1 && newQty <= item.stock) {
+                item.quantity = newQty;
+                localStorage.setItem('cart', JSON.stringify(cart));
+                renderCart();
+                updateStats();
+            }
+        }
+
+        function removeFromCart(supplierIdx, itemIdx) {
+            const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+            cart[supplierIdx].items.splice(itemIdx, 1);
+
+            if (cart[supplierIdx].items.length === 0) {
+                cart.splice(supplierIdx, 1);
+            }
+
+            localStorage.setItem('cart', JSON.stringify(cart));
+            renderCart();
+            updateStats();
+        }
+
+        function placeOrder(supplierIdx) {
+            if (confirm('Оформить заказ?')) {
+                const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+                const supplier = cart[supplierIdx];
+                alert(`Заказ от ${supplier.supplier_name} оформлен! (Демо)`);
+
+                // Remove from cart
+                cart.splice(supplierIdx, 1);
+                localStorage.setItem('cart', JSON.stringify(cart));
+                renderCart();
+                updateStats();
+            }
+        }
+
+        function renderOrders() {
+            const container = document.getElementById('orders-container');
+            container.innerHTML = MOCK_DATA.orders.map(order => `
+                <div class="border rounded-lg p-4 mb-4">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <div class="font-semibold text-gray-800">Заказ ${order.order_number}</div>
+                            <div class="text-sm text-gray-500">${order.supplier.name}</div>
+                            <div class="text-sm text-gray-500">${order.date}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xl font-bold text-gray-800">${order.total.toLocaleString()} ₽</div>
+                            <span class="inline-block px-3 py-1 rounded-full text-sm ${
+                                order.status === 'pending' ? 'bg-orange-100 text-orange-800' :
+                                order.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            }">${order.status_text}</span>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-600 mb-2">${order.phone}</div>
+                    ${order.timeline ? `
+                        <details class="mt-4">
+                            <summary class="cursor-pointer text-blue-600 hover:text-blue-800">Детали доставки</summary>
+                            <div class="mt-4 pl-4 border-l-2 border-gray-300 space-y-4">
+                                ${order.timeline.map(step => `
+                                    <div class="flex items-start gap-3">
+                                        <div class="w-5 h-5 rounded-full ${step.completed ? 'bg-green-500' : step.current ? 'bg-blue-500' : 'bg-gray-300'}"></div>
+                                        <div>
+                                            <div class="font-medium ${step.completed || step.current ? 'text-gray-800' : 'text-gray-500'}">${step.label}</div>
+                                            <div class="text-sm text-gray-500">${step.datetime || step.expected}</div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </details>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        function updateStats() {
+            const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+            const total = cart.reduce((sum, supplier) =>
+                sum + supplier.items.reduce((s, item) => s + item.price * item.quantity, 0), 0
+            );
+
+            document.getElementById('total-spent').textContent = total.toLocaleString() + ' ₽';
+            document.getElementById('orders-count').textContent = MOCK_DATA.orders.length + ' шт.';
+        }
+    </script>
+</body>
+</html>

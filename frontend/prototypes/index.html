@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Цветочный B2B - Витрина</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="assets/mock-data.js"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="text-2xl font-bold text-gray-800">Цветочный B2B</div>
+                <nav class="hidden md:flex space-x-6">
+                    <a href="index.html" class="text-indigo-600 font-medium">Витрина</a>
+                    <a href="buyer.html" class="text-gray-600 hover:text-indigo-600">Кабинет покупателя</a>
+                    <a href="seller.html" class="text-gray-600 hover:text-indigo-600">Кабинет продавца</a>
+                </nav>
+                <div class="flex items-center space-x-4">
+                    <button class="text-gray-600 hover:text-indigo-600">Войти</button>
+                    <button class="bg-emerald-500 text-white px-4 py-2 rounded-lg hover:bg-emerald-600">Регистрация</button>
+                    <a href="buyer.html" class="relative">
+                        <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+                        </svg>
+                        <span id="cart-badge" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">0</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="gradient-bg text-white py-16">
+        <div class="container mx-auto px-4 text-center">
+            <h1 class="text-4xl md:text-5xl font-bold mb-4">Самый быстрый поиск и закупка<br>цветов для вашего бизнеса</h1>
+            <p class="text-xl mb-8 opacity-90">Единая платформа для поставщиков и флористов. Найдите лучшие<br>предложения за 5 минут.</p>
+            <button onclick="document.getElementById('catalog').scrollIntoView({behavior:'smooth'})" class="bg-white text-indigo-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100">СМОТРЕТЬ КАТАЛОГ</button>
+        </div>
+    </section>
+
+    <!-- Statistics -->
+    <section class="bg-white py-8 shadow-sm">
+        <div class="container mx-auto px-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+                <div>
+                    <div class="text-4xl font-bold text-indigo-600 mb-2">50+</div>
+                    <div class="text-gray-600">Поставщиков</div>
+                </div>
+                <div>
+                    <div class="text-4xl font-bold text-indigo-600 mb-2">1000+</div>
+                    <div class="text-gray-600">Сортов цветов</div>
+                </div>
+                <div>
+                    <div class="text-4xl font-bold text-indigo-600 mb-2">0%</div>
+                    <div class="text-gray-600">Комиссия</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Catalog Section -->
+    <section id="catalog" class="container mx-auto px-4 py-12">
+        <!-- Search -->
+        <div class="mb-8">
+            <input
+                type="text"
+                id="search-input"
+                placeholder="Умный поиск по названию, сорту или поставщику..."
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            >
+        </div>
+
+        <!-- Filters -->
+        <div class="mb-8">
+            <div class="flex flex-wrap gap-3 mb-4">
+                <button onclick="filterByType('all')" class="filter-btn active px-4 py-2 rounded-full bg-indigo-600 text-white hover:bg-indigo-700">Все</button>
+                <button onclick="filterByType('rose')" class="filter-btn px-4 py-2 rounded-full bg-white text-gray-700 border border-gray-300 hover:bg-gray-50">🌹 Розы</button>
+                <button onclick="filterByType('tulip')" class="filter-btn px-4 py-2 rounded-full bg-white text-gray-700 border border-gray-300 hover:bg-gray-50">🌷 Тюльпаны</button>
+                <button onclick="filterByType('peony')" class="filter-btn px-4 py-2 rounded-full bg-white text-gray-700 border border-gray-300 hover:bg-gray-50">🌸 Пионы</button>
+                <button onclick="filterByType('hydrangea')" class="filter-btn px-4 py-2 rounded-full bg-white text-gray-700 border border-gray-300 hover:bg-gray-50">💐 Гортензия</button>
+                <button onclick="filterByType('chrysanthemum')" class="filter-btn px-4 py-2 rounded-full bg-white text-gray-700 border border-gray-300 hover:bg-gray-50">🌼 Хризантема</button>
+                <button onclick="filterByType('lily')" class="filter-btn px-4 py-2 rounded-full bg-white text-gray-700 border border-gray-300 hover:bg-gray-50">🌺 Лилия</button>
+            </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="flex justify-between items-center mb-6">
+            <div class="text-gray-600">Найдено: <span id="results-count">0</span> товаров</div>
+            <select id="sort-select" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                <option value="default">Цена: по возрастанию</option>
+                <option value="price_desc">Цена: по убыванию</option>
+                <option value="name_asc">По названию</option>
+            </select>
+        </div>
+
+        <!-- Product Grid -->
+        <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-8 mt-16">
+        <div class="container mx-auto px-4 text-center">
+            <p>&copy; 2025 Цветочный B2B. Все права защищены.</p>
+        </div>
+    </footer>
+
+    <script>
+        let currentFilters = { type: 'all', search: '' };
+        let currentSort = 'default';
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateCartBadge();
+            renderProducts();
+
+            // Search input
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                currentFilters.search = e.target.value;
+                renderProducts();
+            });
+
+            // Sort select
+            document.getElementById('sort-select').addEventListener('change', (e) => {
+                currentSort = e.target.value;
+                renderProducts();
+            });
+        });
+
+        function filterByType(type) {
+            currentFilters.type = type;
+
+            // Update button styles
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-indigo-600', 'text-white');
+                btn.classList.add('bg-white', 'text-gray-700', 'border', 'border-gray-300');
+            });
+            event.target.classList.add('active', 'bg-indigo-600', 'text-white');
+            event.target.classList.remove('bg-white', 'text-gray-700', 'border', 'border-gray-300');
+
+            renderProducts();
+        }
+
+        function renderProducts() {
+            const filtered = MockDataHelpers.filterProducts(currentFilters);
+            const sorted = MockDataHelpers.sortProducts(filtered, currentSort);
+
+            document.getElementById('results-count').textContent = sorted.length;
+
+            const grid = document.getElementById('product-grid');
+            grid.innerHTML = sorted.map(product => `
+                <div class="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                    <div class="h-48 bg-gray-200 flex items-center justify-center">
+                        <span class="text-6xl">${getProductEmoji(product.product_type)}</span>
+                    </div>
+                    <div class="p-4">
+                        <h3 class="font-semibold text-gray-800 mb-1">${product.name}</h3>
+                        <div class="text-sm text-gray-500 mb-2">${product.supplier}</div>
+                        <div class="flex items-center justify-between text-sm text-gray-600 mb-3">
+                            <span>📍 ${product.distance_km} км</span>
+                            <span>⏱ ~${product.delivery_time_min} мин</span>
+                        </div>
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <div class="text-2xl font-bold text-gray-800">${product.price} ₽</div>
+                                <div class="text-sm text-gray-500">/${product.unit}</div>
+                            </div>
+                            <div class="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">Остаток: ${product.stock}</div>
+                        </div>
+                        <div class="flex items-center gap-2 mb-3">
+                            <button onclick="updateQuantity('${product.id}', -1)" class="w-8 h-8 bg-gray-200 rounded hover:bg-gray-300">−</button>
+                            <input type="number" id="qty-${product.id}" value="10" min="1" max="${product.stock}" class="w-16 text-center border border-gray-300 rounded">
+                            <button onclick="updateQuantity('${product.id}', 1)" class="w-8 h-8 bg-gray-200 rounded hover:bg-gray-300">+</button>
+                        </div>
+                        <button onclick="addToCart('${product.id}')" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium">В корзину</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getProductEmoji(type) {
+            const emojis = {
+                rose: '🌹',
+                tulip: '🌷',
+                peony: '🌸',
+                hydrangea: '💐',
+                chrysanthemum: '🌼',
+                lily: '🌺'
+            };
+            return emojis[type] || '🌻';
+        }
+
+        function updateQuantity(productId, delta) {
+            const input = document.getElementById(`qty-${productId}`);
+            const newValue = parseInt(input.value) + delta;
+            const product = MOCK_DATA.products.find(p => p.id === productId);
+            if (newValue >= 1 && newValue <= product.stock) {
+                input.value = newValue;
+            }
+        }
+
+        function addToCart(productId) {
+            const product = MOCK_DATA.products.find(p => p.id === productId);
+            const quantity = parseInt(document.getElementById(`qty-${productId}`).value);
+
+            // Get cart from localStorage
+            let cart = JSON.parse(localStorage.getItem('cart') || '[]');
+
+            // Find or create supplier group
+            let supplierGroup = cart.find(g => g.supplier_id === product.supplier_id);
+            if (!supplierGroup) {
+                supplierGroup = {
+                    supplier_id: product.supplier_id,
+                    supplier_name: product.supplier,
+                    items: []
+                };
+                cart.push(supplierGroup);
+            }
+
+            // Add or update item
+            const existingItem = supplierGroup.items.find(i => i.product_id === productId);
+            if (existingItem) {
+                existingItem.quantity += quantity;
+            } else {
+                supplierGroup.items.push({
+                    product_id: productId,
+                    name: product.name,
+                    price: product.price,
+                    quantity: quantity,
+                    stock: product.stock
+                });
+            }
+
+            localStorage.setItem('cart', JSON.stringify(cart));
+            updateCartBadge();
+
+            // Show notification
+            alert(`Добавлено в корзину: ${product.name} (${quantity} шт)`);
+        }
+
+        function updateCartBadge() {
+            const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+            const total = cart.reduce((sum, group) =>
+                sum + group.items.reduce((s, item) => s + item.quantity, 0), 0
+            );
+            document.getElementById('cart-badge').textContent = total;
+        }
+    </script>
+</body>
+</html>

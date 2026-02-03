@@ -1,0 +1,1464 @@
+# Admin API Reference
+
+## Overview
+
+This document describes all admin endpoints for the B2B Flower Market Platform.
+
+The API enables:
+- Supplier and import management
+- Dictionary-driven normalization configuration
+- Normalized SKU management
+- Manual review workflow (propose → review → confirm)
+- Offer publishing
+
+## Authentication
+
+**MVP**: No authentication required.
+**Production**: Add JWT-based authentication with admin roles.
+
+## Base URL
+
+Local development: `http://localhost:8000`
+
+## API Conventions
+
+- All timestamps in UTC (ISO 8601 format)
+- All IDs are UUIDs
+- Currency: RUB (Russian Ruble) by default
+- Pagination: `limit` and `offset` query parameters
+
+---
+
+## Health
+
+### Check API Health
+
+**Endpoint**: `GET /health`
+
+**Description**: Health check with database connectivity test.
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "database": "connected"
+}
+```
+
+**Status codes**:
+- 200: Healthy
+- 503: Database unavailable
+
+---
+
+## Suppliers
+
+### Create Supplier
+
+**Endpoint**: `POST /admin/suppliers`
+
+**Description**: Create a new supplier.
+
+**Request body**:
+```json
+{
+  "name": "Flower Base Moscow",
+  "city_id": "uuid",
+  "contact_name": "Ivan Ivanov",
+  "phone": "+79001234567",
+  "email": "info@flowerbase.ru",
+  "tier": "standard",
+  "status": "active"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "name": "Flower Base Moscow",
+  "city_id": "uuid",
+  "contact_name": "Ivan Ivanov",
+  "phone": "+79001234567",
+  "email": "info@flowerbase.ru",
+  "tier": "standard",
+  "status": "active",
+  "created_at": "2025-01-12T10:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/suppliers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Flower Base Moscow",
+    "city_id": "uuid-here",
+    "contact_name": "Ivan Ivanov",
+    "phone": "+79001234567",
+    "email": "info@flowerbase.ru",
+    "tier": "standard",
+    "status": "active"
+  }'
+```
+
+---
+
+### List Suppliers
+
+**Endpoint**: `GET /admin/suppliers`
+
+**Description**: List all suppliers with filters.
+
+**Query parameters**:
+- `status` (optional): Filter by status (active, blocked, pending)
+- `city_id` (optional): Filter by city
+- `limit` (optional, default 50): Max results
+- `offset` (optional, default 0): Pagination offset
+
+**Response** (200 OK):
+```json
+{
+  "suppliers": [
+    {
+      "id": "uuid",
+      "name": "Flower Base Moscow",
+      "tier": "key",
+      "status": "active"
+    }
+  ],
+  "total": 10,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+**Example**:
+```bash
+curl "http://localhost:8000/admin/suppliers?status=active&limit=10"
+```
+
+---
+
+## Imports
+
+### Upload CSV
+
+**Endpoint**: `POST /admin/suppliers/{supplier_id}/imports/csv`
+
+**Description**: Upload and parse a CSV price list for a supplier.
+
+**Request**: Multipart form-data with file upload
+
+**Query parameters**:
+- `description` (optional): Import description
+
+**Response** (200 OK):
+```json
+{
+  "batch_id": "uuid",
+  "supplier_id": "uuid",
+  "status": "parsed",
+  "total_rows": 150,
+  "success_rows": 145,
+  "error_rows": 5,
+  "imported_at": "2025-01-12T10:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/suppliers/{uuid}/imports/csv \
+  -F "file=@data/samples/price_list.csv" \
+  -F "description=Weekly update"
+```
+
+**Status codes**:
+- 200: Successfully imported
+- 400: Invalid file format
+- 404: Supplier not found
+- 500: Import failed
+
+**Notes**:
+- Supported formats: CSV (UTF-8, CP1251, Latin-1)
+- Max file size: Configured in server settings
+- Creates `import_batch`, `raw_rows`, `supplier_items`, `offer_candidates`
+- Status will be "parsed" on success, "failed" on error
+
+---
+
+### Get Import Summary
+
+**Endpoint**: `GET /admin/imports/{import_batch_id}`
+
+**Description**: Get import batch details and summary.
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "supplier_id": "uuid",
+  "status": "parsed",
+  "total_rows": 150,
+  "imported_at": "2025-01-12T10:00:00Z",
+  "description": "Weekly update"
+}
+```
+
+**Example**:
+```bash
+curl http://localhost:8000/admin/imports/{uuid}
+```
+
+---
+
+## Dictionary Management
+
+### Bootstrap Dictionary
+
+**Endpoint**: `POST /admin/dictionary/bootstrap`
+
+**Description**: Bootstrap dictionary with seed data (idempotent).
+
+Creates entries for:
+- Product types (rose, carnation, etc.)
+- Countries (Ecuador, Netherlands, etc.)
+- Pack types (bunch, box, etc.)
+- Stopwords (см, цветы, etc.)
+- Regex rules (spray, bush patterns)
+- Variety aliases (mondial, explorer, etc.)
+
+**Response** (200 OK):
+```json
+{
+  "created": 35,
+  "updated": 0
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/dictionary/bootstrap
+```
+
+**Notes**:
+- Idempotent: safe to run multiple times
+- Uses `INSERT ... ON CONFLICT DO UPDATE`
+- Returns counts of created/updated entries
+
+---
+
+### List Dictionary Entries
+
+**Endpoint**: `GET /admin/dictionary`
+
+**Description**: List dictionary entries with filters.
+
+**Query parameters**:
+- `dict_type` (optional): Filter by type (product_type, country, stopword, etc.)
+- `status` (optional): Filter by status (active, inactive)
+- `limit` (optional, default 100): Max results
+- `offset` (optional, default 0): Pagination offset
+
+**Response** (200 OK):
+```json
+{
+  "entries": [
+    {
+      "id": "uuid",
+      "dict_type": "product_type",
+      "key": "rose",
+      "value": "rose",
+      "synonyms": ["роза", "розы", "roses"],
+      "status": "active",
+      "meta": {}
+    }
+  ],
+  "total": 35,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+**Example**:
+```bash
+curl "http://localhost:8000/admin/dictionary?dict_type=product_type"
+```
+
+---
+
+### Create Dictionary Entry
+
+**Endpoint**: `POST /admin/dictionary`
+
+**Description**: Create a new dictionary entry.
+
+**Request body**:
+```json
+{
+  "dict_type": "product_type",
+  "key": "tulip",
+  "value": "tulip",
+  "synonyms": ["тюльпан", "тюльпаны"],
+  "status": "active",
+  "meta": {}
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "dict_type": "product_type",
+  "key": "tulip",
+  "value": "tulip",
+  "synonyms": ["тюльпан", "тюльпаны"],
+  "status": "active",
+  "created_at": "2025-01-12T10:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/dictionary \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dict_type": "product_type",
+    "key": "tulip",
+    "value": "tulip",
+    "synonyms": ["тюльпан"],
+    "status": "active"
+  }'
+```
+
+---
+
+### Update Dictionary Entry
+
+**Endpoint**: `PATCH /admin/dictionary/{entry_id}`
+
+**Description**: Update an existing dictionary entry.
+
+**Request body** (partial update):
+```json
+{
+  "synonyms": ["тюльпан", "тюльпаны", "tulips"],
+  "status": "active"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "dict_type": "product_type",
+  "key": "tulip",
+  "value": "tulip",
+  "synonyms": ["тюльпан", "тюльпаны", "tulips"],
+  "status": "active",
+  "updated_at": "2025-01-12T11:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl -X PATCH http://localhost:8000/admin/dictionary/{uuid} \
+  -H "Content-Type: application/json" \
+  -d '{"status": "inactive"}'
+```
+
+---
+
+## Normalized SKUs
+
+### Create SKU
+
+**Endpoint**: `POST /admin/skus`
+
+**Description**: Create a normalized SKU (canonical product card).
+
+**Request body**:
+```json
+{
+  "product_type": "rose",
+  "variety": "Explorer",
+  "color": null,
+  "title": "Rose Explorer",
+  "meta": {
+    "origin_default": "Ecuador",
+    "subtype": "standard"
+  }
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "product_type": "rose",
+  "variety": "Explorer",
+  "color": null,
+  "title": "Rose Explorer",
+  "meta": {
+    "origin_default": "Ecuador"
+  },
+  "created_at": "2025-01-12T10:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/skus \
+  -H "Content-Type: application/json" \
+  -d '{
+    "product_type": "rose",
+    "variety": "Explorer",
+    "title": "Rose Explorer"
+  }'
+```
+
+---
+
+### List SKUs
+
+**Endpoint**: `GET /admin/skus`
+
+**Description**: List normalized SKUs with search and filters.
+
+**Query parameters**:
+- `q` (optional): Search query (matches title, variety)
+- `product_type` (optional): Filter by product type
+- `limit` (optional, default 50): Max results
+- `offset` (optional, default 0): Pagination offset
+
+**Response** (200 OK):
+```json
+{
+  "skus": [
+    {
+      "id": "uuid",
+      "product_type": "rose",
+      "variety": "Explorer",
+      "title": "Rose Explorer"
+    }
+  ],
+  "total": 100,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+**Example**:
+```bash
+curl "http://localhost:8000/admin/skus?q=explorer&product_type=rose"
+```
+
+---
+
+### Get SKU
+
+**Endpoint**: `GET /admin/skus/{sku_id}`
+
+**Description**: Get a specific normalized SKU by ID.
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "product_type": "rose",
+  "variety": "Explorer",
+  "color": null,
+  "title": "Rose Explorer",
+  "meta": {},
+  "created_at": "2025-01-12T10:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl http://localhost:8000/admin/skus/{uuid}
+```
+
+---
+
+## Normalization
+
+### Propose Mappings
+
+**Endpoint**: `POST /admin/normalization/propose`
+
+**Description**: Run normalization to propose SKU mappings and create review tasks.
+
+Uses dictionary-driven algorithm with confidence scoring.
+
+**Request body**:
+```json
+{
+  "supplier_id": "uuid",
+  "import_batch_id": null,
+  "limit": 1000
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "processed_items": 150,
+  "proposed_mappings": 450,
+  "tasks_created": 25
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/normalization/propose \
+  -H "Content-Type: application/json" \
+  -d '{
+    "supplier_id": "uuid-here",
+    "limit": 1000
+  }'
+```
+
+**Status codes**:
+- 200: Success
+- 400: Invalid request (no filters provided)
+- 404: Supplier or batch not found
+- 500: Normalization failed
+
+**Notes**:
+- At least one of `supplier_id` or `import_batch_id` required
+- Creates `sku_mappings` (status=proposed)
+- Creates `normalization_tasks` for low confidence (<0.70)
+- Idempotent: safe to run multiple times
+- Returns summary with counts
+
+**Algorithm**:
+1. Extract attributes (product_type, variety, subtype, country)
+2. Search candidate SKUs (exact → generic → similarity)
+3. Calculate confidence for each candidate (multi-signal scoring)
+4. Create top 5 mappings (confidence > 0.10)
+5. Create task if confidence < 0.70 or ambiguous
+
+---
+
+### List Tasks
+
+**Endpoint**: `GET /admin/normalization/tasks`
+
+**Description**: List normalization tasks for manual review (enriched with context).
+
+**Query parameters**:
+- `status` (optional): Filter by status (open, in_progress, done)
+- `supplier_id` (optional): Filter by supplier
+- `limit` (optional, default 50, max 500): Max results
+- `offset` (optional, default 0): Pagination offset
+
+**Response** (200 OK):
+```json
+{
+  "tasks": [
+    {
+      "id": "uuid",
+      "supplier_item_id": "uuid",
+      "reason": "Low confidence: 0.45",
+      "priority": 150,
+      "status": "open",
+      "assigned_to": null,
+      "created_at": "2025-01-12T10:00:00Z",
+      "supplier_item": {
+        "id": "uuid",
+        "raw_name": "Роза неизвестная 60см",
+        "raw_group": null,
+        "name_norm": "роза неизвестная 60",
+        "attributes": {
+          "length_cm": 60
+        }
+      },
+      "proposed_mappings": [
+        {
+          "id": "uuid",
+          "normalized_sku_id": "uuid",
+          "confidence": 0.45,
+          "sku_title": "Rose Standard",
+          "sku_variety": null
+        }
+      ],
+      "sample_raw_rows": [
+        {
+          "raw_text": "Роза неизвестная 60см | 120"
+        }
+      ]
+    }
+  ],
+  "total": 25,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+**Example**:
+```bash
+curl "http://localhost:8000/admin/normalization/tasks?status=open&limit=10"
+```
+
+**Notes**:
+- Tasks ordered by priority DESC, created_at ASC
+- Enriched with supplier_item details, proposed mappings, and sample raw rows
+- `proposed_mappings`: Top 5 candidates with confidence scores
+- `sample_raw_rows`: Up to 3 raw CSV rows for context
+
+---
+
+### Confirm Mapping
+
+**Endpoint**: `POST /admin/normalization/confirm`
+
+**Description**: Confirm a SKU mapping (manual decision). **TRANSACTIONAL**.
+
+**Request body**:
+```json
+{
+  "supplier_item_id": "uuid",
+  "normalized_sku_id": "uuid",
+  "notes": "Confirmed after manual review"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "mapping": {
+    "id": "uuid",
+    "supplier_item_id": "uuid",
+    "normalized_sku_id": "uuid",
+    "status": "confirmed",
+    "confidence": 1.0,
+    "method": "manual",
+    "decided_at": "2025-01-12T11:00:00Z",
+    "notes": "Confirmed after manual review"
+  }
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/normalization/confirm \
+  -H "Content-Type: application/json" \
+  -d '{
+    "supplier_item_id": "uuid-here",
+    "normalized_sku_id": "uuid-here",
+    "notes": "Looks correct"
+  }'
+```
+
+**Status codes**:
+- 200: Success
+- 400: Invalid request
+- 404: Supplier item or SKU not found
+- 500: Confirm failed
+
+**Notes**:
+- **CRITICAL**: Only ONE confirmed mapping per supplier_item (DB constraint)
+- Transaction: Reject all existing mappings → Upsert confirmed → Mark tasks done
+- Sets confidence = 1.0, method = "manual"
+- Marks related normalization_task(s) as status='done'
+
+---
+
+## Publishing
+
+### Publish Offers
+
+**Endpoint**: `POST /admin/publish/suppliers/{supplier_id}`
+
+**Description**: Publish offers for supplier from latest import batch.
+
+**Response** (200 OK):
+```json
+{
+  "supplier_id": "uuid",
+  "import_batch_id": "uuid",
+  "offers_deactivated": 150,
+  "offers_created": 145,
+  "skipped_unmapped": 5
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/publish/suppliers/{uuid}
+```
+
+**Status codes**:
+- 200: Success
+- 404: Supplier not found OR no parsed imports found
+- 500: Publish failed
+
+**Notes**:
+- **Replace-all strategy**: Deactivate old offers, create new ones
+- Only publishes offer_candidates with **confirmed** mappings
+- Skips candidates without confirmed mapping (tracked in `skipped_unmapped`)
+- Updates import_batch status to 'published'
+- Old offers: is_active = false (history preserved)
+- New offers: is_active = true
+
+**Algorithm**:
+1. Validate supplier exists and is active
+2. Find latest parsed import_batch
+3. Fetch offer_candidates (validation='ok'/'warn')
+4. Fetch confirmed mappings for those candidates
+5. Deactivate all old offers (is_active=false)
+6. Create new offers for candidates with confirmed mappings
+7. Update batch status to 'published'
+
+---
+
+## Retail (Read-only)
+
+### List Offers
+
+**Endpoint**: `GET /offers`
+
+**Description**: Search published offers with comprehensive filters (public/retail endpoint).
+
+**Query parameters**:
+- `q` (optional): Full text search (title, variety, product_type)
+- `product_type` (optional): Filter by product type
+- `length_cm` (optional): Filter by exact length
+- `length_min` / `length_max` (optional): Filter by length range
+- `price_min` / `price_max` (optional): Filter by price range
+- `supplier_id` (optional): Filter by supplier
+- `is_active` (optional, default true): Filter by active status
+- `limit` (optional, default 100, max 500): Max results
+- `offset` (optional, default 0): Pagination offset
+
+**Response** (200 OK):
+```json
+{
+  "offers": [
+    {
+      "id": "uuid",
+      "supplier": {
+        "id": "uuid",
+        "name": "Flower Base Moscow"
+      },
+      "sku": {
+        "id": "uuid",
+        "product_type": "rose",
+        "variety": "Explorer",
+        "title": "Rose Explorer"
+      },
+      "length_cm": 60,
+      "pack_type": null,
+      "pack_qty": 10,
+      "price_type": "fixed",
+      "price_min": 120.00,
+      "price_max": null,
+      "currency": "RUB",
+      "tier_min_qty": null,
+      "tier_max_qty": null,
+      "availability": "unknown",
+      "stock_qty": null,
+      "published_at": "2025-01-12T10:00:00Z"
+    }
+  ],
+  "total": 150,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+**Example**:
+```bash
+# Search for roses
+curl "http://localhost:8000/offers?product_type=rose&limit=10"
+
+# Full text search
+curl "http://localhost:8000/offers?q=explorer"
+
+# Filter by price and length
+curl "http://localhost:8000/offers?price_max=150&length_cm=60"
+
+# Pagination
+curl "http://localhost:8000/offers?limit=20&offset=40"
+```
+
+**Notes**:
+- Default filter: `is_active=true` (only current offers)
+- Ordering: `published_at DESC, price_min ASC` (newest and cheapest first)
+- Joined data: Includes supplier and SKU details (no additional requests needed)
+- Text search: Case-insensitive substring match on title/variety/product_type
+- All filters are combinable
+
+---
+
+## Buyers (Admin)
+
+### Create Buyer
+
+**Endpoint**: `POST /admin/buyers`
+
+**Description**: Create a new retail buyer (admin endpoint).
+
+**Request body**:
+```json
+{
+  "name": "Flower Shop Moscow",
+  "phone": "+79001234567",
+  "email": "shop@flowers.ru",
+  "address": "123 Main Street",
+  "city_id": "uuid"
+}
+```
+
+**Response** (201 Created):
+```json
+{
+  "id": "uuid",
+  "name": "Flower Shop Moscow",
+  "phone": "+79001234567",
+  "email": "shop@flowers.ru",
+  "address": "123 Main Street",
+  "city_id": "uuid",
+  "status": "active",
+  "created_at": "2025-01-12T10:00:00Z",
+  "updated_at": "2025-01-12T10:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/buyers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Flower Shop Moscow",
+    "phone": "+79001234567",
+    "email": "shop@flowers.ru",
+    "address": "123 Main Street",
+    "city_id": "uuid-here"
+  }'
+```
+
+**Status codes**:
+- 201: Successfully created
+- 400: Validation error (phone already exists)
+- 404: City not found
+
+---
+
+### List Buyers
+
+**Endpoint**: `GET /admin/buyers`
+
+**Description**: List buyers with filters (admin endpoint).
+
+**Query parameters**:
+- `status` (optional): Filter by status (active, blocked, pending_verification)
+- `city_id` (optional): Filter by city
+- `limit` (optional, default 100): Max results
+- `offset` (optional, default 0): Pagination offset
+
+**Response** (200 OK):
+```json
+[
+  {
+    "id": "uuid",
+    "name": "Flower Shop Moscow",
+    "phone": "+79001234567",
+    "email": "shop@flowers.ru",
+    "address": "123 Main Street",
+    "city_id": "uuid",
+    "status": "active",
+    "created_at": "2025-01-12T10:00:00Z",
+    "updated_at": "2025-01-12T10:00:00Z"
+  }
+]
+```
+
+**Example**:
+```bash
+curl "http://localhost:8000/admin/buyers?status=active&limit=50"
+```
+
+---
+
+### Get Buyer
+
+**Endpoint**: `GET /admin/buyers/{buyer_id}`
+
+**Description**: Get buyer details by ID (admin endpoint).
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "name": "Flower Shop Moscow",
+  "phone": "+79001234567",
+  "email": "shop@flowers.ru",
+  "address": "123 Main Street",
+  "city_id": "uuid",
+  "status": "active",
+  "created_at": "2025-01-12T10:00:00Z",
+  "updated_at": "2025-01-12T10:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl http://localhost:8000/admin/buyers/{uuid}
+```
+
+**Status codes**:
+- 200: Success
+- 404: Buyer not found
+
+---
+
+### Update Buyer
+
+**Endpoint**: `PATCH /admin/buyers/{buyer_id}`
+
+**Description**: Update buyer information (admin endpoint).
+
+**Request body** (partial update):
+```json
+{
+  "name": "Flower Shop Updated",
+  "status": "blocked"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "name": "Flower Shop Updated",
+  "phone": "+79001234567",
+  "email": "shop@flowers.ru",
+  "address": "123 Main Street",
+  "city_id": "uuid",
+  "status": "blocked",
+  "created_at": "2025-01-12T10:00:00Z",
+  "updated_at": "2025-01-12T12:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl -X PATCH http://localhost:8000/admin/buyers/{uuid} \
+  -H "Content-Type: application/json" \
+  -d '{"status": "blocked"}'
+```
+
+**Status codes**:
+- 200: Success
+- 400: Invalid status value
+- 404: Buyer not found
+
+**Valid status values**: `active`, `blocked`, `pending_verification`
+
+---
+
+## Orders (Retail)
+
+### Create Order
+
+**Endpoint**: `POST /orders`
+
+**Description**: Create a new order (retail endpoint). MVP: No authentication - buyer_id passed in body.
+
+**Request body**:
+```json
+{
+  "buyer_id": "uuid",
+  "items": [
+    {
+      "offer_id": "uuid",
+      "quantity": 10,
+      "notes": "Please pack carefully"
+    }
+  ],
+  "delivery_address": "456 Oak Street",
+  "delivery_date": "2025-01-15",
+  "notes": "Deliver in the morning"
+}
+```
+
+**Response** (201 Created):
+```json
+{
+  "id": "uuid",
+  "buyer_id": "uuid",
+  "supplier_id": "uuid",
+  "status": "pending",
+  "total_amount": "1000.00",
+  "currency": "RUB",
+  "delivery_address": "456 Oak Street",
+  "delivery_date": "2025-01-15",
+  "notes": "Deliver in the morning",
+  "created_at": "2025-01-12T10:00:00Z",
+  "confirmed_at": null,
+  "rejected_at": null,
+  "rejection_reason": null,
+  "buyer": {
+    "id": "uuid",
+    "name": "Flower Shop Moscow",
+    "phone": "+79001234567"
+  },
+  "supplier": {
+    "id": "uuid",
+    "name": "Flower Base Moscow"
+  },
+  "items": [
+    {
+      "id": "uuid",
+      "offer_id": "uuid",
+      "normalized_sku_id": "uuid",
+      "quantity": 10,
+      "unit_price": "100.00",
+      "total_price": "1000.00",
+      "notes": "Please pack carefully"
+    }
+  ]
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "buyer_id": "uuid-here",
+    "items": [
+      {"offer_id": "uuid-here", "quantity": 10}
+    ],
+    "delivery_address": "456 Oak Street"
+  }'
+```
+
+**Status codes**:
+- 201: Successfully created
+- 400: Validation error (buyer inactive, offers not found, multiple suppliers, negative quantity, etc.)
+- 404: Buyer or offers not found
+
+**MVP Constraints**:
+- Single-supplier orders only (all items must be from same supplier)
+- Price snapshot at order creation time (unit_price saved to order_item)
+- No inventory check
+- No authentication (buyer_id in request body)
+
+---
+
+### List Orders
+
+**Endpoint**: `GET /orders`
+
+**Description**: List orders with filters (retail endpoint).
+
+**Query parameters**:
+- `buyer_id` (optional): Filter by buyer
+- `supplier_id` (optional): Filter by supplier
+- `status` (optional): Filter by status (pending, confirmed, rejected, cancelled)
+- `limit` (optional, default 50): Max results
+- `offset` (optional, default 0): Pagination offset
+
+**Response** (200 OK):
+```json
+{
+  "total": 25,
+  "limit": 50,
+  "offset": 0,
+  "orders": [
+    {
+      "id": "uuid",
+      "buyer_id": "uuid",
+      "supplier_id": "uuid",
+      "status": "pending",
+      "total_amount": "1000.00",
+      "currency": "RUB",
+      "delivery_address": "456 Oak Street",
+      "delivery_date": "2025-01-15",
+      "notes": null,
+      "created_at": "2025-01-12T10:00:00Z",
+      "confirmed_at": null,
+      "rejected_at": null,
+      "rejection_reason": null,
+      "buyer": {
+        "id": "uuid",
+        "name": "Flower Shop Moscow",
+        "phone": "+79001234567"
+      },
+      "supplier": {
+        "id": "uuid",
+        "name": "Flower Base Moscow"
+      },
+      "items": [...]
+    }
+  ]
+}
+```
+
+**Example**:
+```bash
+# List buyer's orders
+curl "http://localhost:8000/orders?buyer_id={uuid}&limit=20"
+
+# Filter by status
+curl "http://localhost:8000/orders?status=pending"
+```
+
+---
+
+### Get Order
+
+**Endpoint**: `GET /orders/{order_id}`
+
+**Description**: Get order details by ID (retail endpoint).
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "buyer_id": "uuid",
+  "supplier_id": "uuid",
+  "status": "confirmed",
+  "total_amount": "1000.00",
+  "currency": "RUB",
+  "delivery_address": "456 Oak Street",
+  "delivery_date": "2025-01-15",
+  "notes": "Deliver in the morning",
+  "created_at": "2025-01-12T10:00:00Z",
+  "confirmed_at": "2025-01-12T11:00:00Z",
+  "rejected_at": null,
+  "rejection_reason": null,
+  "buyer": {
+    "id": "uuid",
+    "name": "Flower Shop Moscow",
+    "phone": "+79001234567"
+  },
+  "supplier": {
+    "id": "uuid",
+    "name": "Flower Base Moscow"
+  },
+  "items": [
+    {
+      "id": "uuid",
+      "offer_id": "uuid",
+      "normalized_sku_id": "uuid",
+      "quantity": 10,
+      "unit_price": "100.00",
+      "total_price": "1000.00",
+      "notes": null
+    }
+  ]
+}
+```
+
+**Example**:
+```bash
+curl http://localhost:8000/orders/{uuid}
+```
+
+**Status codes**:
+- 200: Success
+- 404: Order not found
+
+---
+
+## Supplier Orders (Admin)
+
+### List Supplier Orders
+
+**Endpoint**: `GET /admin/suppliers/{supplier_id}/orders`
+
+**Description**: List orders for a supplier (supplier admin endpoint).
+
+**Query parameters**:
+- `status` (optional): Filter by status (pending, confirmed, rejected, cancelled)
+- `limit` (optional, default 50): Max results
+- `offset` (optional, default 0): Pagination offset
+
+**Response** (200 OK):
+```json
+[
+  {
+    "id": "uuid",
+    "buyer_id": "uuid",
+    "status": "pending",
+    "total_amount": "1000.00",
+    "currency": "RUB",
+    "delivery_address": "456 Oak Street",
+    "delivery_date": "2025-01-15",
+    "notes": null,
+    "created_at": "2025-01-12T10:00:00Z",
+    "confirmed_at": null,
+    "rejected_at": null,
+    "rejection_reason": null,
+    "buyer": {
+      "id": "uuid",
+      "name": "Flower Shop Moscow",
+      "phone": "+79001234567"
+    },
+    "items_count": 2
+  }
+]
+```
+
+**Example**:
+```bash
+curl "http://localhost:8000/admin/suppliers/{uuid}/orders?status=pending"
+```
+
+**Status codes**:
+- 200: Success
+- 404: Supplier not found
+
+---
+
+### Confirm Order
+
+**Endpoint**: `POST /admin/suppliers/{supplier_id}/orders/confirm`
+
+**Description**: Confirm an order (supplier action).
+
+**Request body**:
+```json
+{
+  "order_id": "uuid"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "order_id": "uuid",
+  "status": "confirmed",
+  "confirmed_at": "2025-01-12T11:00:00Z",
+  "rejected_at": null,
+  "rejection_reason": null
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/suppliers/{supplier_id}/orders/confirm \
+  -H "Content-Type: application/json" \
+  -d '{"order_id": "uuid-here"}'
+```
+
+**Status codes**:
+- 200: Success
+- 400: Order cannot be confirmed (wrong status, wrong supplier)
+- 404: Order not found
+
+**Notes**:
+- Only orders in `pending` status can be confirmed
+- Order must belong to the specified supplier
+- Sets `confirmed_at` timestamp
+- Status transition: `pending` → `confirmed`
+
+---
+
+### Reject Order
+
+**Endpoint**: `POST /admin/suppliers/{supplier_id}/orders/reject`
+
+**Description**: Reject an order with reason (supplier action).
+
+**Request body**:
+```json
+{
+  "order_id": "uuid",
+  "reason": "Out of stock"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "order_id": "uuid",
+  "status": "rejected",
+  "confirmed_at": null,
+  "rejected_at": "2025-01-12T11:00:00Z",
+  "rejection_reason": "Out of stock"
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/suppliers/{supplier_id}/orders/reject \
+  -H "Content-Type: application/json" \
+  -d '{
+    "order_id": "uuid-here",
+    "reason": "Out of stock"
+  }'
+```
+
+**Status codes**:
+- 200: Success
+- 400: Order cannot be rejected (wrong status, wrong supplier)
+- 404: Order not found
+
+**Notes**:
+- Only orders in `pending` status can be rejected
+- Order must belong to the specified supplier
+- Sets `rejected_at` timestamp and `rejection_reason`
+- Status transition: `pending` → `rejected`
+
+---
+
+### Get Supplier Order Metrics
+
+**Endpoint**: `GET /admin/suppliers/{supplier_id}/orders/metrics`
+
+**Description**: Get order statistics for supplier (supplier admin endpoint).
+
+**Response** (200 OK):
+```json
+{
+  "total_orders": 150,
+  "pending": 25,
+  "confirmed": 100,
+  "rejected": 20,
+  "cancelled": 5,
+  "total_revenue": "150000.00"
+}
+```
+
+**Example**:
+```bash
+curl http://localhost:8000/admin/suppliers/{uuid}/orders/metrics
+```
+
+**Status codes**:
+- 200: Success
+- 404: Supplier not found
+
+**Notes**:
+- `total_revenue`: Sum of confirmed order amounts (Decimal)
+- Metrics filtered by supplier
+- All counts and revenue are real-time aggregates
+
+---
+
+## Admin Order Metrics
+
+### Get Global Order Metrics
+
+**Endpoint**: `GET /admin/orders/metrics`
+
+**Description**: Get global order statistics across all suppliers (admin endpoint).
+
+**Response** (200 OK):
+```json
+{
+  "total_orders": 500,
+  "pending": 75,
+  "confirmed": 350,
+  "rejected": 60,
+  "cancelled": 15,
+  "total_revenue": "500000.00"
+}
+```
+
+**Example**:
+```bash
+curl http://localhost:8000/admin/orders/metrics
+```
+
+**Notes**:
+- `total_revenue`: Sum of all confirmed order amounts across all suppliers
+- Global metrics (not filtered by supplier)
+- Useful for platform-wide dashboards
+
+---
+
+## Error Responses
+
+All endpoints follow consistent error format:
+
+```json
+{
+  "detail": "Error message"
+}
+```
+
+**Common status codes**:
+- 400: Bad Request (invalid input, validation error)
+- 404: Not Found (resource doesn't exist)
+- 409: Conflict (constraint violation)
+- 500: Internal Server Error (unexpected failure)
+
+---
+
+## Rate Limiting
+
+**MVP**: No rate limiting.
+**Production**: Add rate limiting per client/IP.
+
+---
+
+## OpenAPI Documentation
+
+Interactive API docs available at:
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+---
+
+## Workflow Examples
+
+### Complete Normalization Workflow
+
+```bash
+# 1. Bootstrap dictionary
+curl -X POST http://localhost:8000/admin/dictionary/bootstrap
+
+# 2. Create normalized SKUs
+curl -X POST http://localhost:8000/admin/skus \
+  -H "Content-Type: application/json" \
+  -d '{"product_type": "rose", "variety": "Explorer", "title": "Rose Explorer"}'
+
+# 3. Import CSV
+curl -X POST http://localhost:8000/admin/suppliers/{id}/imports/csv \
+  -F "file=@price_list.csv"
+
+# 4. Propose mappings
+curl -X POST http://localhost:8000/admin/normalization/propose \
+  -H "Content-Type: application/json" \
+  -d '{"supplier_id": "uuid-here"}'
+
+# 5. Review tasks
+curl http://localhost:8000/admin/normalization/tasks?status=open
+
+# 6. Confirm mapping
+curl -X POST http://localhost:8000/admin/normalization/confirm \
+  -H "Content-Type: application/json" \
+  -d '{
+    "supplier_item_id": "uuid-here",
+    "normalized_sku_id": "uuid-here",
+    "notes": "Confirmed"
+  }'
+
+# 7. Publish offers
+curl -X POST http://localhost:8000/admin/publish/suppliers/{id}
+
+# 8. Query offers
+curl "http://localhost:8000/offers?product_type=rose"
+```
+
+---
+
+## Version History
+
+- **v0.3.0** (2025-01-13): Task 3 complete - Order flow (buyers, orders, supplier order management)
+- **v0.2.0** (2025-01-12): Task 2 complete - Normalization and publishing
+- **v0.1.0** (2025-01-10): Task 1 complete - Import pipeline
+
+---
+
+## Support
+
+For issues and questions:
+- GitHub: https://github.com/anthropics/claude-code/issues
+- Docs: Project README.md

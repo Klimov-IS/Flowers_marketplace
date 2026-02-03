@@ -1,0 +1,1 @@
+# Core package - pure parsing and normalization logic
