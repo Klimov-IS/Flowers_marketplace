@@ -31,6 +31,8 @@ class Supplier(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
     name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    email: Mapped[str | None] = mapped_column(String, nullable=True, unique=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(
         String,
         nullable=False,

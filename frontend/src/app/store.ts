@@ -1,5 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { setupListeners } from '@reduxjs/toolkit/query';
+import { authApi } from '../features/auth/authApi';
 import { catalogApi } from '../features/catalog/catalogApi';
 import { ordersApi } from '../features/buyer/ordersApi';
 import { supplierApi } from '../features/seller/supplierApi';
@@ -10,6 +11,7 @@ import filtersReducer from '../features/catalog/filtersSlice';
 export const store = configureStore({
   reducer: {
     // RTK Query API slices
+    [authApi.reducerPath]: authApi.reducer,
     [catalogApi.reducerPath]: catalogApi.reducer,
     [ordersApi.reducerPath]: ordersApi.reducer,
     [supplierApi.reducerPath]: supplierApi.reducer,
@@ -21,6 +23,7 @@ export const store = configureStore({
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(
+      authApi.middleware,
       catalogApi.middleware,
       ordersApi.middleware,
       supplierApi.middleware

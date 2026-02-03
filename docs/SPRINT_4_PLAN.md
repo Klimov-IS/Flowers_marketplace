@@ -80,26 +80,27 @@
 
 ---
 
-### 4.4 Basic Authentication (Priority: Medium)
-
-**Текущее состояние**: Нет авторизации, buyer_id в request body.
+### 4.4 Basic Authentication (Priority: Medium) ✅ DONE
 
 **Задачи**:
-- [ ] JWT auth middleware (FastAPI)
-- [ ] Login/Register endpoints
-- [ ] Frontend auth flow (login page, token storage)
-- [ ] Protected routes (buyer vs supplier)
-- [ ] Refresh token logic
+- [x] JWT auth middleware (FastAPI)
+- [x] Login/Register endpoints
+- [x] Frontend auth flow (login page, token storage)
+- [x] Protected routes (buyer vs supplier)
+- [x] Refresh token logic
 
-**Файлы**:
-- `apps/api/auth/` — новый модуль
-- `apps/api/routers/auth.py` — login/register endpoints
-- `frontend/src/features/auth/` — login flow
+**Реализовано**:
+- `apps/api/auth/` — модуль с JWT, password hashing, dependencies
+- `apps/api/routers/auth.py` — /auth/login, /auth/register/buyer, /auth/register/supplier, /auth/refresh, /auth/me
+- `frontend/src/features/auth/authApi.ts` — RTK Query для auth
+- `frontend/src/features/auth/authSlice.ts` — обновлен для JWT
+- `frontend/src/features/auth/LoginPage.tsx` — реальный логин
+- Migration 004: password_hash + email для buyers/suppliers
 
 **Definition of Done**:
-- [ ] Buyer/Supplier могут залогиниться
-- [ ] API endpoints проверяют JWT
-- [ ] Refresh token работает
+- [x] Buyer/Supplier могут залогиниться
+- [x] API endpoints проверяют JWT (get_current_user dependency)
+- [x] Refresh token работает
 
 ---
 
@@ -210,6 +211,6 @@ Week 2:
 - ✅ Task 4.1: Git Setup — DONE
 - ✅ Task 4.2: Frontend-Backend Integration — DONE (was already implemented!)
 - ✅ Task 4.3: Supplier Dashboard — DONE (was already implemented!)
-- ⏳ Task 4.4: Authentication — TODO
+- ✅ Task 4.4: Authentication — DONE (JWT + password auth)
 - ⏳ Task 4.5: Dictionary Expansion — TODO
 - ⏳ Task 4.6: Production Hardening — TODO

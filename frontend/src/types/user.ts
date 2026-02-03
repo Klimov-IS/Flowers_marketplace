@@ -3,13 +3,9 @@ export type UserRole = 'buyer' | 'seller' | 'admin';
 export interface User {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   phone?: string;
   role: UserRole;
 }
 
-export interface AuthState {
-  user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
-}
+// AuthState is now defined in authSlice.ts

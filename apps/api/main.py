@@ -6,6 +6,7 @@ from apps.api.config import settings
 from apps.api.logging_config import get_logger, setup_logging
 from apps.api.routers import (
     admin,
+    auth,
     buyers,
     dictionary,
     health,
@@ -39,6 +40,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health.router, tags=["health"])
+app.include_router(auth.router)  # /auth/* - authentication endpoints
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
 app.include_router(dictionary.router, prefix="/admin/dictionary", tags=["dictionary"])
 app.include_router(skus.router, prefix="/admin/skus", tags=["skus"])

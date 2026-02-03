@@ -13,7 +13,8 @@ class Buyer(Base, UUIDMixin, TimestampMixin):
 
     name: Mapped[str] = mapped_column(String, nullable=False)
     phone: Mapped[str] = mapped_column(String, nullable=False, index=True)
-    email: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    email: Mapped[str | None] = mapped_column(String, nullable=True, unique=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     address: Mapped[str | None] = mapped_column(String, nullable=True)
     city_id: Mapped[UUID] = mapped_column(
         ForeignKey("cities.id"), nullable=False, index=True

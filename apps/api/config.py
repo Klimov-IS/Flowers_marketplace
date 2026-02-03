@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_reload: bool = True
 
+    # Security
+    secret_key: str = "dev-secret-key-change-in-production"  # Must be changed in production!
+
     @property
     def database_url(self) -> str:
         """Construct PostgreSQL connection URL."""
