@@ -18,71 +18,65 @@
 
 ## Задачи
 
-### 4.1 Git Repository Setup (Priority: Critical)
+### 4.1 Git Repository Setup (Priority: Critical) ✅ DONE
 
 **Проблема**: Git инициализирован в `C:/Users/79025`, не в папке проекта.
 
 **Задачи**:
-- [ ] Удалить привязку к родительскому репозиторию
-- [ ] Инициализировать git в папке проекта
-- [ ] Сделать initial commit всех файлов
-- [ ] Создать remote репозиторий (GitHub/GitLab)
-- [ ] Push initial commit
+- [x] Удалить привязку к родительскому репозиторию
+- [x] Инициализировать git в папке проекта
+- [x] Сделать initial commit всех файлов
+- [x] Создать remote репозиторий (GitHub/GitLab)
+- [x] Push initial commit
 
-**Команды**:
-```bash
-cd "c:\Users\79025\Desktop\проекты\Маркетплейс"
-git init
-git add .
-git commit -m "Initial commit: MVP Phase 1-3 complete"
-```
+**Результат**:
+- Repository: https://github.com/Klimov-IS/Flowers_marketplace
+- Initial commit: 172 files, 33,739 lines
+- Branch: main
 
 ---
 
-### 4.2 Frontend-Backend Integration (Priority: High)
-
-**Текущее состояние**: React-app существует, но не связан с API.
+### 4.2 Frontend-Backend Integration (Priority: High) ✅ DONE
 
 **Задачи**:
-- [ ] Настроить API proxy в Vite config
-- [ ] Реализовать API client (axios/fetch wrapper)
-- [ ] Подключить catalog API к CatalogPage
-- [ ] Подключить orders API к CheckoutModal
-- [ ] Добавить error handling и loading states
+- [x] Настроить API proxy в Vite config
+- [x] Реализовать API client (axios/fetch wrapper)
+- [x] Подключить catalog API к CatalogPage
+- [x] Подключить orders API к CheckoutModal
+- [x] Добавить error handling и loading states
 
-**Файлы**:
-- `frontend/vite.config.ts` — proxy setup
-- `frontend/src/api/client.ts` — API wrapper
-- `frontend/src/features/catalog/catalogApi.ts` — catalog hooks
-- `frontend/src/features/buyer/ordersApi.ts` — orders hooks
+**Изменения**:
+- `frontend/vite.config.ts` — добавлен proxy для /offers, /orders, /admin, /buyers
+- `frontend/src/utils/api.ts` — axios client с interceptors (уже был)
+- `frontend/src/features/catalog/catalogApi.ts` — RTK Query (уже был)
+- `frontend/src/features/buyer/ordersApi.ts` — RTK Query (уже был)
 
 **Definition of Done**:
-- [ ] Buyer может видеть реальные офферы из БД
-- [ ] Buyer может оформить заказ через UI
-- [ ] Ошибки API отображаются пользователю
+- [x] Buyer может видеть реальные офферы из БД
+- [x] Buyer может оформить заказ через UI
+- [x] Ошибки API отображаются пользователю
 
 ---
 
-### 4.3 Supplier Dashboard (Priority: High)
-
-**Текущее состояние**: Только API endpoints, нет UI.
+### 4.3 Supplier Dashboard (Priority: High) ✅ DONE
 
 **Задачи**:
-- [ ] Страница загрузки CSV прайса
-- [ ] Отображение статуса импорта (progress, errors)
-- [ ] Список входящих заказов
-- [ ] Кнопки Confirm/Reject заказа
-- [ ] Базовая статистика (заказы, выручка)
+- [x] Страница загрузки CSV прайса
+- [x] Отображение статуса импорта (progress, errors)
+- [x] Список входящих заказов
+- [x] Кнопки Confirm/Reject заказа
+- [x] Базовая статистика (заказы, выручка)
 
-**Файлы**:
-- `frontend/src/features/seller/PriceListUpload.tsx` — расширить
-- `frontend/src/features/seller/OrdersTable.tsx` — новый
-- `frontend/src/features/seller/SellerDashboard.tsx` — интеграция
+**Реализованные компоненты**:
+- `frontend/src/features/seller/PriceListUpload.tsx` — drag-and-drop upload, progress display
+- `frontend/src/features/seller/SellerDashboard.tsx` — полный dashboard с метриками
+- `frontend/src/features/seller/RejectOrderModal.tsx` — модальное окно отклонения
+- `frontend/src/features/seller/supplierApi.ts` — RTK Query (orders, metrics, upload)
 
 **Definition of Done**:
-- [ ] Поставщик может загрузить CSV через UI
-- [ ] Поставщик видит ошибки парсинга
-- [ ] Поставщик может обработать заказы
+- [x] Поставщик может загрузить CSV через UI
+- [x] Поставщик видит ошибки парсинга
+- [x] Поставщик может обработать заказы
 
 ---
 
@@ -206,6 +200,16 @@ Week 2:
 
 - [x] Code review завершён
 - [x] Текущий статус документирован
-- [ ] Git репозиторий настроен правильно
-- [ ] Remote repository создан
-- [ ] Initial commit сделан
+- [x] Git репозиторий настроен правильно
+- [x] Remote repository создан
+- [x] Initial commit сделан
+
+**Статус**: Sprint 4 IN PROGRESS (2026-02-03)
+
+### Progress Summary
+- ✅ Task 4.1: Git Setup — DONE
+- ✅ Task 4.2: Frontend-Backend Integration — DONE (was already implemented!)
+- ✅ Task 4.3: Supplier Dashboard — DONE (was already implemented!)
+- ⏳ Task 4.4: Authentication — TODO
+- ⏳ Task 4.5: Dictionary Expansion — TODO
+- ⏳ Task 4.6: Production Hardening — TODO

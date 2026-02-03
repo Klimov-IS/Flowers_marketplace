@@ -1,7 +1,9 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { OffersResponse, ProductFilters } from '../../types/product';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// In development, Vite proxy handles /offers, /orders, /admin routes
+// In production, set VITE_API_BASE_URL to the actual API URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 export const catalogApi = createApi({
   reducerPath: 'catalogApi',
