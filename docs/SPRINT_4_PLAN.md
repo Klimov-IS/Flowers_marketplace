@@ -1,8 +1,8 @@
 # Sprint 4 — Frontend Integration & Production Readiness
 
 **Дата**: 2026-02-03
-**Статус**: Planning
-**Длительность**: 2 недели
+**Статус**: ✅ COMPLETED
+**Длительность**: 1 день (ускоренный спринт)
 
 ---
 
@@ -132,18 +132,24 @@
 
 ---
 
-### 4.6 Production Hardening (Priority: Low)
+### 4.6 Production Hardening (Priority: Low) ✅ DONE
 
 **Задачи**:
-- [ ] CORS configuration (whitelist domains)
-- [ ] Rate limiting (slowapi)
-- [ ] Request validation (size limits)
-- [ ] Health check improvements
-- [ ] Migrate to FastAPI lifespan (deprecation fix)
+- [x] CORS configuration (whitelist domains)
+- [x] Rate limiting (in-memory middleware)
+- [ ] Request validation (size limits) — отложено
+- [ ] Health check improvements — отложено
+- [x] Migrate to FastAPI lifespan (deprecation fix)
 
-**Файлы**:
-- `apps/api/main.py` — CORS, lifespan
-- `apps/api/middleware/` — rate limiting
+**Реализовано**:
+- `apps/api/main.py`:
+  - Migrated from `@app.on_event()` to `lifespan` context manager
+  - CORS origins configurable via `CORS_ORIGINS` env variable
+  - Added simple in-memory rate limiting middleware (opt-in)
+- `apps/api/config.py`:
+  - Added `cors_origins` setting (comma-separated list or "*")
+  - Added `rate_limit_enabled`, `rate_limit_requests`, `rate_limit_window`
+- `.env.example` — documented new settings
 
 ---
 
@@ -220,10 +226,24 @@ Week 2:
 - ✅ Task 4.3: Supplier Dashboard — DONE (was already implemented!)
 - ✅ Task 4.4: Authentication — DONE (JWT + password auth)
 - ✅ Task 4.5: Dictionary Expansion — DONE (35 → 115+ entries)
-- ⏳ Task 4.6: Production Hardening — TODO
+- ✅ Task 4.6: Production Hardening — DONE (lifespan, CORS, rate limiting)
 
 **Commits:**
 1. Initial commit (172 files, 33,739 lines)
 2. Add Vite proxy configuration
 3. Add JWT authentication backend and frontend
 4. Expand dictionary seed (115+ entries)
+5. Production hardening (lifespan, CORS, rate limiting)
+
+---
+
+## 🎉 Sprint 4 COMPLETED
+
+**Дата завершения**: 2026-02-03
+
+Все основные задачи Sprint 4 выполнены:
+- Проект под контролем версий (GitHub)
+- Frontend и Backend интегрированы
+- JWT авторизация работает
+- Словарь нормализации расширен
+- API готов к production (CORS, rate limiting, lifespan)

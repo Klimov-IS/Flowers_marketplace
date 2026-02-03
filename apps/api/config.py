@@ -31,6 +31,21 @@ class Settings(BaseSettings):
     # Security
     secret_key: str = "dev-secret-key-change-in-production"  # Must be changed in production!
 
+    # CORS
+    cors_origins: str = "*"  # Comma-separated list of allowed origins, or "*" for all
+
+    # Rate limiting
+    rate_limit_enabled: bool = False  # Enable in production
+    rate_limit_requests: int = 100  # Requests per window
+    rate_limit_window: int = 60  # Window in seconds
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse CORS origins from comma-separated string."""
+        if self.cors_origins == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
     @property
     def database_url(self) -> str:
         """Construct PostgreSQL connection URL."""
