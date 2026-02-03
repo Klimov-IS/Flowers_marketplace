@@ -4,6 +4,53 @@ import io
 from typing import Any, Dict, List
 
 
+# Known header keywords for detection
+KNOWN_HEADERS = [
+    "наименование",
+    "название",
+    "номенклатура",
+    "цена",
+    "price",
+    "стоимость",
+    "кол-во",
+    "количество",
+]
+
+
+def detect_header_row(all_rows: List[List[str]], max_rows: int = 20) -> int:
+    """
+    Find the row index that most likely contains headers.
+
+    Scans up to max_rows rows looking for rows containing known header keywords.
+
+    Args:
+        all_rows: List of all CSV rows (as lists of strings)
+        max_rows: Maximum number of rows to scan
+
+    Returns:
+        Index of the header row (0-based), or 0 if no headers detected
+    """
+    best_idx = 0
+    best_score = 0
+
+    for idx, row in enumerate(all_rows[:max_rows]):
+        if not row:
+            continue
+
+        # Convert row cells to lowercase for matching
+        row_text = " ".join(cell.lower().strip() for cell in row if cell)
+
+        # Count how many known headers appear in this row
+        score = sum(1 for kw in KNOWN_HEADERS if kw in row_text)
+
+        # Require at least 2 known headers to be confident
+        if score >= 2 and score > best_score:
+            best_score = score
+            best_idx = idx
+
+    return best_idx
+
+
 def parse_csv_content(content: bytes, encoding: str = "utf-8") -> List[Dict[str, Any]]:
     """
     Parse CSV content into list of dictionaries.
@@ -43,22 +90,28 @@ def parse_csv_content(content: bytes, encoding: str = "utf-8") -> List[Dict[str,
 
         reader = csv.reader(csv_file, delimiter=delimiter)
 
-        rows = []
-        headers = None
+        # Read all rows first
+        all_rows = list(reader)
 
-        for row_idx, row in enumerate(reader):
+        if not all_rows:
+            raise ValueError("CSV file is empty")
+
+        # Smart header detection - find row with known headers
+        header_idx = detect_header_row(all_rows)
+
+        # Extract headers from detected row
+        headers = [cell.strip() for cell in all_rows[header_idx]]
+
+        # Process data rows (everything after header row)
+        rows = []
+        for row_idx, row in enumerate(all_rows[header_idx + 1 :], start=header_idx + 2):
             # Skip empty rows
             if not row or all(not cell.strip() for cell in row):
                 continue
 
-            # First non-empty row is headers
-            if headers is None:
-                headers = [cell.strip() for cell in row]
-                continue
-
             # Build row dict
             row_dict = {
-                "row_number": row_idx + 1,
+                "row_number": row_idx,
                 "cells": row,
                 "headers": headers,
             }

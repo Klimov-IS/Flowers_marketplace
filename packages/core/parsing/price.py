@@ -32,9 +32,10 @@ def parse_price(price_str: str) -> Dict[str, Optional[Decimal]]:
 
     # Clean price string
     price_clean = str(price_str).strip()
-    # Remove currency symbols
-    price_clean = re.sub(r"[₽рубруб\.\s]", "", price_clean, flags=re.IGNORECASE)
-    # Replace comma with dot for decimal
+    # Remove currency symbols, whitespace (including non-breaking space \u00a0)
+    # This handles Russian format like "1 699,00" where space is thousands separator
+    price_clean = re.sub(r"[₽рубруб\s\u00a0]", "", price_clean, flags=re.IGNORECASE)
+    # Replace comma with dot for decimal (Russian format: "67,00" -> "67.00")
     price_clean = price_clean.replace(",", ".")
 
     # Try to detect range (with various dash types)
