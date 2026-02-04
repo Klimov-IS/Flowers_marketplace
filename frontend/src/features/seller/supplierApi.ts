@@ -1,5 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { Order, OrderMetrics } from '../../types/order';
+import type { SupplierItemsParams, SupplierItemsResponse } from '../../types/supplierItem';
 
 // In development, Vite proxy handles /offers, /orders, /admin routes
 // In production, set VITE_API_BASE_URL to the actual API URL
@@ -8,8 +9,22 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 export const supplierApi = createApi({
   reducerPath: 'supplierApi',
   baseQuery: fetchBaseQuery({ baseUrl: API_BASE_URL }),
-  tagTypes: ['SupplierOrders', 'ImportBatches', 'NormalizationTasks'],
+  tagTypes: ['SupplierOrders', 'ImportBatches', 'NormalizationTasks', 'SupplierItems'],
   endpoints: (builder) => ({
+    // Supplier Items (Assortment)
+    getSupplierItems: builder.query<SupplierItemsResponse, SupplierItemsParams>({
+      query: ({ supplier_id, q, page, per_page }) => {
+        const params = new URLSearchParams();
+        if (q) params.append('q', q);
+        if (page) params.append('page', String(page));
+        if (per_page) params.append('per_page', String(per_page));
+
+        const queryString = params.toString();
+        return `/admin/suppliers/${supplier_id}/items${queryString ? `?${queryString}` : ''}`;
+      },
+      providesTags: ['SupplierItems'],
+    }),
+
     getSupplierOrders: builder.query<
       Order[],
       { supplier_id: string; status?: string; limit?: number; offset?: number }
@@ -85,6 +100,7 @@ export const supplierApi = createApi({
 });
 
 export const {
+  useGetSupplierItemsQuery,
   useGetSupplierOrdersQuery,
   useConfirmOrderMutation,
   useRejectOrderMutation,
