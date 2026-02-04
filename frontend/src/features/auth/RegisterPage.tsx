@@ -2,32 +2,69 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppDispatch } from '../../hooks/useAppDispatch';
 import { setCredentials } from './authSlice';
-import { useLoginMutation } from './authApi';
+import { useRegisterBuyerMutation, useRegisterSupplierMutation } from './authApi';
 import Card from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const [login, { isLoading }] = useLoginMutation();
+  const [registerBuyer, { isLoading: isLoadingBuyer }] = useRegisterBuyerMutation();
+  const [registerSupplier, { isLoading: isLoadingSupplier }] = useRegisterSupplierMutation();
 
   const [role, setRole] = useState<'buyer' | 'supplier'>('buyer');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [address, setAddress] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const isLoading = isLoadingBuyer || isLoadingSupplier;
+
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
-    if (!email || !password) {
-      setErrorMessage('Введите email и пароль');
+    // Validation
+    if (!name || !email || !phone || !password) {
+      setErrorMessage('Заполните все обязательные поля');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage('Пароли не совпадают');
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMessage('Пароль должен содержать минимум 6 символов');
       return;
     }
 
     try {
-      const tokens = await login({ email, password, role }).unwrap();
+      let tokens;
+
+      if (role === 'buyer') {
+        tokens = await registerBuyer({
+          name,
+          email,
+          phone,
+          password,
+          address: address || undefined,
+          city_id: '00000000-0000-0000-0000-000000000001', // Default city
+        }).unwrap();
+      } else {
+        tokens = await registerSupplier({
+          name,
+          email,
+          phone,
+          password,
+          city_id: '00000000-0000-0000-0000-000000000001', // Default city
+        }).unwrap();
+      }
 
       // Fetch user info with the new token
       const response = await fetch('/auth/me', {
@@ -59,21 +96,25 @@ export default function LoginPage() {
       // Navigate to dashboard
       navigate(user.role === 'supplier' ? '/seller' : '/buyer');
     } catch (err: any) {
-      console.error('Login error:', err);
+      console.error('Registration error:', err);
       if (err.data?.detail) {
-        setErrorMessage(err.data.detail);
+        if (typeof err.data.detail === 'string') {
+          setErrorMessage(err.data.detail);
+        } else if (Array.isArray(err.data.detail)) {
+          setErrorMessage(err.data.detail.map((d: any) => d.msg).join(', '));
+        }
       } else {
-        setErrorMessage('Ошибка входа. Проверьте email и пароль.');
+        setErrorMessage('Ошибка регистрации. Попробуйте позже.');
       }
     }
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4">
+    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-8">
       <Card className="w-full max-w-md p-8">
-        <h1 className="text-2xl font-bold text-center mb-6">Вход в систему</h1>
+        <h1 className="text-2xl font-bold text-center mb-6">Регистрация</h1>
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleRegister} className="space-y-4">
           {/* Role Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -107,6 +148,16 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {/* Name */}
+          <Input
+            label={role === 'buyer' ? 'Имя / Название магазина' : 'Название компании'}
+            type="text"
+            placeholder={role === 'buyer' ? 'Иван Иванов' : 'ООО Цветы оптом'}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+
           {/* Email */}
           <Input
             label="Email"
@@ -117,13 +168,44 @@ export default function LoginPage() {
             required
           />
 
+          {/* Phone */}
+          <Input
+            label="Телефон"
+            type="tel"
+            placeholder="+7 (999) 123-45-67"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            required
+          />
+
+          {/* Address (only for buyers) */}
+          {role === 'buyer' && (
+            <Input
+              label="Адрес доставки"
+              type="text"
+              placeholder="г. Москва, ул. Цветочная, д. 1"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+          )}
+
           {/* Password */}
           <Input
             label="Пароль"
             type="password"
-            placeholder="Введите пароль"
+            placeholder="Минимум 6 символов"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+
+          {/* Confirm Password */}
+          <Input
+            label="Подтверждение пароля"
+            type="password"
+            placeholder="Повторите пароль"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
             required
           />
 
@@ -136,16 +218,16 @@ export default function LoginPage() {
 
           {/* Submit Button */}
           <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? 'Вход...' : `Войти как ${role === 'buyer' ? 'покупатель' : 'продавец'}`}
+            {isLoading ? 'Регистрация...' : `Зарегистрироваться как ${role === 'buyer' ? 'покупатель' : 'продавец'}`}
           </Button>
         </form>
 
-        {/* Register Link */}
+        {/* Login Link */}
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
-            Нет аккаунта?{' '}
-            <Link to="/register" className="text-primary-600 hover:underline">
-              Зарегистрироваться
+            Уже есть аккаунт?{' '}
+            <Link to="/login" className="text-primary-600 hover:underline">
+              Войти
             </Link>
           </p>
         </div>
