@@ -1,20 +1,37 @@
-# Admin API Reference
+# Backend API Reference
 
-## Overview
+## Обзор
 
-This document describes all admin endpoints for the B2B Flower Market Platform.
+Полная документация REST API для B2B Flower Market Platform.
 
-The API enables:
-- Supplier and import management
-- Dictionary-driven normalization configuration
-- Normalized SKU management
-- Manual review workflow (propose → review → confirm)
-- Offer publishing
+API обеспечивает:
+- Аутентификация и авторизация (JWT)
+- Управление поставщиками и импортом
+- Словарная нормализация
+- Управление каноническими SKU
+- Workflow ручного review (propose → review → confirm)
+- Публикация офферов
+- Управление заказами
 
-## Authentication
+---
 
-**MVP**: No authentication required.
-**Production**: Add JWT-based authentication with admin roles.
+## Содержание
+
+1. [Аутентификация](#authentication)
+2. [Health](#health)
+3. [Suppliers](#suppliers)
+4. [Imports](#imports)
+5. [Dictionary](#dictionary-management)
+6. [SKUs](#normalized-skus)
+7. [Normalization](#normalization)
+8. [Publishing](#publishing)
+9. [Offers (Retail)](#retail-read-only)
+10. [Buyers](#buyers-admin)
+11. [Orders](#orders-retail)
+12. [Supplier Orders](#supplier-orders-admin)
+13. [Error Handling](#error-responses)
+
+---
 
 ## Base URL
 
@@ -26,6 +43,304 @@ Local development: `http://localhost:8000`
 - All IDs are UUIDs
 - Currency: RUB (Russian Ruble) by default
 - Pagination: `limit` and `offset` query parameters
+
+---
+
+## Authentication
+
+Система использует JWT (JSON Web Tokens) для аутентификации.
+
+### Token Types
+
+| Тип | TTL | Назначение |
+|-----|-----|------------|
+| Access Token | 15 минут | Авторизация API запросов |
+| Refresh Token | 7 дней | Обновление access token |
+
+### Использование токенов
+
+Все защищённые endpoints требуют заголовок `Authorization`:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+### Роли
+
+| Роль | Описание | Доступ |
+|------|----------|--------|
+| `buyer` | Покупатель | /orders, /offers, /auth/me |
+| `supplier` | Поставщик | /admin/suppliers/{id}/*, /auth/me |
+| `admin` | Администратор | Все /admin/* endpoints |
+
+---
+
+### Login
+
+**Endpoint**: `POST /auth/login`
+
+**Description**: Аутентификация пользователя (buyer или supplier).
+
+**Request body**:
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword123",
+  "role": "buyer"
+}
+```
+
+| Поле | Тип | Обязательно | Описание |
+|------|-----|-------------|----------|
+| `email` | string | Да | Email пользователя |
+| `password` | string | Да | Пароль |
+| `role` | string | Да | `buyer` или `supplier` |
+
+**Response** (200 OK):
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
+  "expires_in": 900
+}
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `access_token` | string | JWT access token |
+| `refresh_token` | string | JWT refresh token |
+| `expires_in` | integer | Время жизни access token (секунды) |
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "buyer@example.com",
+    "password": "password123",
+    "role": "buyer"
+  }'
+```
+
+**Status codes**:
+- 200: Успешная аутентификация
+- 400: Невалидная роль
+- 401: Неверный email или пароль
+- 403: Аккаунт не активен
+
+---
+
+### Register Buyer
+
+**Endpoint**: `POST /auth/register/buyer`
+
+**Description**: Регистрация нового покупателя.
+
+**Request body**:
+```json
+{
+  "name": "Цветочный магазин",
+  "email": "shop@flowers.ru",
+  "phone": "+79001234567",
+  "password": "securepassword123",
+  "address": "ул. Цветочная, 1",
+  "city_id": "uuid-of-city"
+}
+```
+
+| Поле | Тип | Обязательно | Описание |
+|------|-----|-------------|----------|
+| `name` | string | Да | Название компании/магазина |
+| `email` | string | Да | Email (уникальный) |
+| `phone` | string | Да | Телефон |
+| `password` | string | Да | Пароль (min 8 символов) |
+| `address` | string | Нет | Адрес доставки |
+| `city_id` | string | Да | UUID города |
+
+**Response** (201 Created):
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
+  "expires_in": 900
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/auth/register/buyer \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Flower Shop",
+    "email": "shop@flowers.ru",
+    "phone": "+79001234567",
+    "password": "password123",
+    "address": "123 Main St",
+    "city_id": "uuid-here"
+  }'
+```
+
+**Status codes**:
+- 201: Успешная регистрация
+- 400: Email уже зарегистрирован / Невалидный city_id
+
+---
+
+### Register Supplier
+
+**Endpoint**: `POST /auth/register/supplier`
+
+**Description**: Регистрация нового поставщика.
+
+**Request body**:
+```json
+{
+  "name": "Оптовая база цветов",
+  "email": "info@wholesale.ru",
+  "phone": "+79001234567",
+  "password": "securepassword123",
+  "city_id": "uuid-of-city"
+}
+```
+
+| Поле | Тип | Обязательно | Описание |
+|------|-----|-------------|----------|
+| `name` | string | Да | Название компании (уникальное) |
+| `email` | string | Да | Email (уникальный) |
+| `phone` | string | Да | Телефон |
+| `password` | string | Да | Пароль (min 8 символов) |
+| `city_id` | string | Нет | UUID города |
+
+**Response** (201 Created):
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
+  "expires_in": 900
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/auth/register/supplier \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Wholesale Flowers",
+    "email": "info@wholesale.ru",
+    "phone": "+79001234567",
+    "password": "password123"
+  }'
+```
+
+**Status codes**:
+- 201: Успешная регистрация
+- 400: Email или название компании уже зарегистрированы
+
+**Notes**:
+- В MVP поставщик активируется автоматически
+- В production: статус `pending`, требуется одобрение админа
+
+---
+
+### Refresh Token
+
+**Endpoint**: `POST /auth/refresh`
+
+**Description**: Обновление access token с помощью refresh token.
+
+**Request body**:
+```json
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
+  "expires_in": 900
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "eyJhbGciOiJIUzI1NiIs..."}'
+```
+
+**Status codes**:
+- 200: Токены обновлены
+- 401: Невалидный или истёкший refresh token
+
+---
+
+### Get Current User
+
+**Endpoint**: `GET /auth/me`
+
+**Description**: Получение информации о текущем пользователе.
+
+**Headers**:
+```http
+Authorization: Bearer <access_token>
+```
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "name": "Цветочный магазин",
+  "email": "shop@flowers.ru",
+  "phone": "+79001234567",
+  "role": "buyer",
+  "status": "active"
+}
+```
+
+**Example**:
+```bash
+curl http://localhost:8000/auth/me \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..."
+```
+
+**Status codes**:
+- 200: Успех
+- 401: Не авторизован
+- 404: Пользователь не найден
+
+---
+
+### Logout
+
+**Endpoint**: `POST /auth/logout`
+
+**Description**: Выход из системы.
+
+**Headers**:
+```http
+Authorization: Bearer <access_token>
+```
+
+**Response** (200 OK):
+```json
+{
+  "message": "Successfully logged out"
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/auth/logout \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..."
+```
+
+**Notes**:
+- JWT токены stateless, сервер не хранит сессии
+- Клиент должен удалить токены из хранилища
+- В production: реализовать blacklist токенов в Redis
 
 ---
 
@@ -1451,14 +1766,25 @@ curl "http://localhost:8000/offers?product_type=rose"
 
 ## Version History
 
+- **v0.4.0** (2026-02-03): Документация расширена: аутентификация, таблица содержания, русский язык
 - **v0.3.0** (2025-01-13): Task 3 complete - Order flow (buyers, orders, supplier order management)
 - **v0.2.0** (2025-01-12): Task 2 complete - Normalization and publishing
 - **v0.1.0** (2025-01-10): Task 1 complete - Import pipeline
 
 ---
 
-## Support
+## Связанные документы
 
-For issues and questions:
-- GitHub: https://github.com/anthropics/claude-code/issues
-- Docs: Project README.md
+- [ARCHITECTURE.md](ARCHITECTURE.md) — общая архитектура системы
+- [WORKFLOWS.md](WORKFLOWS.md) — бизнес-процессы
+- [DATA_LIFECYCLE.md](DATA_LIFECYCLE.md) — жизненный цикл данных
+- [NORMALIZATION_RULES.md](NORMALIZATION_RULES.md) — правила нормализации
+- [FAILURE_MODES.md](FAILURE_MODES.md) — обработка ошибок
+
+---
+
+## OpenAPI Documentation
+
+Интерактивная документация доступна по адресам:
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc

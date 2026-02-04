@@ -1,4 +1,4 @@
-import { Supplier } from './product';
+import type { Supplier } from './product';
 
 export interface Buyer {
   id: string;

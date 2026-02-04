@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     def database_url_sync(self) -> str:
         """Construct PostgreSQL connection URL for sync operations (Alembic)."""
         return (
-            f"postgresql+psycopg2://{self.db_user}:{self.db_password}"
+            f"postgresql+psycopg://{self.db_user}:{self.db_password}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
         )
 

@@ -1,7 +1,7 @@
 """Add orders (buyers, orders, order_items)
 
 Revision ID: 003_add_orders
-Revises: 002_add_normalized_layer
+Revises: 002
 Create Date: 2025-01-13
 
 """
@@ -13,19 +13,19 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = '003_add_orders'
-down_revision: Union[str, None] = '002_add_normalized_layer'
+down_revision: Union[str, None] = '002'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
     # Create buyer_status enum
-    buyer_status_enum = postgresql.ENUM('active', 'blocked', 'pending_verification', name='buyer_status')
-    buyer_status_enum.create(op.get_bind())
+    buyer_status_enum = postgresql.ENUM('active', 'blocked', 'pending_verification', name='buyer_status', create_type=False)
+    buyer_status_enum.create(op.get_bind(), checkfirst=True)
 
     # Create order_status enum
-    order_status_enum = postgresql.ENUM('pending', 'confirmed', 'rejected', 'cancelled', name='order_status')
-    order_status_enum.create(op.get_bind())
+    order_status_enum = postgresql.ENUM('pending', 'confirmed', 'rejected', 'cancelled', name='order_status', create_type=False)
+    order_status_enum.create(op.get_bind(), checkfirst=True)
 
     # Create buyers table
     op.create_table(
@@ -36,7 +36,7 @@ def upgrade() -> None:
         sa.Column('email', sa.String(), nullable=True),
         sa.Column('address', sa.String(), nullable=True),
         sa.Column('city_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('status', sa.Enum('active', 'blocked', 'pending_verification', name='buyer_status'), nullable=False, server_default='active'),
+        sa.Column('status', postgresql.ENUM('active', 'blocked', 'pending_verification', name='buyer_status', create_type=False), nullable=False, server_default='active'),
         sa.Column('meta', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -56,7 +56,7 @@ def upgrade() -> None:
         sa.Column('id', postgresql.UUID(as_uuid=True), server_default=sa.text('gen_random_uuid()'), nullable=False),
         sa.Column('buyer_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('supplier_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('status', sa.Enum('pending', 'confirmed', 'rejected', 'cancelled', name='order_status'), nullable=False, server_default='pending'),
+        sa.Column('status', postgresql.ENUM('pending', 'confirmed', 'rejected', 'cancelled', name='order_status', create_type=False), nullable=False, server_default='pending'),
         sa.Column('total_amount', sa.Numeric(precision=10, scale=2), nullable=False),
         sa.Column('currency', sa.String(length=3), nullable=False, server_default='RUB'),
         sa.Column('delivery_address', sa.String(), nullable=True),

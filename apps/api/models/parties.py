@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from apps.api.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
+    from apps.api.models.normalized import Offer
     from apps.api.models.order import Order
 
 
@@ -47,3 +48,4 @@ class Supplier(Base, UUIDMixin, TimestampMixin):
 
     # Relationships
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="supplier")
+    offers: Mapped[list["Offer"]] = relationship("Offer", back_populates="supplier")

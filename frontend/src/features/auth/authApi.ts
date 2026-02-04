@@ -44,7 +44,7 @@ export interface UserResponse {
 export const authApi = createApi({
   reducerPath: 'authApi',
   baseQuery: fetchBaseQuery({
-    baseURL: API_BASE_URL,
+    baseUrl: API_BASE_URL,
     prepareHeaders: (headers) => {
       const token = localStorage.getItem('access_token');
       if (token) {

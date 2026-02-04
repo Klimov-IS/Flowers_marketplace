@@ -7,7 +7,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 export const supplierApi = createApi({
   reducerPath: 'supplierApi',
-  baseQuery: fetchBaseQuery({ baseURL: API_BASE_URL }),
+  baseQuery: fetchBaseQuery({ baseUrl: API_BASE_URL }),
   tagTypes: ['SupplierOrders', 'ImportBatches', 'NormalizationTasks'],
   endpoints: (builder) => ({
     getSupplierOrders: builder.query<

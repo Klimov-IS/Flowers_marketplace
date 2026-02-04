@@ -7,7 +7,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 export const catalogApi = createApi({
   reducerPath: 'catalogApi',
-  baseQuery: fetchBaseQuery({ baseURL: API_BASE_URL }),
+  baseQuery: fetchBaseQuery({ baseUrl: API_BASE_URL }),
   tagTypes: ['Offers'],
   endpoints: (builder) => ({
     getOffers: builder.query<OffersResponse, ProductFilters>({

@@ -11,7 +11,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 export const ordersApi = createApi({
   reducerPath: 'ordersApi',
-  baseQuery: fetchBaseQuery({ baseURL: API_BASE_URL }),
+  baseQuery: fetchBaseQuery({ baseUrl: API_BASE_URL }),
   tagTypes: ['Orders'],
   endpoints: (builder) => ({
     getOrders: builder.query<
@@ -39,7 +39,7 @@ export const ordersApi = createApi({
 
     getOrderById: builder.query<Order, string>({
       query: (id) => `/orders/${id}`,
-      providesTags: (result, error, id) => [{ type: 'Orders', id }],
+      providesTags: (_result, _error, id) => [{ type: 'Orders', id }],
     }),
 
     createOrder: builder.mutation<Order, CreateOrderRequest>({

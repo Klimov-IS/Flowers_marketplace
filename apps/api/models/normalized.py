@@ -1,13 +1,17 @@
 """Normalized layer models: SKUs, dictionary, mappings, tasks."""
 from decimal import Decimal
 from enum import Enum
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import CheckConstraint, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from apps.api.models.base import Base, TimestampMixin, UUIDMixin
+
+if TYPE_CHECKING:
+    from apps.api.models.parties import Supplier
 
 
 class DictionaryStatus(str, Enum):
@@ -56,6 +60,9 @@ class NormalizedSKU(Base, UUIDMixin, TimestampMixin):
         default=dict,
         server_default="{}",
     )
+
+    # Relationships
+    offers: Mapped[list["Offer"]] = relationship("Offer", back_populates="normalized_sku")
 
 
 class DictionaryEntry(Base, UUIDMixin, TimestampMixin):
@@ -218,6 +225,10 @@ class Offer(Base, UUIDMixin, TimestampMixin):
     # Publishing
     is_active: Mapped[bool] = mapped_column(nullable=False, default=True, index=True)
     published_at: Mapped[str] = mapped_column(nullable=False, server_default="now()")
+
+    # Relationships
+    supplier: Mapped["Supplier"] = relationship("Supplier", back_populates="offers")
+    normalized_sku: Mapped["NormalizedSKU"] = relationship("NormalizedSKU", back_populates="offers")
 
 
 class SupplierDeliveryRule(Base, UUIDMixin, TimestampMixin):

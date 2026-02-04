@@ -31,7 +31,7 @@ export default function CheckoutModal({
   const dispatch = useAppDispatch();
   const cart = useAppSelector((state) => state.cart);
   const user = useAppSelector((state) => state.auth.user);
-  const [createOrder, { isLoading, isSuccess }] = useCreateOrderMutation();
+  const [createOrder, { isLoading }] = useCreateOrderMutation();
 
   const supplier = cart.suppliers.find((s) => s.supplier_id === supplierId);
 

@@ -12,11 +12,11 @@ The core asset is the normalized market database (not the UI). The MVP focus:
 - minimal order flow (no payments).
 
 ### Canonical docs (must read before coding)
-- `/docs/VISION.md`
-- `/docs/MVP_SCOPE.md`
-- `/docs/CORE_DATA_MODEL.md`
-- `/docs/IMPORT_PIPELINE.md`
-- `/docs/NORMALIZATION_RULES.md`
+- `/docs/architecture/VISION.md`
+- `/docs/architecture/MVP_SCOPE.md`
+- `/docs/architecture/CORE_DATA_MODEL.md`
+- `/docs/architecture/IMPORT_PIPELINE.md`
+- `/docs/architecture/NORMALIZATION_RULES.md`
 
 If anything conflicts, these docs are source-of-truth.
 
@@ -90,7 +90,7 @@ Publishing rule (MVP):
 
 ## 7) Normalization Rules (contract)
 - Dictionary-driven extraction + propose → manual confirm flow.
-- Confidence thresholds are defined in `/docs/NORMALIZATION_RULES.md`.
+- Confidence thresholds are defined in `/docs/architecture/NORMALIZATION_RULES.md`.
 - “Matrix” and “tiers” must be expanded into flat `offer_candidates`.
 - “Bundle list in one row” default = SAFE MODE (manual review), unless explicitly enabled.
 
