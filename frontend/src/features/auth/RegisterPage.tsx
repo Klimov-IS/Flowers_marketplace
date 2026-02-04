@@ -7,6 +7,8 @@ import Card from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
 export default function RegisterPage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -67,7 +69,7 @@ export default function RegisterPage() {
       }
 
       // Fetch user info with the new token
-      const response = await fetch('/auth/me', {
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
         headers: {
           Authorization: `Bearer ${tokens.access_token}`,
         },
