@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Dict, List
 from uuid import UUID
 
-from sqlalchemy import select, func, case, cast, Integer
+from sqlalchemy import select, func, case, cast, Integer, literal_column
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.models import (
@@ -339,23 +339,24 @@ class OrderService:
         log.info("order.metrics.start")
 
         # Build base query
+        # Use literal_column for ENUM comparison in PostgreSQL
         query = select(
             func.count(Order.id).label("total"),
             func.sum(
-                cast(Order.status == "pending", Integer)
+                cast(Order.status == literal_column("'pending'"), Integer)
             ).label("pending"),
             func.sum(
-                cast(Order.status == "confirmed", Integer)
+                cast(Order.status == literal_column("'confirmed'"), Integer)
             ).label("confirmed"),
             func.sum(
-                cast(Order.status == "rejected", Integer)
+                cast(Order.status == literal_column("'rejected'"), Integer)
             ).label("rejected"),
             func.sum(
-                cast(Order.status == "cancelled", Integer)
+                cast(Order.status == literal_column("'cancelled'"), Integer)
             ).label("cancelled"),
             func.sum(
                 case(
-                    (Order.status == "confirmed", Order.total_amount),
+                    (Order.status == literal_column("'confirmed'"), Order.total_amount),
                     else_=0
                 )
             ).label("revenue"),

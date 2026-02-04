@@ -9,11 +9,16 @@ KNOWN_HEADERS = [
     "наименование",
     "название",
     "номенклатура",
+    "товар",
+    "продукт",
+    "сорт",
     "цена",
     "price",
     "стоимость",
     "кол-во",
     "количество",
+    "высота",
+    "см",  # Common in flower prices (40 см, 50 см)
 ]
 
 
@@ -43,8 +48,8 @@ def detect_header_row(all_rows: List[List[str]], max_rows: int = 20) -> int:
         # Count how many known headers appear in this row
         score = sum(1 for kw in KNOWN_HEADERS if kw in row_text)
 
-        # Require at least 2 known headers to be confident
-        if score >= 2 and score > best_score:
+        # Require at least 1 known header to be confident
+        if score >= 1 and score > best_score:
             best_score = score
             best_idx = idx
 

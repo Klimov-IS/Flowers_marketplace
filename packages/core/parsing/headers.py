@@ -56,10 +56,11 @@ def normalize_header(header: str) -> str:
     cleaned = re.sub(r"\s+", " ", cleaned)  # normalize whitespace
     cleaned = re.sub(r"[^\w\s-]", "", cleaned)  # remove special chars except dash
 
-    # Try to find mapping
+    # Try to find mapping - check if any variant is contained in header
     for normalized_name, variants in HEADER_MAPPINGS.items():
-        if cleaned in variants:
-            return normalized_name
+        for variant in variants:
+            if variant in cleaned or cleaned in variant:
+                return normalized_name
 
     # Return original if no mapping
     return header
