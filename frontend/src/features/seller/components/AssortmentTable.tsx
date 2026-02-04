@@ -141,30 +141,31 @@ function ItemRow({
   onUpdateItem: (itemId: string, field: string, value: string | number | null) => Promise<void>;
   onUpdateVariant: (variantId: string, field: string, value: string | number | null) => Promise<void>;
 }) {
-  const hasVariants = item.variants_count > 1;
+  const hasMultipleVariants = item.variants_count > 1;
+  const singleVariant = item.variants.length === 1 ? item.variants[0] : null;
 
-  // Format price range (read-only display)
-  const priceDisplay = () => {
+  // Format price range for display (when multiple variants)
+  const priceRangeDisplay = () => {
     if (!item.price_min) return '—';
     const min = parseFloat(item.price_min).toLocaleString();
     if (item.price_max && item.price_min !== item.price_max) {
       const max = parseFloat(item.price_max).toLocaleString();
-      return `${min} – ${max}`;
+      return `${min} – ${max} ₽`;
     }
-    return min;
+    return `${min} ₽`;
   };
 
-  // Format length range (read-only display)
-  const lengthDisplay = () => {
+  // Format length range for display (when multiple variants)
+  const lengthRangeDisplay = () => {
     if (!item.length_min) return '—';
     if (item.length_max && item.length_min !== item.length_max) {
-      return `${item.length_min}–${item.length_max} см`;
+      return `${item.length_min}–${item.length_max}`;
     }
-    return `${item.length_min} см`;
+    return `${item.length_min}`;
   };
 
-  // Get pack type from first variant or show count
-  const packDisplay = () => {
+  // Get pack types summary (when multiple variants)
+  const packTypesDisplay = () => {
     if (item.variants.length === 0) return '—';
     const types = [...new Set(item.variants.map((v) => v.pack_type).filter(Boolean))];
     if (types.length === 0) return '—';
@@ -177,7 +178,7 @@ function ItemRow({
       <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
         {/* Expand button */}
         <td className="w-10 px-2 py-3 text-center">
-          {hasVariants ? (
+          {hasMultipleVariants ? (
             <button
               onClick={onToggle}
               className="p-1 hover:bg-gray-200 rounded transition-colors"
@@ -204,7 +205,7 @@ function ItemRow({
           )}
         </td>
 
-        {/* Name - editable */}
+        {/* Name - always editable */}
         <td className="px-3 py-3">
           <EditableCell
             value={item.raw_name}
@@ -217,7 +218,7 @@ function ItemRow({
           )}
         </td>
 
-        {/* Origin - editable */}
+        {/* Origin - always editable */}
         <td className="px-3 py-3">
           <EditableCell
             value={item.origin_country}
@@ -232,25 +233,58 @@ function ItemRow({
           <ColorSquares colors={item.colors} />
         </td>
 
-        {/* Lengths - read-only aggregated */}
-        <td className="px-3 py-3 text-gray-600">{lengthDisplay()}</td>
-
-        {/* Pack - read-only aggregated */}
-        <td className="px-3 py-3 text-gray-600">{packDisplay()}</td>
-
-        {/* Price - read-only aggregated */}
-        <td className="px-3 py-3 font-medium">{priceDisplay()} ₽</td>
-
-        {/* Stock - editable if single variant, else aggregated */}
+        {/* Length - editable if single variant */}
         <td className="px-3 py-3">
-          {item.variants.length === 1 ? (
+          {singleVariant ? (
             <EditableCell
-              value={item.stock_total}
+              value={singleVariant.length_cm}
+              type="number"
+              placeholder="—"
+              suffix=" см"
+              onSave={async (val) => onUpdateVariant(singleVariant.id, 'length_cm', val)}
+            />
+          ) : (
+            <span className="text-gray-600">{lengthRangeDisplay()} см</span>
+          )}
+        </td>
+
+        {/* Pack type - editable if single variant */}
+        <td className="px-3 py-3">
+          {singleVariant ? (
+            <EditableSelect
+              value={singleVariant.pack_type}
+              options={PACK_TYPE_OPTIONS}
+              onSave={async (val) => onUpdateVariant(singleVariant.id, 'pack_type', val)}
+            />
+          ) : (
+            <span className="text-gray-600">{packTypesDisplay()}</span>
+          )}
+        </td>
+
+        {/* Price - editable if single variant */}
+        <td className="px-3 py-3">
+          {singleVariant ? (
+            <EditableCell
+              value={singleVariant.price ? parseFloat(singleVariant.price) : null}
+              type="number"
+              placeholder="—"
+              suffix=" ₽"
+              onSave={async (val) => onUpdateVariant(singleVariant.id, 'price_min', val)}
+              className="font-medium"
+            />
+          ) : (
+            <span className="font-medium">{priceRangeDisplay()}</span>
+          )}
+        </td>
+
+        {/* Stock - editable if single variant */}
+        <td className="px-3 py-3">
+          {singleVariant ? (
+            <EditableCell
+              value={singleVariant.stock ?? 0}
               type="number"
               placeholder="0"
-              onSave={async (val) =>
-                onUpdateVariant(item.variants[0].id, 'stock_qty', val)
-              }
+              onSave={async (val) => onUpdateVariant(singleVariant.id, 'stock_qty', val)}
             />
           ) : (
             <StockIndicator stock={item.stock_total} />
@@ -285,7 +319,7 @@ function ItemRow({
       </tr>
 
       {/* Expanded variants */}
-      {isExpanded && hasVariants && (
+      {isExpanded && hasMultipleVariants && (
         <ExpandedRow variants={item.variants} onUpdateVariant={onUpdateVariant} />
       )}
     </>
