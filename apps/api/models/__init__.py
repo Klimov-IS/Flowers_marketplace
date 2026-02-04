@@ -14,6 +14,7 @@ from apps.api.models.normalized import (
 )
 from apps.api.models.order import Order, OrderItem
 from apps.api.models.parties import Supplier
+from apps.api.models.ai import AIRun, AISuggestion
 
 __all__ = [
     "Base",
@@ -34,4 +35,6 @@ __all__ = [
     "NormalizationTask",
     "Offer",
     "SupplierDeliveryRule",
+    "AIRun",
+    "AISuggestion",
 ]

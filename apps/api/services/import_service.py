@@ -16,6 +16,7 @@ from apps.api.models import (
     RawRow,
     SupplierItem,
 )
+from apps.api.services.ai_enrichment_service import run_ai_enrichment_for_batch
 from packages.core.parsing import (
     detect_matrix_format,
     extract_length_cm,
@@ -117,6 +118,30 @@ class ImportService:
                 rows=rows,
                 raw_rows=raw_rows,
             )
+
+            # Stage 4.5: AI Enrichment (optional, runs if AI is enabled)
+            try:
+                ai_result = await run_ai_enrichment_for_batch(
+                    db=self.db,
+                    supplier_id=supplier_id,
+                    import_batch_id=import_batch.id,
+                )
+                summary["ai_enrichment"] = ai_result
+                logger.info(
+                    "ai_enrichment_result",
+                    batch_id=str(import_batch.id),
+                    status=ai_result.get("status"),
+                    auto_applied=ai_result.get("auto_applied", 0),
+                    needs_review=ai_result.get("needs_review", 0),
+                )
+            except Exception as e:
+                # AI enrichment failure should not fail the import
+                logger.warning(
+                    "ai_enrichment_error",
+                    batch_id=str(import_batch.id),
+                    error=str(e),
+                )
+                summary["ai_enrichment"] = {"status": "error", "error": str(e)}
 
             # Stage 5: Finalize
             parse_run.finished_at = datetime.utcnow()
@@ -313,7 +338,7 @@ class ImportService:
         if not pack_qty:
             pack_qty = extract_pack_qty(raw_name)
 
-        # Build attributes with all extracted data
+        # Build attributes with all extracted data and source tracking
         attributes = {
             "origin_country": origin_country,
             "colors": normalized.colors if normalized.colors else [],
@@ -324,6 +349,10 @@ class ImportService:
         }
         # Remove None values
         attributes = {k: v for k, v in attributes.items() if v is not None}
+
+        # Add source tracking metadata
+        sources = {k: "parser" for k in attributes.keys()}
+        attributes["_sources"] = sources
 
         # Generate stable key
         name_norm = normalize_name(raw_name)
@@ -343,11 +372,35 @@ class ImportService:
         supplier_item = result.scalar_one_or_none()
 
         if supplier_item:
-            # Update existing
+            # Update existing - preserve locked fields and manual changes
             supplier_item.last_import_batch_id = import_batch_id
             supplier_item.raw_name = raw_name
             supplier_item.name_norm = name_norm
-            supplier_item.attributes = attributes
+
+            # Merge attributes: preserve locked fields and manual sources
+            existing_attrs = supplier_item.attributes or {}
+            locked_fields = existing_attrs.get("_locked", [])
+            existing_sources = existing_attrs.get("_sources", {})
+
+            # Start with new parser attributes
+            merged = dict(attributes)
+            merged_sources = dict(sources)
+
+            # Preserve locked fields from existing
+            for field in locked_fields:
+                if field in existing_attrs:
+                    merged[field] = existing_attrs[field]
+                    merged_sources[field] = existing_sources.get(field, "manual")
+
+            # Preserve manually edited fields (source=manual)
+            for field, source in existing_sources.items():
+                if source == "manual" and field in existing_attrs and field not in locked_fields:
+                    merged[field] = existing_attrs[field]
+                    merged_sources[field] = "manual"
+
+            merged["_sources"] = merged_sources
+            merged["_locked"] = locked_fields
+            supplier_item.attributes = merged
             summary["supplier_items_updated"] += 1
         else:
             # Create new
@@ -425,7 +478,7 @@ class ImportService:
         normalized = normalize_name_rich(raw_name)
         origin_country = normalized.origin_country or extract_origin_country(raw_name)
 
-        # Build attributes with all extracted data
+        # Build attributes with all extracted data and source tracking
         attributes = {
             "origin_country": origin_country,
             "colors": normalized.colors if normalized.colors else [],
@@ -436,6 +489,10 @@ class ImportService:
         }
         # Remove None values
         attributes = {k: v for k, v in attributes.items() if v is not None}
+
+        # Add source tracking metadata
+        sources = {k: "parser" for k in attributes.keys()}
+        attributes["_sources"] = sources
 
         # Generate stable key and create/update SupplierItem
         name_norm = normalize_name(raw_name)
@@ -454,10 +511,35 @@ class ImportService:
         supplier_item = result.scalar_one_or_none()
 
         if supplier_item:
+            # Update existing - preserve locked fields and manual changes
             supplier_item.last_import_batch_id = import_batch_id
             supplier_item.raw_name = raw_name
             supplier_item.name_norm = name_norm
-            supplier_item.attributes = attributes
+
+            # Merge attributes: preserve locked fields and manual sources
+            existing_attrs = supplier_item.attributes or {}
+            locked_fields = existing_attrs.get("_locked", [])
+            existing_sources = existing_attrs.get("_sources", {})
+
+            # Start with new parser attributes
+            merged = dict(attributes)
+            merged_sources = dict(sources)
+
+            # Preserve locked fields from existing
+            for field in locked_fields:
+                if field in existing_attrs:
+                    merged[field] = existing_attrs[field]
+                    merged_sources[field] = existing_sources.get(field, "manual")
+
+            # Preserve manually edited fields (source=manual)
+            for field, source in existing_sources.items():
+                if source == "manual" and field in existing_attrs and field not in locked_fields:
+                    merged[field] = existing_attrs[field]
+                    merged_sources[field] = "manual"
+
+            merged["_sources"] = merged_sources
+            merged["_locked"] = locked_fields
+            supplier_item.attributes = merged
             summary["supplier_items_updated"] += 1
         else:
             supplier_item = SupplierItem(

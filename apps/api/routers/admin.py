@@ -9,11 +9,14 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from apps.api.database import get_db
 from apps.api.logging_config import get_logger
-from apps.api.models import ImportBatch, Supplier
+from apps.api.models import ImportBatch, Supplier, AISuggestion, AIRun
+from apps.api.models.ai import AISuggestionStatus
 from apps.api.models.items import OfferCandidate, SupplierItem
+from apps.api.services.ai_enrichment_service import run_ai_enrichment_for_batch
 from apps.api.services.import_service import ImportService
 from apps.api.services.order_service import OrderService
 
@@ -66,6 +69,62 @@ class ImportSummaryResponse(BaseModel):
     supplier_items_count: int
     offer_candidates_count: int
     parse_events_count: int
+
+
+# AI Enrichment schemas
+class AIEnrichmentResponse(BaseModel):
+    """Schema for AI enrichment response."""
+
+    status: str
+    ai_run_id: Optional[UUID] = None
+    auto_applied: int = 0
+    applied_with_mark: int = 0
+    needs_review: int = 0
+    suggestions_created: int = 0
+    reason: Optional[str] = None
+    error: Optional[str] = None
+
+
+# AI Suggestions Review schemas
+class AISuggestionResponse(BaseModel):
+    """Schema for a single AI suggestion."""
+
+    id: UUID
+    ai_run_id: UUID
+    suggestion_type: str
+    target_entity: Optional[str] = None
+    target_id: Optional[UUID] = None
+    field_name: Optional[str] = None
+    suggested_value: dict
+    confidence: Decimal
+    applied_status: str
+    applied_at: Optional[datetime] = None
+    applied_by: Optional[str] = None
+    created_at: datetime
+    # Joined data
+    item_raw_name: Optional[str] = None
+    supplier_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AISuggestionsListResponse(BaseModel):
+    """Schema for paginated list of AI suggestions."""
+
+    items: List[AISuggestionResponse]
+    total: int
+    page: int
+    per_page: int
+
+
+class AISuggestionActionResponse(BaseModel):
+    """Schema for accept/reject action response."""
+
+    id: UUID
+    applied_status: str
+    applied_at: Optional[datetime] = None
+    message: str
 
 
 # Supplier Items schemas (Seller Cabinet)
@@ -428,6 +487,290 @@ async def get_import_summary(
     return summary
 
 
+# AI Enrichment endpoint
+@router.post("/imports/{import_batch_id}/ai-enrich", response_model=AIEnrichmentResponse)
+async def run_ai_enrichment(
+    import_batch_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> AIEnrichmentResponse:
+    """
+    Manually trigger AI enrichment for an import batch.
+
+    This endpoint allows re-running AI enrichment on items that may have been
+    missed during initial import or when AI was not available.
+
+    Args:
+        import_batch_id: Import batch UUID
+        db: Database session
+
+    Returns:
+        AI enrichment result
+    """
+    # Get the import batch to find supplier_id
+    result = await db.execute(
+        select(ImportBatch).where(ImportBatch.id == import_batch_id)
+    )
+    batch = result.scalar_one_or_none()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Import batch not found")
+
+    logger.info(
+        "ai_enrichment_manual_trigger",
+        batch_id=str(import_batch_id),
+        supplier_id=str(batch.supplier_id),
+    )
+
+    try:
+        ai_result = await run_ai_enrichment_for_batch(
+            db=db,
+            supplier_id=batch.supplier_id,
+            import_batch_id=import_batch_id,
+        )
+
+        logger.info(
+            "ai_enrichment_manual_complete",
+            batch_id=str(import_batch_id),
+            status=ai_result.get("status"),
+        )
+
+        return AIEnrichmentResponse(
+            status=ai_result.get("status", "unknown"),
+            ai_run_id=ai_result.get("ai_run_id"),
+            auto_applied=ai_result.get("auto_applied", 0),
+            applied_with_mark=ai_result.get("applied_with_mark", 0),
+            needs_review=ai_result.get("needs_review", 0),
+            suggestions_created=ai_result.get("suggestions_created", 0),
+            reason=ai_result.get("reason"),
+            error=ai_result.get("error"),
+        )
+
+    except Exception as e:
+        logger.error(
+            "ai_enrichment_manual_failed",
+            batch_id=str(import_batch_id),
+            error=str(e),
+        )
+        raise HTTPException(status_code=500, detail=f"AI enrichment failed: {str(e)}")
+
+
+# AI Suggestions Review endpoints
+@router.get("/ai/suggestions", response_model=AISuggestionsListResponse)
+async def list_ai_suggestions(
+    status: Optional[str] = Query(None, description="Filter by status (needs_review, pending, auto_applied, rejected)"),
+    supplier_id: Optional[UUID] = Query(None, description="Filter by supplier"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(50, ge=1, le=100, description="Items per page"),
+    db: AsyncSession = Depends(get_db),
+) -> AISuggestionsListResponse:
+    """
+    List AI suggestions for review.
+
+    Args:
+        status: Filter by applied_status
+        supplier_id: Filter by supplier
+        page: Page number (1-based)
+        per_page: Items per page
+        db: Database session
+
+    Returns:
+        Paginated list of AI suggestions
+    """
+    # Build query with joins
+    query = (
+        select(AISuggestion, SupplierItem.raw_name, Supplier.name)
+        .join(AIRun, AISuggestion.ai_run_id == AIRun.id)
+        .outerjoin(SupplierItem, AISuggestion.target_id == SupplierItem.id)
+        .outerjoin(Supplier, AIRun.supplier_id == Supplier.id)
+    )
+
+    # Apply filters
+    if status:
+        query = query.where(AISuggestion.applied_status == status)
+    if supplier_id:
+        query = query.where(AIRun.supplier_id == supplier_id)
+
+    # Count total
+    count_query = select(func.count()).select_from(
+        query.with_only_columns(AISuggestion.id).subquery()
+    )
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    # Apply pagination and ordering (newest first, then by confidence desc)
+    offset = (page - 1) * per_page
+    query = query.order_by(
+        AISuggestion.created_at.desc(),
+        AISuggestion.confidence.desc(),
+    ).offset(offset).limit(per_page)
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    # Build response
+    items = []
+    for suggestion, item_raw_name, supplier_name in rows:
+        items.append(
+            AISuggestionResponse(
+                id=suggestion.id,
+                ai_run_id=suggestion.ai_run_id,
+                suggestion_type=suggestion.suggestion_type,
+                target_entity=suggestion.target_entity,
+                target_id=suggestion.target_id,
+                field_name=suggestion.field_name,
+                suggested_value=suggestion.suggested_value,
+                confidence=suggestion.confidence,
+                applied_status=suggestion.applied_status,
+                applied_at=suggestion.applied_at,
+                applied_by=suggestion.applied_by,
+                created_at=suggestion.created_at,
+                item_raw_name=item_raw_name,
+                supplier_name=supplier_name,
+            )
+        )
+
+    logger.info(
+        "ai_suggestions_listed",
+        status_filter=status,
+        supplier_id=str(supplier_id) if supplier_id else None,
+        total=total,
+        page=page,
+    )
+
+    return AISuggestionsListResponse(
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
+
+
+@router.patch("/ai/suggestions/{suggestion_id}/accept", response_model=AISuggestionActionResponse)
+async def accept_ai_suggestion(
+    suggestion_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> AISuggestionActionResponse:
+    """
+    Accept and apply an AI suggestion.
+
+    Args:
+        suggestion_id: Suggestion UUID
+        db: Database session
+
+    Returns:
+        Action result
+    """
+    # Find the suggestion
+    result = await db.execute(
+        select(AISuggestion).where(AISuggestion.id == suggestion_id)
+    )
+    suggestion = result.scalar_one_or_none()
+    if not suggestion:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+
+    # Check if already processed
+    if suggestion.applied_status in [AISuggestionStatus.MANUAL_APPLIED.value, AISuggestionStatus.REJECTED.value]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Suggestion already processed with status: {suggestion.applied_status}",
+        )
+
+    # Apply the suggestion to the target entity
+    if suggestion.target_entity == "supplier_item" and suggestion.target_id and suggestion.field_name:
+        item_result = await db.execute(
+            select(SupplierItem).where(SupplierItem.id == suggestion.target_id)
+        )
+        item = item_result.scalar_one_or_none()
+        if item:
+            attributes = item.attributes or {}
+            sources = attributes.get("_sources", {})
+
+            # Apply value
+            value = suggestion.suggested_value.get("value")
+            attributes[suggestion.field_name] = value
+            sources[suggestion.field_name] = "ai"
+
+            # Update confidences
+            confidences = attributes.get("_confidences", {})
+            confidences[suggestion.field_name] = float(suggestion.confidence)
+            attributes["_confidences"] = confidences
+
+            attributes["_sources"] = sources
+            item.attributes = attributes
+            flag_modified(item, "attributes")
+
+    # Update suggestion status
+    suggestion.applied_status = AISuggestionStatus.MANUAL_APPLIED.value
+    suggestion.applied_at = datetime.utcnow()
+    suggestion.applied_by = "admin"
+
+    await db.commit()
+
+    logger.info(
+        "ai_suggestion_accepted",
+        suggestion_id=str(suggestion_id),
+        field_name=suggestion.field_name,
+        value=suggestion.suggested_value,
+    )
+
+    return AISuggestionActionResponse(
+        id=suggestion.id,
+        applied_status=suggestion.applied_status,
+        applied_at=suggestion.applied_at,
+        message=f"Suggestion accepted and applied to {suggestion.field_name}",
+    )
+
+
+@router.patch("/ai/suggestions/{suggestion_id}/reject", response_model=AISuggestionActionResponse)
+async def reject_ai_suggestion(
+    suggestion_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> AISuggestionActionResponse:
+    """
+    Reject an AI suggestion.
+
+    Args:
+        suggestion_id: Suggestion UUID
+        db: Database session
+
+    Returns:
+        Action result
+    """
+    # Find the suggestion
+    result = await db.execute(
+        select(AISuggestion).where(AISuggestion.id == suggestion_id)
+    )
+    suggestion = result.scalar_one_or_none()
+    if not suggestion:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+
+    # Check if already processed
+    if suggestion.applied_status in [AISuggestionStatus.MANUAL_APPLIED.value, AISuggestionStatus.REJECTED.value]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Suggestion already processed with status: {suggestion.applied_status}",
+        )
+
+    # Update suggestion status
+    suggestion.applied_status = AISuggestionStatus.REJECTED.value
+    suggestion.applied_at = datetime.utcnow()
+    suggestion.applied_by = "admin"
+
+    await db.commit()
+
+    logger.info(
+        "ai_suggestion_rejected",
+        suggestion_id=str(suggestion_id),
+        field_name=suggestion.field_name,
+    )
+
+    return AISuggestionActionResponse(
+        id=suggestion.id,
+        applied_status=suggestion.applied_status,
+        applied_at=suggestion.applied_at,
+        message=f"Suggestion rejected for {suggestion.field_name}",
+    )
+
+
 # Supplier Item Update endpoint (for editable table)
 @router.patch("/supplier-items/{item_id}", response_model=SupplierItemResponse)
 async def update_supplier_item(
@@ -458,13 +801,26 @@ async def update_supplier_item(
     if data.raw_name is not None:
         item.raw_name = data.raw_name
 
-    # Handle attributes updates
+    # Handle attributes updates with source tracking
     attributes = item.attributes or {}
+    sources = attributes.get("_sources", {})
+    locked = attributes.get("_locked", [])
+
     if data.origin_country is not None:
-        attributes["origin_country"] = data.origin_country
+        # Check if field is not locked
+        if "origin_country" not in locked:
+            attributes["origin_country"] = data.origin_country
+            sources["origin_country"] = "manual"
+
     if data.colors is not None:
-        attributes["colors"] = data.colors
+        if "colors" not in locked:
+            attributes["colors"] = data.colors
+            sources["colors"] = "manual"
+
+    # Update sources metadata
+    attributes["_sources"] = sources
     item.attributes = attributes
+    flag_modified(item, "attributes")  # Mark JSON field as modified
 
     await db.commit()
     await db.refresh(item)

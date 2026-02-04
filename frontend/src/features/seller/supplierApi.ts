@@ -22,6 +22,45 @@ export interface OfferCandidateUpdateData {
   stock_qty?: number | null;
 }
 
+// AI Suggestion types
+export interface AISuggestion {
+  id: string;
+  ai_run_id: string;
+  suggestion_type: string;
+  target_entity: string | null;
+  target_id: string | null;
+  field_name: string | null;
+  suggested_value: { value: unknown };
+  confidence: number;
+  applied_status: string;
+  applied_at: string | null;
+  applied_by: string | null;
+  created_at: string;
+  item_raw_name: string | null;
+  supplier_name: string | null;
+}
+
+export interface AISuggestionsResponse {
+  items: AISuggestion[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+export interface AISuggestionsParams {
+  status?: string;
+  supplier_id?: string;
+  page?: number;
+  per_page?: number;
+}
+
+export interface AISuggestionActionResponse {
+  id: string;
+  applied_status: string;
+  applied_at: string | null;
+  message: string;
+}
+
 // In development, Vite proxy handles /offers, /orders, /admin routes
 // In production, set VITE_API_BASE_URL to the actual API URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -29,7 +68,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 export const supplierApi = createApi({
   reducerPath: 'supplierApi',
   baseQuery: fetchBaseQuery({ baseUrl: API_BASE_URL }),
-  tagTypes: ['SupplierOrders', 'ImportBatches', 'NormalizationTasks', 'SupplierItems'],
+  tagTypes: ['SupplierOrders', 'ImportBatches', 'NormalizationTasks', 'SupplierItems', 'AISuggestions'],
   endpoints: (builder) => ({
     // Supplier Items (Assortment)
     getSupplierItems: builder.query<SupplierItemsResponse, SupplierItemsParams>({
@@ -142,6 +181,37 @@ export const supplierApi = createApi({
       }),
       invalidatesTags: ['SupplierItems'],
     }),
+
+    // AI Suggestions endpoints
+    getAISuggestions: builder.query<AISuggestionsResponse, AISuggestionsParams>({
+      query: ({ status, supplier_id, page, per_page }) => {
+        const params = new URLSearchParams();
+        if (status) params.append('status', status);
+        if (supplier_id) params.append('supplier_id', supplier_id);
+        if (page) params.append('page', String(page));
+        if (per_page) params.append('per_page', String(per_page));
+
+        const queryString = params.toString();
+        return `/admin/ai/suggestions${queryString ? `?${queryString}` : ''}`;
+      },
+      providesTags: ['AISuggestions'],
+    }),
+
+    acceptAISuggestion: builder.mutation<AISuggestionActionResponse, string>({
+      query: (suggestionId) => ({
+        url: `/admin/ai/suggestions/${suggestionId}/accept`,
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['AISuggestions', 'SupplierItems'],
+    }),
+
+    rejectAISuggestion: builder.mutation<AISuggestionActionResponse, string>({
+      query: (suggestionId) => ({
+        url: `/admin/ai/suggestions/${suggestionId}/reject`,
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['AISuggestions'],
+    }),
   }),
 });
 
@@ -154,4 +224,7 @@ export const {
   useUploadPriceListMutation,
   useUpdateSupplierItemMutation,
   useUpdateOfferCandidateMutation,
+  useGetAISuggestionsQuery,
+  useAcceptAISuggestionMutation,
+  useRejectAISuggestionMutation,
 } = supplierApi;

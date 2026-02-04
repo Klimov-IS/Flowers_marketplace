@@ -4,10 +4,10 @@ import {
   useUpdateSupplierItemMutation,
   useUpdateOfferCandidateMutation,
 } from '../supplierApi';
-import ColorSquares from './ColorSquares';
 import StockIndicator from './StockIndicator';
 import EditableCell from './EditableCell';
 import EditableSelect from './EditableSelect';
+import EditableColorSelect from './EditableColorSelect';
 import Badge from '../../../components/ui/Badge';
 
 interface AssortmentTableProps {
@@ -21,6 +21,18 @@ const PACK_TYPE_OPTIONS = [
   { value: 'бак', label: 'Бак' },
   { value: 'упак', label: 'Упаковка' },
   { value: 'шт', label: 'Штука' },
+];
+
+const COUNTRY_OPTIONS = [
+  { value: null, label: '—' },
+  { value: 'Эквадор', label: 'Эквадор' },
+  { value: 'Колумбия', label: 'Колумбия' },
+  { value: 'Нидерланды', label: 'Нидерланды' },
+  { value: 'Кения', label: 'Кения' },
+  { value: 'Израиль', label: 'Израиль' },
+  { value: 'Россия', label: 'Россия' },
+  { value: 'Эфиопия', label: 'Эфиопия' },
+  { value: 'Италия', label: 'Италия' },
 ];
 
 // Expanded row component showing editable variants
@@ -125,6 +137,9 @@ function ExpandedRow({
   );
 }
 
+// Value type for item updates (supports strings, numbers, and arrays)
+type ItemUpdateValue = string | number | string[] | null;
+
 // Single item row
 function ItemRow({
   item,
@@ -138,7 +153,7 @@ function ItemRow({
   isExpanded: boolean;
   onToggle: () => void;
   onViewDetails?: (item: SupplierItem) => void;
-  onUpdateItem: (itemId: string, field: string, value: string | number | null) => Promise<void>;
+  onUpdateItem: (itemId: string, field: string, value: ItemUpdateValue) => Promise<void>;
   onUpdateVariant: (variantId: string, field: string, value: string | number | null) => Promise<void>;
 }) {
   const hasMultipleVariants = item.variants_count > 1;
@@ -218,19 +233,21 @@ function ItemRow({
           )}
         </td>
 
-        {/* Origin - always editable */}
+        {/* Origin - dropdown select */}
         <td className="px-3 py-3">
-          <EditableCell
+          <EditableSelect
             value={item.origin_country}
-            type="text"
-            placeholder="—"
+            options={COUNTRY_OPTIONS}
             onSave={async (val) => onUpdateItem(item.id, 'origin_country', val)}
           />
         </td>
 
-        {/* Colors - read-only (complex to edit inline) */}
+        {/* Colors - multi-select */}
         <td className="px-3 py-3">
-          <ColorSquares colors={item.colors} />
+          <EditableColorSelect
+            value={item.colors || []}
+            onSave={async (colors) => onUpdateItem(item.id, 'colors', colors)}
+          />
         </td>
 
         {/* Length - editable if single variant */}
@@ -350,7 +367,7 @@ export default function AssortmentTable({
   const handleUpdateItem = async (
     itemId: string,
     field: string,
-    value: string | number | null
+    value: ItemUpdateValue
   ) => {
     const data: Record<string, unknown> = {};
     data[field] = value;

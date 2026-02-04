@@ -5,16 +5,18 @@ import {
   useGetOrderMetricsQuery,
   useConfirmOrderMutation,
   useRejectOrderMutation,
+  useGetAISuggestionsQuery,
 } from './supplierApi';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import TabsNav from './components/TabsNav';
 import AssortmentTab from './components/AssortmentTab';
+import AIReviewTab from './components/AIReviewTab';
 import PriceListUpload from './PriceListUpload';
 import RejectOrderModal from './RejectOrderModal';
 
-type TabId = 'assortment' | 'orders' | 'upload';
+type TabId = 'assortment' | 'orders' | 'upload' | 'ai-review';
 
 export default function SellerDashboard() {
   const user = useAppSelector((state) => state.auth.user);
@@ -31,6 +33,12 @@ export default function SellerDashboard() {
   const { data: metrics } = useGetOrderMetricsQuery(user?.id || '', {
     skip: !user?.id || user.role !== 'seller',
   });
+
+  // Fetch AI suggestions count for badge
+  const { data: aiSuggestionsData } = useGetAISuggestionsQuery(
+    { status: 'needs_review', supplier_id: user?.id, per_page: 1 },
+    { skip: !user?.id || user.role !== 'seller' }
+  );
 
   const [confirmOrder, { isLoading: isConfirming }] = useConfirmOrderMutation();
   const [rejectOrder] = useRejectOrderMutation();
@@ -105,6 +113,12 @@ export default function SellerDashboard() {
       badgeVariant: 'warning' as const,
     },
     { id: 'upload', label: 'Загрузка прайса' },
+    {
+      id: 'ai-review',
+      label: 'AI Проверка',
+      badge: aiSuggestionsData?.total,
+      badgeVariant: 'warning' as const,
+    },
   ];
 
   if (!user || user.role !== 'seller') {
@@ -168,6 +182,16 @@ export default function SellerDashboard() {
         <div>
           <h2 className="text-xl font-semibold mb-4">Загрузка прайс-листа</h2>
           <PriceListUpload />
+        </div>
+      )}
+
+      {activeTab === 'ai-review' && (
+        <div>
+          <h2 className="text-xl font-semibold mb-4">AI-предложения для проверки</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Здесь отображаются предложения AI с низкой уверенностью, требующие вашей проверки
+          </p>
+          <AIReviewTab supplierId={user.id} />
         </div>
       )}
 
