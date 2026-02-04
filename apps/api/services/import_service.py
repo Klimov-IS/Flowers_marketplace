@@ -17,10 +17,13 @@ from apps.api.models import (
     SupplierItem,
 )
 from packages.core.parsing import (
+    detect_matrix_format,
     extract_length_cm,
+    extract_matrix_columns,
     extract_origin_country,
     parse_csv_content,
     parse_price,
+    normalize_name as normalize_name_rich,
 )
 from packages.core.parsing.attributes import extract_pack_qty
 from packages.core.parsing.headers import normalize_headers
@@ -171,16 +174,41 @@ class ImportService:
             "parse_events_count": 0,
         }
 
+        # Detect matrix format from first row headers
+        is_matrix = False
+        matrix_columns = []
+        if rows:
+            headers = rows[0].get("headers", [])
+            is_matrix = detect_matrix_format(headers)
+            if is_matrix:
+                matrix_columns = extract_matrix_columns(headers)
+                logger.info(
+                    "matrix_format_detected",
+                    columns_count=len(matrix_columns),
+                    columns=matrix_columns,
+                )
+
         for row_data, raw_row in zip(rows, raw_rows):
             try:
-                await self._process_single_row(
-                    supplier_id=supplier_id,
-                    import_batch_id=import_batch_id,
-                    parse_run_id=parse_run_id,
-                    row_data=row_data,
-                    raw_row=raw_row,
-                    summary=summary,
-                )
+                if is_matrix and matrix_columns:
+                    await self._process_matrix_row(
+                        supplier_id=supplier_id,
+                        import_batch_id=import_batch_id,
+                        parse_run_id=parse_run_id,
+                        row_data=row_data,
+                        raw_row=raw_row,
+                        matrix_columns=matrix_columns,
+                        summary=summary,
+                    )
+                else:
+                    await self._process_single_row(
+                        supplier_id=supplier_id,
+                        import_batch_id=import_batch_id,
+                        parse_run_id=parse_run_id,
+                        row_data=row_data,
+                        raw_row=raw_row,
+                        summary=summary,
+                    )
             except Exception as e:
                 # Log error but continue
                 logger.warning(
@@ -276,11 +304,26 @@ class ImportService:
             if pack_qty_str.isdigit():
                 pack_qty = int(pack_qty_str)
 
-        # Extract attributes from name
-        length_cm = extract_length_cm(raw_name)
-        origin_country = extract_origin_country(raw_name)
+        # Extract attributes using rich name normalizer
+        normalized = normalize_name_rich(raw_name)
+
+        # Use normalized values, falling back to legacy extraction
+        length_cm = normalized.length_cm or extract_length_cm(raw_name)
+        origin_country = normalized.origin_country or extract_origin_country(raw_name)
         if not pack_qty:
             pack_qty = extract_pack_qty(raw_name)
+
+        # Build attributes with all extracted data
+        attributes = {
+            "origin_country": origin_country,
+            "colors": normalized.colors if normalized.colors else [],
+            "flower_type": normalized.flower_type,
+            "variety": normalized.variety,
+            "farm": normalized.farm,
+            "clean_name": normalized.clean_name,
+        }
+        # Remove None values
+        attributes = {k: v for k, v in attributes.items() if v is not None}
 
         # Generate stable key
         name_norm = normalize_name(raw_name)
@@ -304,9 +347,7 @@ class ImportService:
             supplier_item.last_import_batch_id = import_batch_id
             supplier_item.raw_name = raw_name
             supplier_item.name_norm = name_norm
-            supplier_item.attributes = {
-                "origin_country": origin_country,
-            }
+            supplier_item.attributes = attributes
             summary["supplier_items_updated"] += 1
         else:
             # Create new
@@ -317,9 +358,7 @@ class ImportService:
                 raw_name=raw_name,
                 raw_group=None,
                 name_norm=name_norm,
-                attributes={
-                    "origin_country": origin_country,
-                },
+                attributes=attributes,
                 status="active",
             )
             self.db.add(supplier_item)
@@ -347,6 +386,151 @@ class ImportService:
         )
         self.db.add(offer_candidate)
         summary["offer_candidates_created"] += 1
+
+    async def _process_matrix_row(
+        self,
+        supplier_id: UUID,
+        import_batch_id: UUID,
+        parse_run_id: UUID,
+        row_data: Dict,
+        raw_row: RawRow,
+        matrix_columns: List[tuple],
+        summary: Dict,
+    ) -> None:
+        """
+        Process a matrix format row - one product with multiple price columns.
+
+        Matrix format example:
+            Наименование | 40 см Бак | 40 см Упак | 50 см Бак
+            Роза         | 60        | 65         | 70
+
+        Creates one SupplierItem and multiple OfferCandidates.
+        """
+        cells = row_data["cells"]
+
+        # First column is product name
+        raw_name = cells[0].strip() if cells else ""
+        if not raw_name:
+            await self._create_parse_event(
+                parse_run_id=parse_run_id,
+                raw_row_id=raw_row.id,
+                severity="error",
+                code="MISSING_NAME",
+                message="Name column empty in matrix row",
+            )
+            summary["parse_events_count"] += 1
+            return
+
+        # Extract attributes using rich name normalizer
+        normalized = normalize_name_rich(raw_name)
+        origin_country = normalized.origin_country or extract_origin_country(raw_name)
+
+        # Build attributes with all extracted data
+        attributes = {
+            "origin_country": origin_country,
+            "colors": normalized.colors if normalized.colors else [],
+            "flower_type": normalized.flower_type,
+            "variety": normalized.variety,
+            "farm": normalized.farm,
+            "clean_name": normalized.clean_name,
+        }
+        # Remove None values
+        attributes = {k: v for k, v in attributes.items() if v is not None}
+
+        # Generate stable key and create/update SupplierItem
+        name_norm = normalize_name(raw_name)
+        stable_key = generate_stable_key(
+            supplier_id=supplier_id,
+            raw_name=raw_name,
+            raw_group=None,
+        )
+
+        result = await self.db.execute(
+            select(SupplierItem).where(
+                SupplierItem.supplier_id == supplier_id,
+                SupplierItem.stable_key == stable_key,
+            )
+        )
+        supplier_item = result.scalar_one_or_none()
+
+        if supplier_item:
+            supplier_item.last_import_batch_id = import_batch_id
+            supplier_item.raw_name = raw_name
+            supplier_item.name_norm = name_norm
+            supplier_item.attributes = attributes
+            summary["supplier_items_updated"] += 1
+        else:
+            supplier_item = SupplierItem(
+                supplier_id=supplier_id,
+                stable_key=stable_key,
+                last_import_batch_id=import_batch_id,
+                raw_name=raw_name,
+                raw_group=None,
+                name_norm=name_norm,
+                attributes=attributes,
+                status="active",
+            )
+            self.db.add(supplier_item)
+            await self.db.flush()
+            summary["supplier_items_created"] += 1
+
+        # Create OfferCandidate for each non-empty price column
+        candidates_created = 0
+        for col_idx, length_cm, pack_type in matrix_columns:
+            if col_idx >= len(cells):
+                continue
+
+            raw_price = cells[col_idx].strip()
+            if not raw_price:
+                continue  # Skip empty cells
+
+            # Parse price
+            price_data = parse_price(raw_price)
+            if price_data["error"] or price_data["price_min"] is None:
+                await self._create_parse_event(
+                    parse_run_id=parse_run_id,
+                    raw_row_id=raw_row.id,
+                    severity="warning",
+                    code="MATRIX_PRICE_INVALID",
+                    message=f"Invalid price in column {col_idx}: {raw_price}",
+                    payload={"column_index": col_idx, "raw_price": raw_price},
+                )
+                summary["parse_events_count"] += 1
+                continue
+
+            # Create OfferCandidate
+            offer_candidate = OfferCandidate(
+                supplier_item_id=supplier_item.id,
+                import_batch_id=import_batch_id,
+                raw_row_id=raw_row.id,
+                length_cm=length_cm,
+                pack_type=pack_type,
+                pack_qty=None,
+                price_type=price_data["price_type"],
+                price_min=price_data["price_min"],
+                price_max=price_data["price_max"],
+                currency="RUB",
+                tier_min_qty=None,
+                tier_max_qty=None,
+                availability="unknown",
+                stock_qty=None,
+                validation="ok",
+                validation_notes=None,
+            )
+            self.db.add(offer_candidate)
+            candidates_created += 1
+
+        summary["offer_candidates_created"] += candidates_created
+
+        if candidates_created == 0:
+            await self._create_parse_event(
+                parse_run_id=parse_run_id,
+                raw_row_id=raw_row.id,
+                severity="warning",
+                code="NO_VALID_PRICES",
+                message=f"No valid prices found in matrix row for: {raw_name}",
+            )
+            summary["parse_events_count"] += 1
 
     async def _create_parse_event(
         self,

@@ -1,7 +1,8 @@
 """CSV parsing functions."""
 import csv
 import io
-from typing import Any, Dict, List
+import re
+from typing import Any, Dict, List, Tuple
 
 
 # Known header keywords for detection
@@ -129,3 +130,70 @@ def parse_csv_content(content: bytes, encoding: str = "utf-8") -> List[Dict[str,
 
     except csv.Error as e:
         raise ValueError(f"CSV parsing error: {str(e)}")
+
+
+# Pattern for matrix column headers like "40 см Бак", "50 cm упак"
+MATRIX_COLUMN_PATTERN = re.compile(
+    r"(\d{2,3})\s*(см|cm)\.?\s*(бак|упак|pack|bucket)?",
+    re.IGNORECASE
+)
+
+
+def detect_matrix_format(headers: List[str]) -> bool:
+    """
+    Determine if CSV is in matrix format (multiple dimension columns).
+
+    Matrix format example:
+        Наименование | 40 см Бак | 40 см Упак | 50 см Бак
+        Роза         | 60        | 65         | 70
+
+    Args:
+        headers: List of header strings
+
+    Returns:
+        True if matrix format detected (2+ dimension columns)
+    """
+    if not headers:
+        return False
+
+    dimension_count = 0
+    # Skip first column (usually product name)
+    for header in headers[1:]:
+        if header and MATRIX_COLUMN_PATTERN.search(header.lower()):
+            dimension_count += 1
+
+    return dimension_count >= 2
+
+
+def extract_matrix_columns(headers: List[str]) -> List[Tuple[int, int, str | None]]:
+    """
+    Extract matrix column information from headers.
+
+    Args:
+        headers: List of header strings
+
+    Returns:
+        List of tuples: (column_index, length_cm, pack_type)
+        Example: [(1, 40, "bak"), (2, 40, "pack"), (3, 50, "bak")]
+    """
+    columns = []
+    for idx, header in enumerate(headers):
+        if not header:
+            continue
+
+        match = MATRIX_COLUMN_PATTERN.search(header.lower())
+        if match:
+            length_cm = int(match.group(1))
+            raw_pack_type = match.group(3)
+
+            # Normalize pack_type
+            pack_type = None
+            if raw_pack_type:
+                if raw_pack_type in ("бак", "bucket"):
+                    pack_type = "bak"
+                elif raw_pack_type in ("упак", "pack"):
+                    pack_type = "pack"
+
+            columns.append((idx, length_cm, pack_type))
+
+    return columns

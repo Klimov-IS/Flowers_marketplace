@@ -115,6 +115,25 @@ class SupplierItemsListResponse(BaseModel):
     per_page: int
 
 
+# Update schemas for editable table
+class SupplierItemUpdate(BaseModel):
+    """Schema for updating a supplier item."""
+
+    raw_name: Optional[str] = None
+    origin_country: Optional[str] = None
+    colors: Optional[List[str]] = None
+
+
+class OfferCandidateUpdate(BaseModel):
+    """Schema for updating an offer candidate (variant)."""
+
+    length_cm: Optional[int] = None
+    pack_type: Optional[str] = None
+    pack_qty: Optional[int] = None
+    price_min: Optional[Decimal] = None
+    stock_qty: Optional[int] = None
+
+
 # Supplier endpoints
 @router.post("/suppliers", response_model=SupplierResponse)
 async def create_supplier(
@@ -407,6 +426,161 @@ async def get_import_summary(
         raise HTTPException(status_code=404, detail="Import batch not found")
 
     return summary
+
+
+# Supplier Item Update endpoint (for editable table)
+@router.patch("/supplier-items/{item_id}", response_model=SupplierItemResponse)
+async def update_supplier_item(
+    item_id: UUID,
+    data: SupplierItemUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> SupplierItemResponse:
+    """
+    Update a supplier item's editable fields.
+
+    Args:
+        item_id: Supplier item UUID
+        data: Fields to update
+        db: Database session
+
+    Returns:
+        Updated supplier item
+    """
+    # Find the item
+    result = await db.execute(
+        select(SupplierItem).where(SupplierItem.id == item_id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Supplier item not found")
+
+    # Update fields
+    if data.raw_name is not None:
+        item.raw_name = data.raw_name
+
+    # Handle attributes updates
+    attributes = item.attributes or {}
+    if data.origin_country is not None:
+        attributes["origin_country"] = data.origin_country
+    if data.colors is not None:
+        attributes["colors"] = data.colors
+    item.attributes = attributes
+
+    await db.commit()
+    await db.refresh(item)
+
+    # Load variants for response
+    variants_query = select(OfferCandidate).where(
+        OfferCandidate.supplier_item_id == item_id
+    )
+    variants_result = await db.execute(variants_query)
+    variants = variants_result.scalars().all()
+
+    # Extract attributes
+    origin_country = attributes.get("origin_country")
+    colors = attributes.get("colors", [])
+    if isinstance(colors, str):
+        colors = [colors]
+
+    # Aggregate variant data
+    lengths = [v.length_cm for v in variants if v.length_cm is not None]
+    prices = [v.price_min for v in variants if v.price_min is not None]
+    stocks = [v.stock_qty for v in variants if v.stock_qty is not None]
+
+    variant_responses = [
+        OfferVariantResponse(
+            id=v.id,
+            length_cm=v.length_cm,
+            pack_type=v.pack_type,
+            pack_qty=v.pack_qty,
+            price=v.price_min,
+            price_max=v.price_max,
+            stock=v.stock_qty,
+            validation=v.validation,
+        )
+        for v in variants
+    ]
+
+    logger.info(
+        "supplier_item_updated",
+        item_id=str(item_id),
+        updated_fields=data.model_dump(exclude_unset=True),
+    )
+
+    return SupplierItemResponse(
+        id=item.id,
+        raw_name=item.raw_name,
+        origin_country=origin_country,
+        colors=colors,
+        length_min=min(lengths) if lengths else None,
+        length_max=max(lengths) if lengths else None,
+        price_min=min(prices) if prices else None,
+        price_max=max(prices) if prices else None,
+        stock_total=sum(stocks) if stocks else 0,
+        status=item.status,
+        source_file=None,
+        variants_count=len(variants),
+        variants=variant_responses,
+    )
+
+
+# Offer Candidate Update endpoint (for editable table)
+@router.patch("/offer-candidates/{candidate_id}", response_model=OfferVariantResponse)
+async def update_offer_candidate(
+    candidate_id: UUID,
+    data: OfferCandidateUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> OfferVariantResponse:
+    """
+    Update an offer candidate (variant) fields.
+
+    Args:
+        candidate_id: Offer candidate UUID
+        data: Fields to update
+        db: Database session
+
+    Returns:
+        Updated offer candidate
+    """
+    # Find the candidate
+    result = await db.execute(
+        select(OfferCandidate).where(OfferCandidate.id == candidate_id)
+    )
+    candidate = result.scalar_one_or_none()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Offer candidate not found")
+
+    # Update fields
+    if data.length_cm is not None:
+        candidate.length_cm = data.length_cm
+    if data.pack_type is not None:
+        candidate.pack_type = data.pack_type
+    if data.pack_qty is not None:
+        candidate.pack_qty = data.pack_qty
+    if data.price_min is not None:
+        candidate.price_min = data.price_min
+    if data.stock_qty is not None:
+        candidate.stock_qty = data.stock_qty
+
+    await db.commit()
+    await db.refresh(candidate)
+
+    logger.info(
+        "offer_candidate_updated",
+        candidate_id=str(candidate_id),
+        updated_fields=data.model_dump(exclude_unset=True),
+    )
+
+    return OfferVariantResponse(
+        id=candidate.id,
+        length_cm=candidate.length_cm,
+        pack_type=candidate.pack_type,
+        pack_qty=candidate.pack_qty,
+        price=candidate.price_min,
+        price_max=candidate.price_max,
+        stock=candidate.stock_qty,
+        validation=candidate.validation,
+    )
 
 
 # Order metrics endpoint

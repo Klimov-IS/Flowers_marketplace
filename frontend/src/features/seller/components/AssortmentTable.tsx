@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import type { SupplierItem, OfferVariant } from '../../../types/supplierItem';
+import {
+  useUpdateSupplierItemMutation,
+  useUpdateOfferCandidateMutation,
+} from '../supplierApi';
 import ColorSquares from './ColorSquares';
 import StockIndicator from './StockIndicator';
+import EditableCell from './EditableCell';
+import EditableSelect from './EditableSelect';
 import Badge from '../../../components/ui/Badge';
 
 interface AssortmentTableProps {
@@ -10,8 +16,25 @@ interface AssortmentTableProps {
   onViewDetails?: (item: SupplierItem) => void;
 }
 
-// Expanded row component showing variants
-function ExpandedRow({ variants }: { variants: OfferVariant[] }) {
+const PACK_TYPE_OPTIONS = [
+  { value: null, label: '—' },
+  { value: 'бак', label: 'Бак' },
+  { value: 'упак', label: 'Упаковка' },
+  { value: 'шт', label: 'Штука' },
+];
+
+// Expanded row component showing editable variants
+function ExpandedRow({
+  variants,
+  onUpdateVariant,
+}: {
+  variants: OfferVariant[];
+  onUpdateVariant: (
+    variantId: string,
+    field: string,
+    value: string | number | null
+  ) => Promise<void>;
+}) {
   return (
     <tr className="bg-gray-50">
       <td colSpan={9} className="px-4 py-3">
@@ -19,9 +42,10 @@ function ExpandedRow({ variants }: { variants: OfferVariant[] }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-gray-500">
-                <th className="pb-2 font-medium">Размер</th>
+                <th className="pb-2 font-medium">Размер (см)</th>
                 <th className="pb-2 font-medium">Упаковка</th>
-                <th className="pb-2 font-medium">Цена</th>
+                <th className="pb-2 font-medium">Кол-во</th>
+                <th className="pb-2 font-medium">Цена (₽)</th>
                 <th className="pb-2 font-medium">Остаток</th>
                 <th className="pb-2 font-medium">Статус</th>
               </tr>
@@ -30,22 +54,53 @@ function ExpandedRow({ variants }: { variants: OfferVariant[] }) {
               {variants.map((variant) => (
                 <tr key={variant.id} className="border-t border-gray-200">
                   <td className="py-2">
-                    {variant.length_cm ? `${variant.length_cm} см` : '—'}
+                    <EditableCell
+                      value={variant.length_cm}
+                      type="number"
+                      placeholder="—"
+                      onSave={async (val) =>
+                        onUpdateVariant(variant.id, 'length_cm', val)
+                      }
+                    />
                   </td>
                   <td className="py-2">
-                    {variant.pack_type || '—'}
-                    {variant.pack_qty && ` (${variant.pack_qty} шт)`}
+                    <EditableSelect
+                      value={variant.pack_type}
+                      options={PACK_TYPE_OPTIONS}
+                      onSave={async (val) =>
+                        onUpdateVariant(variant.id, 'pack_type', val)
+                      }
+                    />
                   </td>
                   <td className="py-2">
-                    {parseFloat(variant.price).toLocaleString()} ₽
-                    {variant.price_max && (
-                      <span className="text-gray-500">
-                        {' '}– {parseFloat(variant.price_max).toLocaleString()} ₽
-                      </span>
-                    )}
+                    <EditableCell
+                      value={variant.pack_qty}
+                      type="number"
+                      placeholder="—"
+                      onSave={async (val) =>
+                        onUpdateVariant(variant.id, 'pack_qty', val)
+                      }
+                    />
                   </td>
                   <td className="py-2">
-                    <StockIndicator stock={variant.stock || 0} />
+                    <EditableCell
+                      value={variant.price ? parseFloat(variant.price) : null}
+                      type="number"
+                      placeholder="—"
+                      onSave={async (val) =>
+                        onUpdateVariant(variant.id, 'price_min', val)
+                      }
+                    />
+                  </td>
+                  <td className="py-2">
+                    <EditableCell
+                      value={variant.stock}
+                      type="number"
+                      placeholder="0"
+                      onSave={async (val) =>
+                        onUpdateVariant(variant.id, 'stock_qty', val)
+                      }
+                    />
                   </td>
                   <td className="py-2">
                     <Badge
@@ -76,15 +131,19 @@ function ItemRow({
   isExpanded,
   onToggle,
   onViewDetails,
+  onUpdateItem,
+  onUpdateVariant,
 }: {
   item: SupplierItem;
   isExpanded: boolean;
   onToggle: () => void;
   onViewDetails?: (item: SupplierItem) => void;
+  onUpdateItem: (itemId: string, field: string, value: string | number | null) => Promise<void>;
+  onUpdateVariant: (variantId: string, field: string, value: string | number | null) => Promise<void>;
 }) {
   const hasVariants = item.variants_count > 1;
 
-  // Format price range
+  // Format price range (read-only display)
   const priceDisplay = () => {
     if (!item.price_min) return '—';
     const min = parseFloat(item.price_min).toLocaleString();
@@ -95,7 +154,7 @@ function ItemRow({
     return min;
   };
 
-  // Format length range
+  // Format length range (read-only display)
   const lengthDisplay = () => {
     if (!item.length_min) return '—';
     if (item.length_max && item.length_min !== item.length_max) {
@@ -145,36 +204,57 @@ function ItemRow({
           )}
         </td>
 
-        {/* Name */}
+        {/* Name - editable */}
         <td className="px-3 py-3">
-          <div className="font-medium text-gray-900">{item.raw_name}</div>
+          <EditableCell
+            value={item.raw_name}
+            type="text"
+            onSave={async (val) => onUpdateItem(item.id, 'raw_name', val)}
+            className="font-medium text-gray-900"
+          />
           {item.source_file && (
-            <div className="text-xs text-gray-400 mt-0.5">{item.source_file}</div>
+            <div className="text-xs text-gray-400 mt-0.5 px-2">{item.source_file}</div>
           )}
         </td>
 
-        {/* Origin */}
-        <td className="px-3 py-3 text-gray-600">
-          {item.origin_country || '—'}
+        {/* Origin - editable */}
+        <td className="px-3 py-3">
+          <EditableCell
+            value={item.origin_country}
+            type="text"
+            placeholder="—"
+            onSave={async (val) => onUpdateItem(item.id, 'origin_country', val)}
+          />
         </td>
 
-        {/* Colors */}
+        {/* Colors - read-only (complex to edit inline) */}
         <td className="px-3 py-3">
           <ColorSquares colors={item.colors} />
         </td>
 
-        {/* Lengths */}
+        {/* Lengths - read-only aggregated */}
         <td className="px-3 py-3 text-gray-600">{lengthDisplay()}</td>
 
-        {/* Pack */}
+        {/* Pack - read-only aggregated */}
         <td className="px-3 py-3 text-gray-600">{packDisplay()}</td>
 
-        {/* Price */}
+        {/* Price - read-only aggregated */}
         <td className="px-3 py-3 font-medium">{priceDisplay()} ₽</td>
 
-        {/* Stock */}
+        {/* Stock - editable if single variant, else aggregated */}
         <td className="px-3 py-3">
-          <StockIndicator stock={item.stock_total} />
+          {item.variants.length === 1 ? (
+            <EditableCell
+              value={item.stock_total}
+              type="number"
+              placeholder="0"
+              onSave={async (val) =>
+                onUpdateVariant(item.variants[0].id, 'stock_qty', val)
+              }
+            />
+          ) : (
+            <StockIndicator stock={item.stock_total} />
+          )}
         </td>
 
         {/* Actions */}
@@ -205,7 +285,9 @@ function ItemRow({
       </tr>
 
       {/* Expanded variants */}
-      {isExpanded && hasVariants && <ExpandedRow variants={item.variants} />}
+      {isExpanded && hasVariants && (
+        <ExpandedRow variants={item.variants} onUpdateVariant={onUpdateVariant} />
+      )}
     </>
   );
 }
@@ -216,6 +298,8 @@ export default function AssortmentTable({
   onViewDetails,
 }: AssortmentTableProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [updateSupplierItem] = useUpdateSupplierItemMutation();
+  const [updateOfferCandidate] = useUpdateOfferCandidateMutation();
 
   const toggleExpanded = (itemId: string) => {
     setExpandedItems((prev) => {
@@ -227,6 +311,26 @@ export default function AssortmentTable({
       }
       return next;
     });
+  };
+
+  const handleUpdateItem = async (
+    itemId: string,
+    field: string,
+    value: string | number | null
+  ) => {
+    const data: Record<string, unknown> = {};
+    data[field] = value;
+    await updateSupplierItem({ id: itemId, data }).unwrap();
+  };
+
+  const handleUpdateVariant = async (
+    variantId: string,
+    field: string,
+    value: string | number | null
+  ) => {
+    const data: Record<string, unknown> = {};
+    data[field] = value;
+    await updateOfferCandidate({ id: variantId, data }).unwrap();
   };
 
   if (isLoading) {
@@ -302,6 +406,8 @@ export default function AssortmentTable({
               isExpanded={expandedItems.has(item.id)}
               onToggle={() => toggleExpanded(item.id)}
               onViewDetails={onViewDetails}
+              onUpdateItem={handleUpdateItem}
+              onUpdateVariant={handleUpdateVariant}
             />
           ))}
         </tbody>
