@@ -508,37 +508,37 @@ Show AI source indicator:
 
 ## 8) Implementation Plan
 
-### Phase 0: Preparation (1-2 дня)
+### Phase 0: Preparation (1-2 дня) ✅ DONE
 - [x] Сохранить DeepSeek API key в .env
-- [ ] Создать миграцию для ai_runs и ai_suggestions таблиц
-- [ ] Расширить SupplierItem.attributes схему (_sources, _confidences, _locked)
-- [ ] Добавить source tracking в PATCH endpoint
+- [x] Создать миграцию для ai_runs и ai_suggestions таблиц
+- [x] Расширить SupplierItem.attributes схему (_sources, _confidences, _locked)
+- [x] Добавить source tracking в PATCH endpoint
 
-### Phase 1: AI Service Core (2-3 дня)
-- [ ] Создать `packages/core/ai/` модуль
-- [ ] Реализовать DeepSeekClient
-- [ ] Написать промпты для extraction
-- [ ] Создать AIService с базовой логикой
-- [ ] Unit тесты для AI service
+### Phase 1: AI Service Core (2-3 дня) ✅ DONE
+- [x] Создать `packages/core/ai/` модуль
+- [x] Реализовать DeepSeekClient
+- [x] Написать промпты для extraction
+- [x] Создать AIService с базовой логикой
+- [x] Unit тесты для AI service
 
-### Phase 2: Pipeline Integration (1-2 дня)
-- [ ] Интегрировать AI в ImportService (после парсера)
-- [ ] Добавить confidence tier логику
-- [ ] Реализовать применение suggestions
+### Phase 2: Pipeline Integration (1-2 дня) ✅ DONE
+- [x] Интегрировать AI в ImportService (после парсера)
+- [x] Добавить confidence tier логику
+- [x] Реализовать применение suggestions
 - [ ] Integration тест: import → AI → suggestions
 
-### Phase 3: API & Review Queue (2-3 дня)
-- [ ] Создать `/admin/ai/` роутер
-- [ ] Реализовать endpoints для suggestions
-- [ ] Создать Review Queue страницу в Seller Cabinet
+### Phase 3: API & Review Queue (2-3 дня) ✅ DONE
+- [x] Создать `/admin/ai/` endpoints в admin.py
+- [x] Реализовать endpoints для suggestions (GET, accept, reject)
+- [x] Создать Review Queue страницу в Seller Cabinet (AIReviewTab)
 - [ ] Добавить AI индикаторы в AssortmentTable
 
-### Phase 4: Polish & Testing (1-2 дня)
+### Phase 4: Polish & Testing (1-2 дня) ⏳ PARTIAL
 - [ ] Добавить кэширование по input_hash
 - [ ] Добавить rate limiting
-- [ ] Добавить метрики и логирование
+- [x] Добавить метрики и логирование (structlog)
 - [ ] E2E тесты
-- [ ] Документация
+- [x] Документация (TASK AI.md)
 
 ---
 
@@ -546,17 +546,17 @@ Show AI source indicator:
 
 Feature is done when:
 
-1. [ ] Import pipeline still works without AI (AI_ENABLED=false)
-2. [ ] For imports <= 5000 rows, AI run can be started and completes
-3. [ ] Column mapping AI can resolve ambiguous formats
-4. [ ] Row extraction AI fills missing attributes with confidence
-5. [ ] Auto-apply works for confidence >= 0.90
-6. [ ] Suggestions with confidence < 0.70 go to Review Queue only
-7. [ ] Review Queue UI allows apply/reject suggestions
-8. [ ] All AI actions are auditable (ai_runs + ai_suggestions)
-9. [ ] Source tracking shows parser/ai/manual in UI
+1. [x] Import pipeline still works without AI (AI_ENABLED=false)
+2. [x] For imports <= 5000 rows, AI run can be started and completes
+3. [ ] Column mapping AI can resolve ambiguous formats (not implemented)
+4. [x] Row extraction AI fills missing attributes with confidence
+5. [x] Auto-apply works for confidence >= 0.90
+6. [x] Suggestions with confidence < 0.70 go to Review Queue only
+7. [x] Review Queue UI allows apply/reject suggestions
+8. [x] All AI actions are auditable (ai_runs + ai_suggestions)
+9. [ ] Source tracking shows parser/ai/manual in UI (partial)
 10. [ ] Basic tests exist:
-    - [ ] Unit test: confidence tier logic
+    - [x] Unit test: confidence tier logic
     - [ ] Unit test: DeepSeek client mock
     - [ ] Integration test: AI run lifecycle
     - [ ] Integration test: import with AI disabled
