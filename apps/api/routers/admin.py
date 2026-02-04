@@ -1,4 +1,5 @@
 """Admin endpoints for suppliers and imports."""
+from datetime import datetime
 from decimal import Decimal
 from typing import List
 from uuid import UUID
@@ -48,7 +49,7 @@ class ImportBatchResponse(BaseModel):
     source_type: str
     source_filename: str | None
     status: str
-    imported_at: str
+    imported_at: datetime
 
     class Config:
         from_attributes = True

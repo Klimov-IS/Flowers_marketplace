@@ -13,7 +13,7 @@ from apps.api.logging_config import get_logger
 from apps.api.models import Order, Supplier
 from apps.api.services.order_service import OrderService
 
-router = APIRouter(prefix="/admin/suppliers/{supplier_id}/orders", tags=["supplier-orders"])
+router = APIRouter(prefix="/suppliers/{supplier_id}/orders", tags=["supplier-orders"])
 logger = get_logger(__name__)
 
 
