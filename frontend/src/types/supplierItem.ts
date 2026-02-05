@@ -34,7 +34,7 @@ export interface SupplierItem {
   price_min: string | null;
   price_max: string | null;
   stock_total: number;
-  status: 'active' | 'ambiguous' | 'rejected';
+  status: 'active' | 'ambiguous' | 'rejected' | 'hidden' | 'deleted';
   source_file: string | null;
   variants_count: number;
   variants: OfferVariant[];
@@ -53,4 +53,14 @@ export interface SupplierItemsParams {
   q?: string;
   page?: number;
   per_page?: number;
+  status?: string[];
+  // Additional filters
+  origin_country?: (string | null)[];
+  colors?: (string | null)[];
+  price_min?: number;
+  price_max?: number;
+  length_min?: number;
+  length_max?: number;
+  stock_min?: number;
+  stock_max?: number;
 }

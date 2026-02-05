@@ -254,6 +254,23 @@ async def get_supplier_items(
     q: Optional[str] = Query(None, description="Search query for item name"),
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(50, ge=1, le=100, description="Items per page"),
+    status: Optional[List[str]] = Query(
+        default=["active"],
+        description="Filter by status (active, hidden, deleted). Default: active only"
+    ),
+    # Additional column filters
+    origin_country: Optional[List[str]] = Query(
+        None, description="Filter by origin country (use '__null__' for items without country)"
+    ),
+    colors: Optional[List[str]] = Query(
+        None, description="Filter by color (use '__null__' for items without color)"
+    ),
+    price_min: Optional[Decimal] = Query(None, description="Minimum price filter"),
+    price_max: Optional[Decimal] = Query(None, description="Maximum price filter"),
+    length_min: Optional[int] = Query(None, description="Minimum length filter (cm)"),
+    length_max: Optional[int] = Query(None, description="Maximum length filter (cm)"),
+    stock_min: Optional[int] = Query(None, description="Minimum stock filter"),
+    stock_max: Optional[int] = Query(None, description="Maximum stock filter"),
     db: AsyncSession = Depends(get_db),
 ) -> SupplierItemsListResponse:
     """
@@ -264,6 +281,7 @@ async def get_supplier_items(
         q: Optional search query
         page: Page number (1-based)
         per_page: Items per page
+        status: Filter by item status (active, hidden, deleted)
         db: Database session
 
     Returns:
@@ -280,6 +298,10 @@ async def get_supplier_items(
     # Build base query for supplier items
     base_query = select(SupplierItem).where(SupplierItem.supplier_id == supplier_id)
 
+    # Apply status filter
+    if status:
+        base_query = base_query.where(SupplierItem.status.in_(status))
+
     # Apply search filter if provided
     if q:
         search_term = f"%{q.lower()}%"
@@ -289,6 +311,57 @@ async def get_supplier_items(
                 SupplierItem.name_norm.ilike(search_term),
             )
         )
+
+    # Apply origin_country filter
+    if origin_country:
+        include_null = "__null__" in origin_country
+        actual_countries = [c for c in origin_country if c != "__null__"]
+        if include_null and actual_countries:
+            base_query = base_query.where(
+                or_(
+                    SupplierItem.origin_country.in_(actual_countries),
+                    SupplierItem.origin_country.is_(None),
+                )
+            )
+        elif include_null:
+            base_query = base_query.where(SupplierItem.origin_country.is_(None))
+        elif actual_countries:
+            base_query = base_query.where(SupplierItem.origin_country.in_(actual_countries))
+
+    # Apply colors filter (checks if any color matches)
+    if colors:
+        include_null = "__null__" in colors
+        actual_colors = [c for c in colors if c != "__null__"]
+        if include_null and actual_colors:
+            # Items with any of the specified colors OR empty colors array
+            base_query = base_query.where(
+                or_(
+                    SupplierItem.colors.op("&&")(actual_colors),  # PostgreSQL array overlap
+                    SupplierItem.colors == [],
+                )
+            )
+        elif include_null:
+            base_query = base_query.where(SupplierItem.colors == [])
+        elif actual_colors:
+            base_query = base_query.where(SupplierItem.colors.op("&&")(actual_colors))
+
+    # Apply price range filter (using aggregated min/max from variants)
+    if price_min is not None:
+        base_query = base_query.where(SupplierItem.price_max >= price_min)
+    if price_max is not None:
+        base_query = base_query.where(SupplierItem.price_min <= price_max)
+
+    # Apply length range filter
+    if length_min is not None:
+        base_query = base_query.where(SupplierItem.length_max >= length_min)
+    if length_max is not None:
+        base_query = base_query.where(SupplierItem.length_min <= length_max)
+
+    # Apply stock filter
+    if stock_min is not None:
+        base_query = base_query.where(SupplierItem.stock_total >= stock_min)
+    if stock_max is not None:
+        base_query = base_query.where(SupplierItem.stock_total <= stock_max)
 
     # Count total items
     count_query = select(func.count()).select_from(base_query.subquery())
@@ -939,6 +1012,234 @@ async def update_offer_candidate(
         price_max=candidate.price_max,
         stock=candidate.stock_qty,
         validation=candidate.validation,
+    )
+
+
+# ============================================================================
+# Supplier Item Actions (delete, hide, restore)
+# ============================================================================
+
+class ItemActionResponse(BaseModel):
+    """Response for item action endpoints."""
+    id: UUID
+    status: str
+    message: str
+
+
+class BulkActionRequest(BaseModel):
+    """Request for bulk actions."""
+    item_ids: List[UUID]
+
+
+class BulkActionResponse(BaseModel):
+    """Response for bulk actions."""
+    affected_count: int
+    status: str
+    message: str
+
+
+@router.delete("/supplier-items/{item_id}", response_model=ItemActionResponse)
+async def delete_supplier_item(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ItemActionResponse:
+    """
+    Soft delete a supplier item (sets status to 'deleted').
+
+    The item remains in DB but won't appear in listings by default.
+    Can be restored using the restore endpoint.
+    """
+    from datetime import datetime
+
+    result = await db.execute(
+        select(SupplierItem).where(SupplierItem.id == item_id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Supplier item not found")
+
+    item.status = "deleted"
+    item.deleted_at = datetime.utcnow()
+
+    await db.commit()
+
+    logger.info(
+        "supplier_item_deleted",
+        item_id=str(item_id),
+        supplier_id=str(item.supplier_id),
+    )
+
+    return ItemActionResponse(
+        id=item_id,
+        status="deleted",
+        message="Item deleted successfully",
+    )
+
+
+@router.post("/supplier-items/{item_id}/hide", response_model=ItemActionResponse)
+async def hide_supplier_item(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ItemActionResponse:
+    """
+    Hide a supplier item (sets status to 'hidden').
+
+    Hidden items won't appear in public catalog but remain manageable.
+    """
+    result = await db.execute(
+        select(SupplierItem).where(SupplierItem.id == item_id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Supplier item not found")
+
+    item.status = "hidden"
+
+    await db.commit()
+
+    logger.info(
+        "supplier_item_hidden",
+        item_id=str(item_id),
+        supplier_id=str(item.supplier_id),
+    )
+
+    return ItemActionResponse(
+        id=item_id,
+        status="hidden",
+        message="Item hidden successfully",
+    )
+
+
+@router.post("/supplier-items/{item_id}/restore", response_model=ItemActionResponse)
+async def restore_supplier_item(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ItemActionResponse:
+    """
+    Restore a hidden or deleted supplier item (sets status to 'active').
+    """
+    result = await db.execute(
+        select(SupplierItem).where(SupplierItem.id == item_id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Supplier item not found")
+
+    item.status = "active"
+    item.deleted_at = None
+
+    await db.commit()
+
+    logger.info(
+        "supplier_item_restored",
+        item_id=str(item_id),
+        supplier_id=str(item.supplier_id),
+    )
+
+    return ItemActionResponse(
+        id=item_id,
+        status="active",
+        message="Item restored successfully",
+    )
+
+
+@router.post("/supplier-items/bulk-delete", response_model=BulkActionResponse)
+async def bulk_delete_supplier_items(
+    request: BulkActionRequest,
+    db: AsyncSession = Depends(get_db),
+) -> BulkActionResponse:
+    """
+    Bulk soft delete supplier items.
+    """
+    from datetime import datetime
+    from sqlalchemy import update
+
+    result = await db.execute(
+        update(SupplierItem)
+        .where(SupplierItem.id.in_(request.item_ids))
+        .values(status="deleted", deleted_at=datetime.utcnow())
+    )
+
+    await db.commit()
+
+    affected = result.rowcount
+
+    logger.info(
+        "supplier_items_bulk_deleted",
+        item_count=affected,
+        item_ids=[str(id) for id in request.item_ids],
+    )
+
+    return BulkActionResponse(
+        affected_count=affected,
+        status="deleted",
+        message=f"Deleted {affected} items",
+    )
+
+
+@router.post("/supplier-items/bulk-hide", response_model=BulkActionResponse)
+async def bulk_hide_supplier_items(
+    request: BulkActionRequest,
+    db: AsyncSession = Depends(get_db),
+) -> BulkActionResponse:
+    """
+    Bulk hide supplier items.
+    """
+    from sqlalchemy import update
+
+    result = await db.execute(
+        update(SupplierItem)
+        .where(SupplierItem.id.in_(request.item_ids))
+        .values(status="hidden")
+    )
+
+    await db.commit()
+
+    affected = result.rowcount
+
+    logger.info(
+        "supplier_items_bulk_hidden",
+        item_count=affected,
+        item_ids=[str(id) for id in request.item_ids],
+    )
+
+    return BulkActionResponse(
+        affected_count=affected,
+        status="hidden",
+        message=f"Hidden {affected} items",
+    )
+
+
+@router.post("/supplier-items/bulk-restore", response_model=BulkActionResponse)
+async def bulk_restore_supplier_items(
+    request: BulkActionRequest,
+    db: AsyncSession = Depends(get_db),
+) -> BulkActionResponse:
+    """
+    Bulk restore supplier items (set to active).
+    """
+    from sqlalchemy import update
+
+    result = await db.execute(
+        update(SupplierItem)
+        .where(SupplierItem.id.in_(request.item_ids))
+        .values(status="active", deleted_at=None)
+    )
+
+    await db.commit()
+
+    affected = result.rowcount
+
+    logger.info(
+        "supplier_items_bulk_restored",
+        item_count=affected,
+        item_ids=[str(id) for id in request.item_ids],
+    )
+
+    return BulkActionResponse(
+        affected_count=affected,
+        status="active",
+        message=f"Restored {affected} items",
     )
 
 

@@ -15,6 +15,12 @@ interface AssortmentTableProps {
   items: SupplierItem[];
   isLoading?: boolean;
   onViewDetails?: (item: SupplierItem) => void;
+  onHideItem?: (itemId: string) => void;
+  onDeleteItem?: (itemId: string) => void;
+  onRestoreItem?: (itemId: string) => void;
+  // Selection props
+  selectedIds?: Set<string>;
+  onSelectionChange?: (ids: Set<string>) => void;
 }
 
 const PACK_TYPE_OPTIONS = [
@@ -40,6 +46,7 @@ const COUNTRY_OPTIONS = [
 function ExpandedRow({
   variants,
   onUpdateVariant,
+  hasCheckbox,
 }: {
   variants: OfferVariant[];
   onUpdateVariant: (
@@ -47,10 +54,11 @@ function ExpandedRow({
     field: string,
     value: string | number | null
   ) => Promise<void>;
+  hasCheckbox?: boolean;
 }) {
   return (
     <tr className="bg-gray-50">
-      <td colSpan={9} className="px-4 py-3">
+      <td colSpan={hasCheckbox ? 10 : 9} className="px-4 py-3">
         <div className="ml-8">
           <table className="w-full text-sm">
             <thead>
@@ -149,6 +157,11 @@ function ItemRow({
   onViewDetails,
   onUpdateItem,
   onUpdateVariant,
+  onHideItem,
+  onDeleteItem,
+  onRestoreItem,
+  isSelected,
+  onToggleSelect,
 }: {
   item: SupplierItem;
   isExpanded: boolean;
@@ -156,6 +169,11 @@ function ItemRow({
   onViewDetails?: (item: SupplierItem) => void;
   onUpdateItem: (itemId: string, field: string, value: ItemUpdateValue) => Promise<void>;
   onUpdateVariant: (variantId: string, field: string, value: string | number | null) => Promise<void>;
+  onHideItem?: (itemId: string) => void;
+  onDeleteItem?: (itemId: string) => void;
+  onRestoreItem?: (itemId: string) => void;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const hasMultipleVariants = item.variants_count > 1;
   const singleVariant = item.variants.length === 1 ? item.variants[0] : null;
@@ -192,6 +210,18 @@ function ItemRow({
   return (
     <>
       <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+        {/* Checkbox */}
+        {onToggleSelect && (
+          <td className="w-10 px-2 py-3 text-center">
+            <input
+              type="checkbox"
+              checked={isSelected || false}
+              onChange={onToggleSelect}
+              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+            />
+          </td>
+        )}
+
         {/* Expand button */}
         <td className="w-10 px-2 py-3 text-center">
           {hasMultipleVariants ? (
@@ -337,7 +367,8 @@ function ItemRow({
 
         {/* Actions */}
         <td className="px-3 py-3">
-          <div className="flex gap-2">
+          <div className="flex gap-1">
+            {/* View Details */}
             <button
               onClick={() => onViewDetails?.(item)}
               className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
@@ -358,13 +389,73 @@ function ItemRow({
                 />
               </svg>
             </button>
+
+            {/* Show Restore for hidden/deleted items, otherwise show Hide/Delete */}
+            {(item.status === 'hidden' || item.status === 'deleted') ? (
+              <button
+                onClick={() => onRestoreItem?.(item.id)}
+                className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                title="Восстановить"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              </button>
+            ) : (
+              <>
+                {/* Hide */}
+                <button
+                  onClick={() => onHideItem?.(item.id)}
+                  className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors"
+                  title="Скрыть"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                    />
+                  </svg>
+                </button>
+
+                {/* Delete */}
+                <button
+                  onClick={() => {
+                    if (confirm('Удалить этот товар? Его можно будет восстановить.')) {
+                      onDeleteItem?.(item.id);
+                    }
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                  title="Удалить"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                </button>
+              </>
+            )}
           </div>
         </td>
       </tr>
 
       {/* Expanded variants */}
       {isExpanded && hasMultipleVariants && (
-        <ExpandedRow variants={item.variants} onUpdateVariant={onUpdateVariant} />
+        <ExpandedRow
+          variants={item.variants}
+          onUpdateVariant={onUpdateVariant}
+          hasCheckbox={!!onToggleSelect}
+        />
       )}
     </>
   );
@@ -374,10 +465,43 @@ export default function AssortmentTable({
   items,
   isLoading,
   onViewDetails,
+  onHideItem,
+  onDeleteItem,
+  onRestoreItem,
+  selectedIds,
+  onSelectionChange,
 }: AssortmentTableProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [updateSupplierItem] = useUpdateSupplierItemMutation();
   const [updateOfferCandidate] = useUpdateOfferCandidateMutation();
+
+  const hasSelection = !!selectedIds && !!onSelectionChange;
+
+  // Check if all items on current page are selected
+  const allSelected = hasSelection && items.length > 0 && items.every((item) => selectedIds.has(item.id));
+  const someSelected = hasSelection && items.some((item) => selectedIds.has(item.id)) && !allSelected;
+
+  const handleSelectAll = () => {
+    if (!onSelectionChange) return;
+    if (allSelected) {
+      // Deselect all
+      onSelectionChange(new Set());
+    } else {
+      // Select all on current page
+      onSelectionChange(new Set(items.map((item) => item.id)));
+    }
+  };
+
+  const handleToggleSelect = (itemId: string) => {
+    if (!selectedIds || !onSelectionChange) return;
+    const next = new Set(selectedIds);
+    if (next.has(itemId)) {
+      next.delete(itemId);
+    } else {
+      next.add(itemId);
+    }
+    onSelectionChange(next);
+  };
 
   const toggleExpanded = (itemId: string) => {
     setExpandedItems((prev) => {
@@ -449,6 +573,21 @@ export default function AssortmentTable({
       <table className="w-full">
         <thead className="bg-gray-50 border-b border-gray-200">
           <tr className="text-left text-sm text-gray-600">
+            {/* Checkbox header */}
+            {hasSelection && (
+              <th className="w-10 px-2 py-3 text-center">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someSelected;
+                  }}
+                  onChange={handleSelectAll}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                  title={allSelected ? 'Снять выделение' : 'Выбрать все'}
+                />
+              </th>
+            )}
             <th className="w-10 px-2 py-3" /> {/* Expand */}
             <th className="px-3 py-3 font-medium" style={{ width: '18%' }}>
               Название
@@ -486,6 +625,11 @@ export default function AssortmentTable({
               onViewDetails={onViewDetails}
               onUpdateItem={handleUpdateItem}
               onUpdateVariant={handleUpdateVariant}
+              onHideItem={onHideItem}
+              onDeleteItem={onDeleteItem}
+              onRestoreItem={onRestoreItem}
+              isSelected={selectedIds?.has(item.id)}
+              onToggleSelect={hasSelection ? () => handleToggleSelect(item.id) : undefined}
             />
           ))}
         </tbody>

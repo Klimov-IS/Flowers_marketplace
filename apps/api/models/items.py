@@ -1,9 +1,10 @@
 """Supplier items and offer candidates models."""
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, Integer, Numeric, String, Text
+from sqlalchemy import CheckConstraint, DateTime, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +17,8 @@ class SupplierItemStatus(str, Enum):
     ACTIVE = "active"
     AMBIGUOUS = "ambiguous"
     REJECTED = "rejected"
+    HIDDEN = "hidden"
+    DELETED = "deleted"
 
 
 class PriceType(str, Enum):
@@ -72,6 +75,11 @@ class SupplierItem(Base, UUIDMixin, TimestampMixin):
         String,
         nullable=False,
         default=SupplierItemStatus.ACTIVE.value,
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+        default=None,
     )
 
 
