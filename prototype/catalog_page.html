@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Каталог | Flower Market</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="catalog.css">
+</head>
+<body>
+    <!-- Top Navigation -->
+    <nav class="top-nav">
+        <div class="nav-left">
+            <a href="#" class="logo">Flower Market</a>
+            <div class="nav-links">
+                <a href="#" class="active">Витрина</a>
+                <a href="#">Кабинет покупателя</a>
+                <a href="#">Кабинет продавца</a>
+            </div>
+        </div>
+        <div class="nav-right">
+            <button class="btn-cart">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="9" cy="21" r="1"/>
+                    <circle cx="20" cy="21" r="1"/>
+                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                </svg>
+                <span class="cart-count">3</span>
+            </button>
+            <span class="user-badge">
+                <span class="badge-role">Покупатель</span>
+                <span class="badge-name">Цветочный салон "Роза"</span>
+            </span>
+            <button class="btn-link">Выйти</button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="catalog-main">
+        <!-- Hero Section -->
+        <section class="hero">
+            <h1>Самый быстрый поиск и закупка цветов для вашего бизнеса</h1>
+            <p>Единая платформа для поставщиков и флористов. Найдите лучшие предложения за 5 минут.</p>
+        </section>
+
+        <!-- Content Grid: Sidebar + Products -->
+        <div class="catalog-layout">
+            <!-- Sidebar Filters -->
+            <aside class="filters-sidebar">
+                <div class="filters-header">
+                    <h2>Фильтры</h2>
+                    <button class="btn-link btn-reset">Сбросить</button>
+                </div>
+
+                <!-- Product Type Filter -->
+                <div class="filter-section">
+                    <h3 class="filter-title">Тип цветка</h3>
+                    <div class="filter-checkboxes">
+                        <label class="filter-checkbox">
+                            <input type="checkbox" checked>
+                            <span class="checkbox-icon"></span>
+                            <span class="checkbox-label">Роза</span>
+                            <span class="checkbox-count">44</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox">
+                            <span class="checkbox-icon"></span>
+                            <span class="checkbox-label">Гвоздика</span>
+                            <span class="checkbox-count">12</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox">
+                            <span class="checkbox-icon"></span>
+                            <span class="checkbox-label">Гипсофила</span>
+                            <span class="checkbox-count">8</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox">
+                            <span class="checkbox-icon"></span>
+                            <span class="checkbox-label">Рускус</span>
+                            <span class="checkbox-count">5</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox">
+                            <span class="checkbox-icon"></span>
+                            <span class="checkbox-label">Альстромерия</span>
+                            <span class="checkbox-count">3</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox">
+                            <span class="checkbox-icon"></span>
+                            <span class="checkbox-label">Эвкалипт</span>
+                            <span class="checkbox-count">2</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox">
+                            <span class="checkbox-icon"></span>
+                            <span class="checkbox-label">Протея</span>
+                            <span class="checkbox-count">1</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Country Filter -->
+                <div class="filter-section">
+                    <h3 class="filter-title">Страна</h3>
+                    <div class="filter-checkboxes">
+                        <label class="filter-checkbox">
+                            <input type="checkbox">
+                            <span class="checkbox-icon"></span>
+                            <span class="checkbox-label">🇪🇨 Эквадор</span>
+                            <span class="checkbox-count">38</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox">
+                            <span class="checkbox-icon"></span>
+                            <span class="checkbox-label">🇳🇱 Нидерланды</span>
+                            <span class="checkbox-count">15</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox">
+                            <span class="checkbox-icon"></span>
+                            <span class="checkbox-label">🇨🇴 Колумбия</span>
+                            <span class="checkbox-count">12</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox">
+                            <span class="checkbox-icon"></span>
+                            <span class="checkbox-label">🇰🇪 Кения</span>
+                            <span class="checkbox-count">8</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox">
+                            <span class="checkbox-icon"></span>
+                            <span class="checkbox-label">🇷🇺 Россия</span>
+                            <span class="checkbox-count">4</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Color Filter -->
+                <div class="filter-section">
+                    <h3 class="filter-title">Цвет</h3>
+                    <div class="filter-colors">
+                        <button class="color-btn" data-color="white" title="Белый">
+                            <span class="color-swatch" style="background: #ffffff"></span>
+                            <span class="color-name">Белый</span>
+                        </button>
+                        <button class="color-btn" data-color="red" title="Красный">
+                            <span class="color-swatch" style="background: #e53935"></span>
+                            <span class="color-name">Красный</span>
+                        </button>
+                        <button class="color-btn" data-color="pink" title="Розовый">
+                            <span class="color-swatch" style="background: #ec407a"></span>
+                            <span class="color-name">Розовый</span>
+                        </button>
+                        <button class="color-btn" data-color="yellow" title="Жёлтый">
+                            <span class="color-swatch" style="background: #fdd835"></span>
+                            <span class="color-name">Жёлтый</span>
+                        </button>
+                        <button class="color-btn" data-color="orange" title="Оранжевый">
+                            <span class="color-swatch" style="background: #ff9800"></span>
+                            <span class="color-name">Оранж.</span>
+                        </button>
+                        <button class="color-btn active" data-color="mix" title="Микс">
+                            <span class="color-swatch color-mix"></span>
+                            <span class="color-name">Микс</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Length Filter -->
+                <div class="filter-section">
+                    <h3 class="filter-title">Длина, см</h3>
+                    <div class="filter-range">
+                        <input type="range" min="40" max="90" value="40" class="range-slider" id="lengthMin">
+                        <div class="range-values">
+                            <input type="number" value="40" min="40" max="90" class="range-input">
+                            <span class="range-separator">—</span>
+                            <input type="number" value="90" min="40" max="90" class="range-input">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Price Filter -->
+                <div class="filter-section">
+                    <h3 class="filter-title">Цена, ₽</h3>
+                    <div class="filter-range">
+                        <div class="range-values">
+                            <input type="number" value="35" min="35" max="250" class="range-input">
+                            <span class="range-separator">—</span>
+                            <input type="number" value="250" min="35" max="250" class="range-input">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- In Stock Toggle -->
+                <div class="filter-section">
+                    <label class="filter-toggle">
+                        <input type="checkbox" checked>
+                        <span class="toggle-switch"></span>
+                        <span class="toggle-label">Только в наличии</span>
+                    </label>
+                </div>
+            </aside>
+
+            <!-- Products Area -->
+            <div class="products-area">
+                <!-- Search Bar -->
+                <div class="search-bar">
+                    <div class="search-box search-large">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="m21 21-4.35-4.35"/>
+                        </svg>
+                        <input type="text" placeholder="Поиск по названию, сорту или поставщику...">
+                    </div>
+                    <div class="search-meta">
+                        <span class="results-count">Найдено: <strong>54</strong> товара</span>
+                        <div class="sort-dropdown">
+                            <span>Сортировка:</span>
+                            <select>
+                                <option>По популярности</option>
+                                <option>Сначала дешёвые</option>
+                                <option>Сначала дорогие</option>
+                                <option>По дате</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Products Grid -->
+                <div class="products-grid">
+                    <!-- Product Card 1 - Full info -->
+                    <article class="product-card">
+                        <div class="product-image">
+                            <img src="../frontend/public/images/flowers/rosa.jpg.png" alt="Роза Аваланш" loading="lazy">
+                        </div>
+                        <div class="product-content">
+                            <div class="product-country">
+                                <span class="country-flag">🇪🇨</span>
+                                <span class="country-name">Эквадор</span>
+                            </div>
+                            <h3 class="product-title">Роза Аваланш</h3>
+                            <p class="product-colors">белый, кремовый</p>
+                            <p class="product-meta">
+                                <span class="meta-length">60 см</span>
+                                <span class="meta-separator">·</span>
+                                <span class="meta-pack">Бак 25 шт</span>
+                            </p>
+                        </div>
+                        <div class="product-footer">
+                            <div class="price-block">
+                                <span class="price-value">85 ₽</span>
+                                <div class="price-meta">
+                                    <span class="price-stock">Ост: 450</span>
+                                    <span class="price-tier">от 50 шт</span>
+                                </div>
+                            </div>
+                            <p class="product-supplier">ФлораОпт</p>
+                            <div class="quantity-row">
+                                <button class="qty-btn">−</button>
+                                <input type="number" value="10" min="1" class="qty-input">
+                                <button class="qty-btn">+</button>
+                            </div>
+                            <button class="btn-add-cart">В корзину</button>
+                        </div>
+                    </article>
+
+                    <!-- Product Card 2 - Without tier -->
+                    <article class="product-card">
+                        <div class="product-image">
+                            <img src="../frontend/public/images/flowers/rosa.jpg.png" alt="Роза Фридом" loading="lazy">
+                        </div>
+                        <div class="product-content">
+                            <div class="product-country">
+                                <span class="country-flag">🇨🇴</span>
+                                <span class="country-name">Колумбия</span>
+                            </div>
+                            <h3 class="product-title">Роза Фридом</h3>
+                            <p class="product-colors">красный</p>
+                            <p class="product-meta">
+                                <span class="meta-length">50 см</span>
+                                <span class="meta-separator">·</span>
+                                <span class="meta-pack">Упак 10 шт</span>
+                            </p>
+                        </div>
+                        <div class="product-footer">
+                            <div class="price-block">
+                                <span class="price-value">72 ₽</span>
+                                <div class="price-meta">
+                                    <span class="price-stock">Ост: 200</span>
+                                </div>
+                            </div>
+                            <p class="product-supplier">Цветочная база</p>
+                            <div class="quantity-row">
+                                <button class="qty-btn">−</button>
+                                <input type="number" value="1" min="1" class="qty-input">
+                                <button class="qty-btn">+</button>
+                            </div>
+                            <button class="btn-add-cart">В корзину</button>
+                        </div>
+                    </article>
+
+                    <!-- Product Card 3 - Multiple colors -->
+                    <article class="product-card">
+                        <div class="product-image">
+                            <img src="../frontend/public/images/flowers/carnation.jpg.png" alt="Гвоздика Микс" loading="lazy">
+                        </div>
+                        <div class="product-content">
+                            <div class="product-country">
+                                <span class="country-flag">🇳🇱</span>
+                                <span class="country-name">Нидерланды</span>
+                            </div>
+                            <h3 class="product-title">Гвоздика кустовая Микс</h3>
+                            <p class="product-colors">красный, розовый, белый, жёлтый</p>
+                            <p class="product-meta">
+                                <span class="meta-length">55 см</span>
+                                <span class="meta-separator">·</span>
+                                <span class="meta-pack">Пучок 5 шт</span>
+                            </p>
+                        </div>
+                        <div class="product-footer">
+                            <div class="price-block">
+                                <span class="price-value">45 ₽</span>
+                                <div class="price-meta">
+                                    <span class="price-stock">Ост: 120</span>
+                                    <span class="price-tier">10–50 шт</span>
+                                </div>
+                            </div>
+                            <p class="product-supplier">ФлораОпт</p>
+                            <div class="quantity-row">
+                                <button class="qty-btn">−</button>
+                                <input type="number" value="1" min="1" class="qty-input">
+                                <button class="qty-btn">+</button>
+                            </div>
+                            <button class="btn-add-cart">В корзину</button>
+                        </div>
+                    </article>
+
+                    <!-- Product Card 4 - Greenery -->
+                    <article class="product-card">
+                        <div class="product-image">
+                            <img src="../frontend/public/images/flowers/eucalyptus.jpg.png" alt="Эвкалипт Цинерия" loading="lazy">
+                        </div>
+                        <div class="product-content">
+                            <div class="product-country">
+                                <span class="country-flag">🇪🇨</span>
+                                <span class="country-name">Эквадор</span>
+                            </div>
+                            <h3 class="product-title">Эвкалипт Цинерия</h3>
+                            <p class="product-colors">зелёный</p>
+                            <p class="product-meta">
+                                <span class="meta-length">65 см</span>
+                                <span class="meta-separator">·</span>
+                                <span class="meta-pack">Пучок 10 шт</span>
+                            </p>
+                        </div>
+                        <div class="product-footer">
+                            <div class="price-block">
+                                <span class="price-value">120 ₽</span>
+                                <div class="price-meta">
+                                    <span class="price-stock">Ост: 35</span>
+                                </div>
+                            </div>
+                            <p class="product-supplier">GreenFlora</p>
+                            <div class="quantity-row">
+                                <button class="qty-btn">−</button>
+                                <input type="number" value="1" min="1" class="qty-input">
+                                <button class="qty-btn">+</button>
+                            </div>
+                            <button class="btn-add-cart">В корзину</button>
+                        </div>
+                    </article>
+
+                    <!-- Product Card 5 - Gypsophila -->
+                    <article class="product-card">
+                        <div class="product-image">
+                            <img src="../frontend/public/images/flowers/gypsophila.jpg.png" alt="Гипсофила Xlence" loading="lazy">
+                        </div>
+                        <div class="product-content">
+                            <div class="product-country">
+                                <span class="country-flag">🇪🇨</span>
+                                <span class="country-name">Эквадор</span>
+                            </div>
+                            <h3 class="product-title">Гипсофила Xlence</h3>
+                            <p class="product-colors">белый</p>
+                            <p class="product-meta">
+                                <span class="meta-length">70 см</span>
+                                <span class="meta-separator">·</span>
+                                <span class="meta-pack">Бак 25 шт</span>
+                            </p>
+                        </div>
+                        <div class="product-footer">
+                            <div class="price-block">
+                                <span class="price-value">95 ₽</span>
+                                <div class="price-meta">
+                                    <span class="price-stock">Ост: 80</span>
+                                </div>
+                            </div>
+                            <p class="product-supplier">ФлораОпт</p>
+                            <div class="quantity-row">
+                                <button class="qty-btn">−</button>
+                                <input type="number" value="1" min="1" class="qty-input">
+                                <button class="qty-btn">+</button>
+                            </div>
+                            <button class="btn-add-cart">В корзину</button>
+                        </div>
+                    </article>
+
+                    <!-- Product Card 6 - Low stock -->
+                    <article class="product-card">
+                        <div class="product-image">
+                            <img src="../frontend/public/images/flowers/protea.jpg.png" alt="Протея Пинк Айс" loading="lazy">
+                        </div>
+                        <div class="product-content">
+                            <div class="product-country">
+                                <span class="country-flag">🇿🇦</span>
+                                <span class="country-name">ЮАР</span>
+                            </div>
+                            <h3 class="product-title">Протея Пинк Айс</h3>
+                            <p class="product-colors">розовый</p>
+                            <p class="product-meta">
+                                <span class="meta-length">45 см</span>
+                            </p>
+                        </div>
+                        <div class="product-footer">
+                            <div class="price-block">
+                                <span class="price-value">350 ₽</span>
+                                <div class="price-meta">
+                                    <span class="price-stock low">Ост: 5</span>
+                                </div>
+                            </div>
+                            <p class="product-supplier">ExoticFlowers</p>
+                            <div class="quantity-row">
+                                <button class="qty-btn">−</button>
+                                <input type="number" value="1" min="1" class="qty-input">
+                                <button class="qty-btn">+</button>
+                            </div>
+                            <button class="btn-add-cart">В корзину</button>
+                        </div>
+                    </article>
+
+                    <!-- Product Card 7 - Ruscus -->
+                    <article class="product-card">
+                        <div class="product-image">
+                            <img src="../frontend/public/images/flowers/ruscus.jpg.png" alt="Рускус Итальянский" loading="lazy">
+                        </div>
+                        <div class="product-content">
+                            <div class="product-country">
+                                <span class="country-flag">🇮🇹</span>
+                                <span class="country-name">Италия</span>
+                            </div>
+                            <h3 class="product-title">Рускус Итальянский</h3>
+                            <p class="product-colors">зелёный</p>
+                            <p class="product-meta">
+                                <span class="meta-length">60 см</span>
+                                <span class="meta-separator">·</span>
+                                <span class="meta-pack">Пучок 10 шт</span>
+                            </p>
+                        </div>
+                        <div class="product-footer">
+                            <div class="price-block">
+                                <span class="price-value">65 ₽</span>
+                                <div class="price-meta">
+                                    <span class="price-stock">Ост: 150</span>
+                                </div>
+                            </div>
+                            <p class="product-supplier">GreenFlora</p>
+                            <div class="quantity-row">
+                                <button class="qty-btn">−</button>
+                                <input type="number" value="1" min="1" class="qty-input">
+                                <button class="qty-btn">+</button>
+                            </div>
+                            <button class="btn-add-cart">В корзину</button>
+                        </div>
+                    </article>
+
+                    <!-- Product Card 8 - Alstroemeria -->
+                    <article class="product-card">
+                        <div class="product-image">
+                            <img src="../frontend/public/images/flowers/alstroemeria.jpg.png" alt="Альстромерия Вирджиния" loading="lazy">
+                        </div>
+                        <div class="product-content">
+                            <div class="product-country">
+                                <span class="country-flag">🇨🇴</span>
+                                <span class="country-name">Колумбия</span>
+                            </div>
+                            <h3 class="product-title">Альстромерия Вирджиния</h3>
+                            <p class="product-colors">белый, розовый</p>
+                            <p class="product-meta">
+                                <span class="meta-length">70 см</span>
+                                <span class="meta-separator">·</span>
+                                <span class="meta-pack">Упак 10 шт</span>
+                            </p>
+                        </div>
+                        <div class="product-footer">
+                            <div class="price-block">
+                                <span class="price-value">55 ₽</span>
+                                <div class="price-meta">
+                                    <span class="price-stock">Ост: 90</span>
+                                    <span class="price-tier">от 20 шт</span>
+                                </div>
+                            </div>
+                            <p class="product-supplier">Цветочная база</p>
+                            <div class="quantity-row">
+                                <button class="qty-btn">−</button>
+                                <input type="number" value="1" min="1" class="qty-input">
+                                <button class="qty-btn">+</button>
+                            </div>
+                            <button class="btn-add-cart">В корзину</button>
+                        </div>
+                    </article>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination">
+                    <button class="pagination-btn" disabled>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"/>
+                        </svg>
+                    </button>
+                    <button class="pagination-num active">1</button>
+                    <button class="pagination-num">2</button>
+                    <button class="pagination-num">3</button>
+                    <span class="pagination-dots">...</span>
+                    <button class="pagination-num">7</button>
+                    <button class="pagination-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Mobile Filter Button (Fixed) -->
+    <button class="mobile-filter-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="4" y1="21" x2="4" y2="14"/>
+            <line x1="4" y1="10" x2="4" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12" y2="3"/>
+            <line x1="20" y1="21" x2="20" y2="16"/>
+            <line x1="20" y1="12" x2="20" y2="3"/>
+            <line x1="1" y1="14" x2="7" y2="14"/>
+            <line x1="9" y1="8" x2="15" y2="8"/>
+            <line x1="17" y1="16" x2="23" y2="16"/>
+        </svg>
+        Фильтры
+    </button>
+
+    <script src="catalog.js"></script>
+</body>
+</html>

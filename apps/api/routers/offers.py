@@ -13,6 +13,8 @@ from sqlalchemy.orm import joinedload
 
 from apps.api.database import get_db
 from apps.api.models import NormalizedSKU, Offer, Supplier
+from apps.api.models.items import SupplierItem
+from apps.api.models.normalized import SKUMapping, MappingStatus
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -64,6 +66,9 @@ class OfferDetail(BaseModel):
     availability: str
     stock_qty: int | None
     published_at: datetime
+    # Enriched from supplier_item attributes
+    origin_country: str | None = None
+    colors: list[str] = []
 
     class Config:
         from_attributes = True
@@ -183,11 +188,42 @@ async def list_offers(
     result = await db.execute(query)
     offers = result.scalars().all()
 
+    # Get supplier_item attributes for enrichment
+    # Build a map of (supplier_id, normalized_sku_id) -> attributes
+    supplier_item_attrs: dict[tuple, dict] = {}
+    if offers:
+        # Get all unique (supplier_id, normalized_sku_id) pairs
+        offer_keys = [(o.supplier_id, o.normalized_sku_id) for o in offers]
+
+        # Query supplier_items through sku_mappings
+        attrs_query = (
+            select(
+                SupplierItem.supplier_id,
+                SKUMapping.normalized_sku_id,
+                SupplierItem.attributes,
+            )
+            .join(SKUMapping, SKUMapping.supplier_item_id == SupplierItem.id)
+            .where(SKUMapping.status == MappingStatus.CONFIRMED.value)
+        )
+        attrs_result = await db.execute(attrs_query)
+
+        for row in attrs_result:
+            key = (row.supplier_id, row.normalized_sku_id)
+            if key not in supplier_item_attrs:
+                supplier_item_attrs[key] = row.attributes or {}
+
     # Build response
     offer_details = []
     for offer in offers:
         # Use display_title if available, fallback to sku.title
         title = offer.display_title or offer.normalized_sku.title
+
+        # Get enriched attributes from supplier_item
+        attrs = supplier_item_attrs.get((offer.supplier_id, offer.normalized_sku_id), {})
+        origin_country = attrs.get("origin_country")
+        colors = attrs.get("colors", [])
+        if isinstance(colors, str):
+            colors = [colors]
 
         offer_details.append(
             OfferDetail(
@@ -215,6 +251,8 @@ async def list_offers(
                 availability=offer.availability,
                 stock_qty=offer.stock_qty,
                 published_at=offer.published_at,
+                origin_country=origin_country,
+                colors=colors,
             )
         )
 

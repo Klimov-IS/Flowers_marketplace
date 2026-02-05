@@ -28,6 +28,9 @@ export interface Offer {
   availability: string;
   stock_qty: number | null;
   published_at: string;
+  // Enriched from supplier_item attributes
+  origin_country: string | null;
+  colors: string[];
 }
 
 export interface OffersResponse {

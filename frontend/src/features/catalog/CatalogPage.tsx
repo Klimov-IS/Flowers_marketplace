@@ -9,6 +9,13 @@ import Card from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import { getFlowerImage, getDefaultFlowerImage } from '../../utils/flowerImages';
+import {
+  getCountryFlag,
+  getCountryName,
+  formatPackInfo,
+  formatTier,
+  formatColors,
+} from '../../utils/catalogFormatters';
 
 export default function CatalogPage() {
   const dispatch = useAppDispatch();
@@ -142,80 +149,109 @@ export default function CatalogPage() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {data?.offers.map((offer) => (
-          <Card key={offer.id} className="p-4 flex flex-col h-full">
-            {/* Image Block - fixed height, image aligned to bottom */}
-            <div className="aspect-square bg-gray-100 rounded-lg mb-4 overflow-hidden flex items-end justify-center">
-              <img
-                src={getFlowerImage(offer.sku.product_type)}
-                alt={offer.display_title || offer.sku.title}
-                className="max-w-full max-h-full object-contain"
-                loading="lazy"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = getDefaultFlowerImage();
-                }}
-              />
-            </div>
+        {data?.offers.map((offer) => {
+          const packInfo = formatPackInfo(offer.pack_type, offer.pack_qty);
+          const tierInfo = formatTier(offer.tier_min_qty, offer.tier_max_qty);
+          const colorsText = formatColors(offer.colors);
 
-            {/* Content Block - title & metadata */}
-            <div className="flex-grow">
-              <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2 min-h-[2.5rem]">
-                {offer.display_title || offer.sku.title}
-              </h3>
-              <p className="text-sm text-gray-600 mb-2 truncate">{offer.supplier.name}</p>
+          return (
+            <Card key={offer.id} className="p-4 flex flex-col h-full">
+              {/* Image Block */}
+              <div className="aspect-square bg-gray-100 rounded-lg mb-3 overflow-hidden flex items-end justify-center">
+                <img
+                  src={getFlowerImage(offer.sku.product_type)}
+                  alt={offer.display_title || offer.sku.title}
+                  className="max-w-full max-h-full object-contain"
+                  loading="lazy"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = getDefaultFlowerImage();
+                  }}
+                />
+              </div>
 
-              {/* Metadata - fixed height with placeholder */}
-              <div className="h-5 mb-2">
-                <p className="text-xs text-gray-500">
-                  Длина: {offer.length_cm ? `${offer.length_cm} см` : '—'}
+              {/* Content Block */}
+              <div className="flex-grow">
+                {/* Country */}
+                {offer.origin_country && (
+                  <p className="text-xs text-gray-500 mb-1">
+                    <span className="mr-1">{getCountryFlag(offer.origin_country)}</span>
+                    {getCountryName(offer.origin_country)}
+                  </p>
+                )}
+
+                {/* Title */}
+                <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2 min-h-[2.5rem]">
+                  {offer.display_title || offer.sku.title}
+                </h3>
+
+                {/* Colors */}
+                {colorsText && (
+                  <p className="text-sm text-gray-600 mb-1 truncate">{colorsText}</p>
+                )}
+
+                {/* Length & Pack */}
+                <p className="text-xs text-gray-500 mb-2">
+                  {offer.length_cm && <span>{offer.length_cm} см</span>}
+                  {offer.length_cm && packInfo && <span className="mx-1">·</span>}
+                  {packInfo && <span>{packInfo}</span>}
+                  {!offer.length_cm && !packInfo && <span>—</span>}
                 </p>
               </div>
-            </div>
 
-            {/* Footer Block - pinned to bottom */}
-            <div className="mt-auto">
-              <div className="flex justify-between items-center mb-3">
-                <span className="text-2xl font-bold text-primary-600">
-                  {offer.price_min} ₽
-                </span>
-                <span className="text-xs text-gray-500">
-                  {offer.stock_qty ? `Остаток: ${offer.stock_qty}` : '—'}
-                </span>
-              </div>
+              {/* Footer Block - pinned to bottom */}
+              <div className="mt-auto pt-3 border-t border-gray-100">
+                {/* Price Block - compact with aligned metrics */}
+                <div className="flex justify-between items-start mb-2 min-h-[44px]">
+                  <span className="text-2xl font-bold text-primary-600">
+                    {offer.price_min} ₽
+                  </span>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">
+                      {offer.stock_qty ? `Ост: ${offer.stock_qty}` : '—'}
+                    </p>
+                    {tierInfo && (
+                      <p className="text-[10px] text-green-600">{tierInfo}</p>
+                    )}
+                  </div>
+                </div>
 
-              {/* Quantity Controls */}
-              <div className="flex items-center gap-2 mb-3">
-                <button
-                  onClick={() => setQuantity(offer.id, getQuantity(offer.id) - 1)}
-                  className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700"
+                {/* Supplier */}
+                <p className="text-xs text-gray-400 mb-2">{offer.supplier.name}</p>
+
+                {/* Quantity Controls */}
+                <div className="flex items-center gap-2 mb-3">
+                  <button
+                    onClick={() => setQuantity(offer.id, getQuantity(offer.id) - 1)}
+                    className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    value={getQuantity(offer.id)}
+                    onChange={(e) => setQuantity(offer.id, parseInt(e.target.value) || 1)}
+                    className="w-16 text-center border border-gray-300 rounded px-2 py-1"
+                  />
+                  <button
+                    onClick={() => setQuantity(offer.id, getQuantity(offer.id) + 1)}
+                    className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700"
+                  >
+                    +
+                  </button>
+                </div>
+
+                <Button
+                  className="w-full"
+                  size="sm"
+                  onClick={() => handleAddToCart(offer.id)}
                 >
-                  −
-                </button>
-                <input
-                  type="number"
-                  min="1"
-                  value={getQuantity(offer.id)}
-                  onChange={(e) => setQuantity(offer.id, parseInt(e.target.value) || 1)}
-                  className="w-16 text-center border border-gray-300 rounded px-2 py-1"
-                />
-                <button
-                  onClick={() => setQuantity(offer.id, getQuantity(offer.id) + 1)}
-                  className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700"
-                >
-                  +
-                </button>
+                  В корзину
+                </Button>
               </div>
-
-              <Button
-                className="w-full"
-                size="sm"
-                onClick={() => handleAddToCart(offer.id)}
-              >
-                В корзину
-              </Button>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
