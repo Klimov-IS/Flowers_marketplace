@@ -22,14 +22,15 @@ API обеспечивает:
 3. [Suppliers](#suppliers)
 4. [Imports](#imports)
 5. [Dictionary](#dictionary-management)
-6. [SKUs](#normalized-skus)
-7. [Normalization](#normalization)
-8. [Publishing](#publishing)
-9. [Offers (Retail)](#retail-read-only)
-10. [Buyers](#buyers-admin)
-11. [Orders](#orders-retail)
-12. [Supplier Orders](#supplier-orders-admin)
-13. [Error Handling](#error-responses)
+6. [Flower Catalog](#flower-catalog) ← **NEW**
+7. [SKUs](#normalized-skus)
+8. [Normalization](#normalization)
+9. [Publishing](#publishing)
+10. [Offers (Retail)](#retail-read-only)
+11. [Buyers](#buyers-admin)
+12. [Orders](#orders-retail)
+13. [Supplier Orders](#supplier-orders-admin)
+14. [Error Handling](#error-responses)
 
 ---
 
@@ -681,6 +682,562 @@ curl -X PATCH http://localhost:8000/admin/dictionary/{uuid} \
   -H "Content-Type: application/json" \
   -d '{"status": "inactive"}'
 ```
+
+---
+
+## Flower Catalog
+
+Иерархический справочник цветов: категории → типы → субтипы → сорта.
+
+### Структура каталога
+
+```
+flower_categories (опционально)
+    └── flower_types (Роза, Хризантема, Эвкалипт)
+          ├── flower_subtypes (Кустовая, Спрей, Пионовидная)
+          │     └── subtype_synonyms
+          ├── type_synonyms (роза, розы, rose → Роза)
+          └── flower_varieties (Explorer, Freedom, Red Naomi)
+                └── variety_synonyms (эксплорер → Explorer)
+```
+
+---
+
+### List Categories
+
+**Endpoint**: `GET /admin/catalog/categories`
+
+**Description**: Список категорий верхнего уровня.
+
+**Response** (200 OK):
+```json
+[
+  {
+    "id": "uuid",
+    "name": "Срезанные цветы",
+    "slug": "cut-flowers",
+    "sort_order": 1,
+    "created_at": "2026-02-05T10:00:00Z",
+    "types_count": 25
+  }
+]
+```
+
+**Example**:
+```bash
+curl http://localhost:8000/admin/catalog/categories
+```
+
+---
+
+### Create Category
+
+**Endpoint**: `POST /admin/catalog/categories`
+
+**Description**: Создать новую категорию.
+
+**Request body**:
+```json
+{
+  "name": "Сухоцветы",
+  "slug": "dried-flowers",
+  "sort_order": 3
+}
+```
+
+**Response** (201 Created):
+```json
+{
+  "id": "uuid",
+  "name": "Сухоцветы",
+  "slug": "dried-flowers",
+  "sort_order": 3,
+  "created_at": "2026-02-05T10:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/catalog/categories \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Сухоцветы", "slug": "dried-flowers", "sort_order": 3}'
+```
+
+---
+
+### List Flower Types
+
+**Endpoint**: `GET /admin/catalog/types`
+
+**Description**: Список типов цветов с синонимами и субтипами.
+
+**Query parameters**:
+- `category_id` (optional): Фильтр по категории
+- `is_active` (optional, default true): Фильтр по активности
+
+**Response** (200 OK):
+```json
+[
+  {
+    "id": "uuid",
+    "canonical_name": "Роза",
+    "slug": "rosa",
+    "category_id": "uuid",
+    "meta": {"avg_length_min": 40, "avg_length_max": 80},
+    "is_active": true,
+    "created_at": "2026-02-05T10:00:00Z",
+    "synonyms": ["роза", "розы", "розу", "rose", "roses"],
+    "subtypes": [
+      {"id": "uuid", "name": "Кустовая", "slug": "shrub"},
+      {"id": "uuid", "name": "Спрей", "slug": "spray"}
+    ]
+  }
+]
+```
+
+**Example**:
+```bash
+curl "http://localhost:8000/admin/catalog/types?is_active=true"
+```
+
+---
+
+### Create Flower Type
+
+**Endpoint**: `POST /admin/catalog/types`
+
+**Description**: Создать новый тип цветка с синонимами.
+
+**Request body**:
+```json
+{
+  "canonical_name": "Пион",
+  "slug": "peony",
+  "category_id": "uuid",
+  "meta": {"seasonal": true},
+  "is_active": true,
+  "synonyms": ["пион", "пионы", "peony", "peonies"]
+}
+```
+
+**Response** (201 Created):
+```json
+{
+  "id": "uuid",
+  "canonical_name": "Пион",
+  "slug": "peony",
+  "category_id": "uuid",
+  "meta": {"seasonal": true},
+  "is_active": true,
+  "created_at": "2026-02-05T10:00:00Z",
+  "synonyms": ["пион", "пионы", "peony", "peonies"],
+  "subtypes": []
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/catalog/types \
+  -H "Content-Type: application/json" \
+  -d '{
+    "canonical_name": "Пион",
+    "slug": "peony",
+    "synonyms": ["пион", "пионы"]
+  }'
+```
+
+**Status codes**:
+- 201: Успешно создано
+- 400: Slug уже существует
+
+---
+
+### Update Flower Type
+
+**Endpoint**: `PATCH /admin/catalog/types/{type_id}`
+
+**Description**: Обновить тип цветка.
+
+**Request body** (partial update):
+```json
+{
+  "canonical_name": "Пион садовый",
+  "is_active": false
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "canonical_name": "Пион садовый",
+  "slug": "peony",
+  "is_active": false,
+  "updated_at": "2026-02-05T11:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl -X PATCH http://localhost:8000/admin/catalog/types/{uuid} \
+  -H "Content-Type: application/json" \
+  -d '{"is_active": false}'
+```
+
+---
+
+### Add Type Synonym
+
+**Endpoint**: `POST /admin/catalog/types/{type_id}/synonyms`
+
+**Description**: Добавить синоним к типу цветка.
+
+**Request body**:
+```json
+{
+  "synonym": "пионов",
+  "priority": 50
+}
+```
+
+**Response** (201 Created):
+```json
+{
+  "id": "uuid",
+  "type_id": "uuid",
+  "synonym": "пионов",
+  "priority": 50
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/catalog/types/{uuid}/synonyms \
+  -H "Content-Type: application/json" \
+  -d '{"synonym": "пионов"}'
+```
+
+**Notes**:
+- Синонимы автоматически приводятся к lowercase
+- Один синоним может указывать только на один тип (UNIQUE constraint)
+
+---
+
+### List Subtypes
+
+**Endpoint**: `GET /admin/catalog/subtypes`
+
+**Description**: Список субтипов цветков.
+
+**Query parameters**:
+- `type_id` (optional): Фильтр по типу цветка
+
+**Response** (200 OK):
+```json
+[
+  {
+    "id": "uuid",
+    "type_id": "uuid",
+    "name": "Кустовая",
+    "slug": "shrub",
+    "meta": {},
+    "is_active": true,
+    "created_at": "2026-02-05T10:00:00Z",
+    "synonyms": ["кустовая", "кустовые", "куст", "shrub", "spray"],
+    "type_name": "Роза"
+  }
+]
+```
+
+**Example**:
+```bash
+curl "http://localhost:8000/admin/catalog/subtypes?type_id={uuid}"
+```
+
+---
+
+### Create Subtype
+
+**Endpoint**: `POST /admin/catalog/subtypes`
+
+**Description**: Создать субтип цветка.
+
+**Request body**:
+```json
+{
+  "type_id": "uuid",
+  "name": "Пионовидная",
+  "slug": "peony-type",
+  "synonyms": ["пионовидная", "пионовидные", "garden"]
+}
+```
+
+**Response** (201 Created):
+```json
+{
+  "id": "uuid",
+  "type_id": "uuid",
+  "name": "Пионовидная",
+  "slug": "peony-type",
+  "is_active": true,
+  "created_at": "2026-02-05T10:00:00Z",
+  "synonyms": ["пионовидная", "пионовидные", "garden"]
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/catalog/subtypes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type_id": "uuid-here",
+    "name": "Пионовидная",
+    "slug": "peony-type",
+    "synonyms": ["пионовидная"]
+  }'
+```
+
+---
+
+### List Varieties
+
+**Endpoint**: `GET /admin/catalog/varieties`
+
+**Description**: Список сортов цветков с поиском.
+
+**Query parameters**:
+- `type_id` (optional): Фильтр по типу цветка
+- `subtype_id` (optional): Фильтр по субтипу
+- `search` (optional): Поиск по названию (fuzzy search с триграммами)
+- `verified_only` (optional, default false): Только проверенные сорта
+- `limit` (optional, default 100): Макс. результатов
+- `offset` (optional, default 0): Пагинация
+
+**Response** (200 OK):
+```json
+{
+  "varieties": [
+    {
+      "id": "uuid",
+      "type_id": "uuid",
+      "subtype_id": null,
+      "name": "Explorer",
+      "slug": "explorer",
+      "official_colors": ["красный"],
+      "typical_length_min": 40,
+      "typical_length_max": 70,
+      "meta": {},
+      "is_verified": true,
+      "is_active": true,
+      "created_at": "2026-02-05T10:00:00Z",
+      "synonyms": ["эксплорер", "eksplorer"],
+      "type_name": "Роза",
+      "subtype_name": null
+    }
+  ],
+  "total": 150,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+**Example**:
+```bash
+# Поиск сорта
+curl "http://localhost:8000/admin/catalog/varieties?search=explorer"
+
+# Фильтр по типу
+curl "http://localhost:8000/admin/catalog/varieties?type_id={uuid}&verified_only=true"
+```
+
+---
+
+### Create Variety
+
+**Endpoint**: `POST /admin/catalog/varieties`
+
+**Description**: Создать новый сорт цветка.
+
+**Request body**:
+```json
+{
+  "type_id": "uuid",
+  "subtype_id": null,
+  "name": "Red Naomi",
+  "slug": "red-naomi",
+  "official_colors": ["красный", "бордовый"],
+  "typical_length_min": 50,
+  "typical_length_max": 80,
+  "meta": {"premium": true},
+  "is_verified": false,
+  "synonyms": ["ред наоми", "наоми"]
+}
+```
+
+**Response** (201 Created):
+```json
+{
+  "id": "uuid",
+  "type_id": "uuid",
+  "name": "Red Naomi",
+  "slug": "red-naomi",
+  "official_colors": ["красный", "бордовый"],
+  "typical_length_min": 50,
+  "typical_length_max": 80,
+  "is_verified": false,
+  "is_active": true,
+  "created_at": "2026-02-05T10:00:00Z",
+  "synonyms": ["ред наоми", "наоми"]
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/catalog/varieties \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type_id": "uuid-here",
+    "name": "Red Naomi",
+    "slug": "red-naomi",
+    "official_colors": ["красный"],
+    "synonyms": ["ред наоми"]
+  }'
+```
+
+---
+
+### Update Variety
+
+**Endpoint**: `PATCH /admin/catalog/varieties/{variety_id}`
+
+**Description**: Обновить сорт цветка.
+
+**Request body** (partial update):
+```json
+{
+  "is_verified": true,
+  "official_colors": ["красный", "бордовый", "тёмно-красный"]
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "name": "Red Naomi",
+  "is_verified": true,
+  "official_colors": ["красный", "бордовый", "тёмно-красный"],
+  "updated_at": "2026-02-05T11:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl -X PATCH http://localhost:8000/admin/catalog/varieties/{uuid} \
+  -H "Content-Type: application/json" \
+  -d '{"is_verified": true}'
+```
+
+---
+
+### Verify Variety
+
+**Endpoint**: `PUT /admin/catalog/varieties/{variety_id}/verify`
+
+**Description**: Отметить сорт как проверенный экспертом.
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "name": "Red Naomi",
+  "is_verified": true,
+  "updated_at": "2026-02-05T11:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl -X PUT http://localhost:8000/admin/catalog/varieties/{uuid}/verify
+```
+
+---
+
+### Catalog Lookup (for Parser)
+
+**Endpoint**: `GET /admin/catalog/lookup`
+
+**Description**: Получить все данные каталога для использования парсером (с кэшированием).
+
+**Response** (200 OK):
+```json
+{
+  "types": {
+    "роза": "Роза",
+    "розы": "Роза",
+    "rose": "Роза",
+    "хризантема": "Хризантема"
+  },
+  "subtypes": {
+    "Роза": {
+      "кустовая": "Кустовая",
+      "спрей": "Спрей"
+    },
+    "Хризантема": {
+      "кустовая": "Кустовая",
+      "одноголовая": "Одноголовая"
+    }
+  },
+  "varieties": {
+    "Роза": {
+      "эксплорер": "Explorer",
+      "explorer": "Explorer",
+      "фридом": "Freedom"
+    }
+  },
+  "cached_at": "2026-02-05T10:00:00Z"
+}
+```
+
+**Example**:
+```bash
+curl http://localhost:8000/admin/catalog/lookup
+```
+
+**Notes**:
+- Данные кэшируются на 5 минут (TTL=300s)
+- Используется парсером для извлечения атрибутов из названий
+- Возвращает маппинг: синоним → каноническое название
+
+---
+
+### Seed Catalog
+
+**Endpoint**: `POST /admin/catalog/seed`
+
+**Description**: Заполнить каталог начальными данными (идемпотентно).
+
+**Response** (200 OK):
+```json
+{
+  "categories_created": 3,
+  "types_created": 35,
+  "subtypes_created": 12,
+  "synonyms_created": 150,
+  "message": "Catalog seeded successfully"
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/catalog/seed
+```
+
+**Notes**:
+- Идемпотентная операция — безопасно вызывать повторно
+- Создаёт 35+ типов цветов с синонимами на русском и английском
+- Создаёт субтипы (кустовая, спрей, одноголовая и т.д.)
+- Не перезаписывает существующие записи
 
 ---
 
@@ -1766,6 +2323,7 @@ curl "http://localhost:8000/offers?product_type=rose"
 
 ## Version History
 
+- **v0.5.0** (2026-02-05): Добавлен Flower Catalog API — иерархический справочник типов/субтипов/сортов цветов
 - **v0.4.0** (2026-02-03): Документация расширена: аутентификация, таблица содержания, русский язык
 - **v0.3.0** (2025-01-13): Task 3 complete - Order flow (buyers, orders, supplier order management)
 - **v0.2.0** (2025-01-12): Task 2 complete - Normalization and publishing

@@ -331,6 +331,118 @@ BEFORE UPDATE ON normalization_tasks
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- =========================================================
+-- 7.5) FLOWER CATALOG (hierarchical types/subtypes/varieties)
+-- =========================================================
+
+-- Categories (optional top-level grouping)
+CREATE TABLE IF NOT EXISTS flower_categories (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        varchar(100) NOT NULL,
+  slug        varchar(50) NOT NULL UNIQUE,
+  sort_order  integer NOT NULL DEFAULT 0,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER trg_flower_categories_updated_at
+BEFORE UPDATE ON flower_categories
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Flower types (Роза, Хризантема, Эвкалипт)
+CREATE TABLE IF NOT EXISTS flower_types (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  category_id     uuid NULL REFERENCES flower_categories(id) ON DELETE SET NULL,
+  canonical_name  varchar(100) NOT NULL UNIQUE,
+  slug            varchar(50) NOT NULL UNIQUE,
+  meta            jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_active       boolean NOT NULL DEFAULT true,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER trg_flower_types_updated_at
+BEFORE UPDATE ON flower_types
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Flower subtypes (Кустовая, Спрей, Пионовидная)
+CREATE TABLE IF NOT EXISTS flower_subtypes (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  type_id     uuid NOT NULL REFERENCES flower_types(id) ON DELETE CASCADE,
+  name        varchar(100) NOT NULL,
+  slug        varchar(50) NOT NULL,
+  meta        jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_active   boolean NOT NULL DEFAULT true,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (type_id, slug)
+);
+
+CREATE TRIGGER trg_flower_subtypes_updated_at
+BEFORE UPDATE ON flower_subtypes
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Type synonyms (роза, розы, rose → Роза)
+CREATE TABLE IF NOT EXISTS type_synonyms (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  type_id     uuid NOT NULL REFERENCES flower_types(id) ON DELETE CASCADE,
+  synonym     varchar(100) NOT NULL,
+  priority    integer NOT NULL DEFAULT 100,
+  CONSTRAINT chk_synonym_lowercase CHECK (synonym = lower(synonym)),
+  UNIQUE (synonym)  -- one synonym → one type only
+);
+
+CREATE INDEX IF NOT EXISTS ix_type_synonyms_synonym ON type_synonyms (synonym);
+
+-- Subtype synonyms (кустовая, куст, shrub → Кустовая)
+CREATE TABLE IF NOT EXISTS subtype_synonyms (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  subtype_id  uuid NOT NULL REFERENCES flower_subtypes(id) ON DELETE CASCADE,
+  synonym     varchar(100) NOT NULL,
+  priority    integer NOT NULL DEFAULT 100,
+  CONSTRAINT chk_subtype_synonym_lowercase CHECK (synonym = lower(synonym)),
+  UNIQUE (subtype_id, synonym)
+);
+
+CREATE INDEX IF NOT EXISTS ix_subtype_synonyms_synonym ON subtype_synonyms (synonym);
+
+-- Flower varieties (Explorer, Freedom, Red Naomi)
+CREATE TABLE IF NOT EXISTS flower_varieties (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  type_id             uuid NOT NULL REFERENCES flower_types(id) ON DELETE CASCADE,
+  subtype_id          uuid NULL REFERENCES flower_subtypes(id) ON DELETE SET NULL,
+  name                varchar(100) NOT NULL,
+  slug                varchar(100) NOT NULL,
+  official_colors     text[] NULL,
+  typical_length_min  integer NULL CHECK (typical_length_min IS NULL OR typical_length_min > 0),
+  typical_length_max  integer NULL CHECK (typical_length_max IS NULL OR typical_length_max > 0),
+  meta                jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_verified         boolean NOT NULL DEFAULT false,
+  is_active           boolean NOT NULL DEFAULT true,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (type_id, slug)
+);
+
+CREATE TRIGGER trg_flower_varieties_updated_at
+BEFORE UPDATE ON flower_varieties
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Trigram index for fuzzy search on variety names
+CREATE INDEX IF NOT EXISTS gin_flower_varieties_name_trgm
+ON flower_varieties USING gin (name gin_trgm_ops);
+
+-- Variety synonyms (эксплорер → Explorer)
+CREATE TABLE IF NOT EXISTS variety_synonyms (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  variety_id  uuid NOT NULL REFERENCES flower_varieties(id) ON DELETE CASCADE,
+  synonym     varchar(100) NOT NULL,
+  priority    integer NOT NULL DEFAULT 100,
+  UNIQUE (variety_id, synonym)
+);
+
+CREATE INDEX IF NOT EXISTS ix_variety_synonyms_synonym ON variety_synonyms (synonym);
+
+-- =========================================================
 -- 8) PUBLISHED layer: offers + delivery rules
 -- =========================================================
 CREATE TABLE IF NOT EXISTS supplier_delivery_rules (

@@ -1,6 +1,15 @@
 """SQLAlchemy models."""
 from apps.api.models.base import Base
 from apps.api.models.buyer import Buyer
+from apps.api.models.catalog import (
+    FlowerCategory,
+    FlowerSubtype,
+    FlowerType,
+    FlowerVariety,
+    SubtypeSynonym,
+    TypeSynonym,
+    VarietySynonym,
+)
 from apps.api.models.geo import City
 from apps.api.models.imports import ImportBatch, ParseEvent, ParseRun, RawRow
 from apps.api.models.items import OfferCandidate, SupplierItem
@@ -37,4 +46,12 @@ __all__ = [
     "SupplierDeliveryRule",
     "AIRun",
     "AISuggestion",
+    # Catalog models
+    "FlowerCategory",
+    "FlowerType",
+    "FlowerSubtype",
+    "FlowerVariety",
+    "TypeSynonym",
+    "SubtypeSynonym",
+    "VarietySynonym",
 ]

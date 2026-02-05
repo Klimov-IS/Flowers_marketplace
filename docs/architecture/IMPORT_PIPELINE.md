@@ -103,6 +103,19 @@ Pipeline обязан:
    - attributes (json): страна/бренд/сорт (если извлекли)
    - stable_key = hash(supplier_id + raw_group + normalized_name)
 
+5) извлекаем атрибуты из raw_name (**используя иерархический каталог**):
+   - **flower_type** — тип цветка (Роза, Хризантема...)
+     - lookup из `flower_types` + `type_synonyms` с кэшем (TTL=5 мин)
+     - fallback на hardcoded словарь FLOWER_TYPES_FALLBACK
+   - **flower_subtype** — субтип (Кустовая, Спрей, Пионовидная)
+     - lookup из `flower_subtypes` + `subtype_synonyms` (по type_id)
+   - **variety** — сорт (остаток названия после извлечения типа/субтипа/страны/длины)
+   - **origin_country** — страна (из скобок или регулярки)
+   - **length_cm** — длина в см
+   - **colors** — цвета (микс, красный и т.д.)
+
+   > Парсер использует API `/admin/catalog/lookup` или прямой async запрос к БД.
+
 5) для каждой строки создаём `offer_candidates` (см. Stage D — раскрытие).
 
 **Таблицы:**

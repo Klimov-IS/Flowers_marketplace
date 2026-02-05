@@ -180,6 +180,78 @@ raw “тиры” → много `offer_candidate` по диапазонам qt
 
 ### 3.4 NORMALIZED слой (каталог + словари)
 
+#### Иерархический каталог цветов (NEW)
+
+Структура справочника типов/субтипов/сортов:
+
+```
+flower_categories (опционально)
+    └── flower_types (Роза, Хризантема, Эвкалипт)
+          ├── flower_subtypes (Кустовая, Спрей, Пионовидная)
+          │     └── subtype_synonyms
+          ├── type_synonyms (роза, розы, rose → Роза)
+          └── flower_varieties (Explorer, Freedom, Red Naomi)
+                └── variety_synonyms (эксплорер → Explorer)
+```
+
+#### `flower_category`
+Категории верхнего уровня (опционально).
+- id
+- name (Срезанные цветы / Зелень / Сухоцветы)
+- slug (cut-flowers / greenery / dried)
+- sort_order
+
+#### `flower_type`
+Тип цветка (основной справочник).
+- id
+- category_id (FK, nullable)
+- canonical_name (Роза)
+- slug (rosa)
+- meta (JSONB: avg_length_min, avg_length_max, etc.)
+- is_active
+
+#### `flower_subtype`
+Субтип цветка (кустовая, спрей, пионовидная).
+- id
+- type_id (FK → flower_types)
+- name (Кустовая)
+- slug (shrub)
+- meta (JSONB)
+- is_active
+
+#### `type_synonym` / `subtype_synonym`
+Синонимы для типов/субтипов.
+- id
+- type_id / subtype_id (FK)
+- synonym (lowercase: "розы", "rose", "кустовая")
+- priority (для сортировки при конфликтах)
+
+**CONSTRAINT**: synonym UNIQUE — один синоним может указывать только на один тип.
+
+#### `flower_variety`
+Справочник известных сортов.
+- id
+- type_id (FK → flower_types, required)
+- subtype_id (FK → flower_subtypes, nullable)
+- name (Explorer)
+- slug (explorer)
+- official_colors (ARRAY: ["красный"])
+- typical_length_min / typical_length_max
+- meta (JSONB)
+- is_verified (bool: проверено экспертом)
+- is_active
+
+#### `variety_synonym`
+Синонимы сортов.
+- id
+- variety_id (FK)
+- synonym (lowercase: "эксплорер")
+- priority
+
+**Триграмный индекс**: `flower_varieties.name` для fuzzy search.
+
+---
+
 #### `normalized_sku`
 Каноническая карточка товара.
 - id
@@ -191,8 +263,8 @@ raw “тиры” → много `offer_candidate` по диапазонам qt
 - title (человекочитаемо)
 - search_tokens (tsvector/json)
 
-> MVP-рекомендация: **длину держать в Offer**, а не в SKU.  
-SKU = “что это”, Offer = “в каких параметрах продаётся”.
+> MVP-рекомендация: **длину держать в Offer**, а не в SKU.
+SKU = "что это", Offer = "в каких параметрах продаётся".
 
 #### `dictionary_entry`
 Универсальная модель словаря/синонимов/правил.
@@ -203,6 +275,9 @@ SKU = “что это”, Offer = “в каких параметрах про�
 - synonyms (array)
 - rules_json (regex/replace/extract)
 - status (active/deprecated)
+
+> **Note**: `dictionary_entry` остаётся для обратной совместимости и хранения цветов/стран.
+> Типы цветов теперь управляются через `flower_types` + `type_synonyms`.
 
 #### `sku_mapping`
 Соответствие supplier_item → normalized_sku.

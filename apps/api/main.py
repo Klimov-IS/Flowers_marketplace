@@ -10,6 +10,7 @@ from apps.api.routers import (
     admin,
     auth,
     buyers,
+    catalog,
     dictionary,
     health,
     normalization,
@@ -119,3 +120,4 @@ app.include_router(buyers.router, tags=["buyers"])  # Admin buyer management
 app.include_router(orders.router, tags=["orders"])  # Retail order endpoints (no prefix)
 app.include_router(supplier_orders.router, prefix="/admin", tags=["supplier-orders"])  # Supplier order management
 app.include_router(offers.router, tags=["offers"])  # No prefix - public endpoint
+app.include_router(catalog.router, prefix="/admin/catalog", tags=["catalog"])  # Flower catalog management
