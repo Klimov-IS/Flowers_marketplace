@@ -143,66 +143,77 @@ export default function CatalogPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {data?.offers.map((offer) => (
-          <Card key={offer.id} className="p-4">
-            <div className="aspect-square bg-gray-100 rounded-lg mb-4 overflow-hidden">
+          <Card key={offer.id} className="p-4 flex flex-col h-full">
+            {/* Image Block - fixed height, image aligned to bottom */}
+            <div className="aspect-square bg-gray-100 rounded-lg mb-4 overflow-hidden flex items-end justify-center">
               <img
                 src={getFlowerImage(offer.sku.product_type)}
                 alt={offer.display_title || offer.sku.title}
-                className="w-full h-full object-cover"
+                className="max-w-full max-h-full object-contain"
                 loading="lazy"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = getDefaultFlowerImage();
                 }}
               />
             </div>
-            <h3 className="font-semibold text-gray-900 mb-1">
-              {offer.display_title || offer.sku.title}
-            </h3>
-            <p className="text-sm text-gray-600 mb-2">{offer.supplier.name}</p>
 
-            {offer.length_cm && (
-              <p className="text-xs text-gray-500 mb-2">Длина: {offer.length_cm} см</p>
-            )}
+            {/* Content Block - title & metadata */}
+            <div className="flex-grow">
+              <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2 min-h-[2.5rem]">
+                {offer.display_title || offer.sku.title}
+              </h3>
+              <p className="text-sm text-gray-600 mb-2 truncate">{offer.supplier.name}</p>
 
-            <div className="flex justify-between items-center mb-3">
-              <span className="text-2xl font-bold text-primary-600">
-                {offer.price_min} ₽
-              </span>
-              {offer.stock_qty && (
-                <span className="text-xs text-gray-500">Остаток: {offer.stock_qty}</span>
-              )}
+              {/* Metadata - fixed height with placeholder */}
+              <div className="h-5 mb-2">
+                <p className="text-xs text-gray-500">
+                  Длина: {offer.length_cm ? `${offer.length_cm} см` : '—'}
+                </p>
+              </div>
             </div>
 
-            {/* Quantity Controls */}
-            <div className="flex items-center gap-2 mb-3">
-              <button
-                onClick={() => setQuantity(offer.id, getQuantity(offer.id) - 1)}
-                className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700"
-              >
-                −
-              </button>
-              <input
-                type="number"
-                min="1"
-                value={getQuantity(offer.id)}
-                onChange={(e) => setQuantity(offer.id, parseInt(e.target.value) || 1)}
-                className="w-16 text-center border border-gray-300 rounded px-2 py-1"
-              />
-              <button
-                onClick={() => setQuantity(offer.id, getQuantity(offer.id) + 1)}
-                className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700"
-              >
-                +
-              </button>
-            </div>
+            {/* Footer Block - pinned to bottom */}
+            <div className="mt-auto">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-2xl font-bold text-primary-600">
+                  {offer.price_min} ₽
+                </span>
+                <span className="text-xs text-gray-500">
+                  {offer.stock_qty ? `Остаток: ${offer.stock_qty}` : '—'}
+                </span>
+              </div>
 
-            <Button
-              className="w-full"
-              size="sm"
-              onClick={() => handleAddToCart(offer.id)}
-            >
-              В корзину
-            </Button>
+              {/* Quantity Controls */}
+              <div className="flex items-center gap-2 mb-3">
+                <button
+                  onClick={() => setQuantity(offer.id, getQuantity(offer.id) - 1)}
+                  className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  min="1"
+                  value={getQuantity(offer.id)}
+                  onChange={(e) => setQuantity(offer.id, parseInt(e.target.value) || 1)}
+                  className="w-16 text-center border border-gray-300 rounded px-2 py-1"
+                />
+                <button
+                  onClick={() => setQuantity(offer.id, getQuantity(offer.id) + 1)}
+                  className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700"
+                >
+                  +
+                </button>
+              </div>
+
+              <Button
+                className="w-full"
+                size="sm"
+                onClick={() => handleAddToCart(offer.id)}
+              >
+                В корзину
+              </Button>
+            </div>
           </Card>
         ))}
       </div>
