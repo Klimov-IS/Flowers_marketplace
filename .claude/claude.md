@@ -133,3 +133,36 @@ A task is done only when:
 - No leftover temp files
 - Docs updated (if behavior/schema changed)
 - Clear run instructions provided
+
+---
+
+## 12) Deployment (production)
+When user asks for deploy/commit/push:
+
+1. **Commit** changes with conventional commit message format:
+   ```
+   feat|fix|docs|refactor(scope): short description
+   ```
+
+2. **Push** to `origin/main`:
+   ```bash
+   git push origin main
+   ```
+
+3. **Deploy** via SSH (автоматический скрипт):
+   ```bash
+   ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236 \
+     "cd /opt/flower-market && ./deploy.sh"
+   ```
+
+The deploy script automatically:
+- Pulls latest code from git
+- Installs Python dependencies
+- Runs `alembic upgrade head` (migrations)
+- Builds frontend with `npm run build`
+- Restarts API service
+- Reloads nginx
+
+**Production URL:** http://158.160.217.236/flower/
+
+Full deployment docs: `/docs/DEPLOYMENT.md`
