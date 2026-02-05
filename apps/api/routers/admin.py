@@ -6,7 +6,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from sqlalchemy import cast, func, or_, select, literal
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
@@ -303,8 +304,26 @@ async def get_supplier_items(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
-    # Build base query for supplier items
-    base_query = select(SupplierItem).where(SupplierItem.supplier_id == supplier_id)
+    # Create aggregation subquery from offer_candidates
+    aggregates_subq = (
+        select(
+            OfferCandidate.supplier_item_id,
+            func.min(OfferCandidate.price_min).label('agg_price_min'),
+            func.max(OfferCandidate.price_min).label('agg_price_max'),
+            func.min(OfferCandidate.length_cm).label('agg_length_min'),
+            func.max(OfferCandidate.length_cm).label('agg_length_max'),
+            func.coalesce(func.sum(OfferCandidate.stock_qty), 0).label('agg_stock_total'),
+        )
+        .group_by(OfferCandidate.supplier_item_id)
+        .subquery('aggregates')
+    )
+
+    # Build base query with aggregates join
+    base_query = (
+        select(SupplierItem)
+        .outerjoin(aggregates_subq, SupplierItem.id == aggregates_subq.c.supplier_item_id)
+        .where(SupplierItem.supplier_id == supplier_id)
+    )
 
     # Apply status filter
     if status:
@@ -320,56 +339,70 @@ async def get_supplier_items(
             )
         )
 
-    # Apply origin_country filter
+    # Apply origin_country filter (from JSONB attributes)
     if origin_country:
+        origin_col = SupplierItem.attributes['origin_country'].astext
         include_null = "__null__" in origin_country
         actual_countries = [c for c in origin_country if c != "__null__"]
         if include_null and actual_countries:
             base_query = base_query.where(
                 or_(
-                    SupplierItem.origin_country.in_(actual_countries),
-                    SupplierItem.origin_country.is_(None),
+                    origin_col.in_(actual_countries),
+                    origin_col.is_(None),
+                    ~SupplierItem.attributes.has_key('origin_country'),
                 )
             )
         elif include_null:
-            base_query = base_query.where(SupplierItem.origin_country.is_(None))
+            base_query = base_query.where(
+                or_(
+                    origin_col.is_(None),
+                    ~SupplierItem.attributes.has_key('origin_country'),
+                )
+            )
         elif actual_countries:
-            base_query = base_query.where(SupplierItem.origin_country.in_(actual_countries))
+            base_query = base_query.where(origin_col.in_(actual_countries))
 
-    # Apply colors filter (checks if any color matches)
+    # Apply colors filter (from JSONB attributes)
     if colors:
+        colors_col = SupplierItem.attributes['colors']
         include_null = "__null__" in colors
         actual_colors = [c for c in colors if c != "__null__"]
         if include_null and actual_colors:
-            # Items with any of the specified colors OR empty colors array
+            # Items with any of the specified colors OR empty/missing colors
             base_query = base_query.where(
                 or_(
-                    SupplierItem.colors.op("&&")(actual_colors),  # PostgreSQL array overlap
-                    SupplierItem.colors == [],
+                    colors_col.op('?|')(actual_colors),  # contains any
+                    colors_col == cast('[]', JSONB),
+                    ~SupplierItem.attributes.has_key('colors'),
                 )
             )
         elif include_null:
-            base_query = base_query.where(SupplierItem.colors == [])
+            base_query = base_query.where(
+                or_(
+                    colors_col == cast('[]', JSONB),
+                    ~SupplierItem.attributes.has_key('colors'),
+                )
+            )
         elif actual_colors:
-            base_query = base_query.where(SupplierItem.colors.op("&&")(actual_colors))
+            base_query = base_query.where(colors_col.op('?|')(actual_colors))
 
-    # Apply price range filter (using aggregated min/max from variants)
+    # Apply price range filter (from aggregated offer_candidates)
     if price_min is not None:
-        base_query = base_query.where(SupplierItem.price_max >= price_min)
+        base_query = base_query.where(aggregates_subq.c.agg_price_max >= price_min)
     if price_max is not None:
-        base_query = base_query.where(SupplierItem.price_min <= price_max)
+        base_query = base_query.where(aggregates_subq.c.agg_price_min <= price_max)
 
-    # Apply length range filter
+    # Apply length range filter (from aggregated offer_candidates)
     if length_min is not None:
-        base_query = base_query.where(SupplierItem.length_max >= length_min)
+        base_query = base_query.where(aggregates_subq.c.agg_length_max >= length_min)
     if length_max is not None:
-        base_query = base_query.where(SupplierItem.length_min <= length_max)
+        base_query = base_query.where(aggregates_subq.c.agg_length_min <= length_max)
 
-    # Apply stock filter
+    # Apply stock filter (from aggregated offer_candidates)
     if stock_min is not None:
-        base_query = base_query.where(SupplierItem.stock_total >= stock_min)
+        base_query = base_query.where(aggregates_subq.c.agg_stock_total >= stock_min)
     if stock_max is not None:
-        base_query = base_query.where(SupplierItem.stock_total <= stock_max)
+        base_query = base_query.where(aggregates_subq.c.agg_stock_total <= stock_max)
 
     # Count total items
     count_query = select(func.count()).select_from(base_query.subquery())
@@ -382,10 +415,10 @@ async def get_supplier_items(
     # Build order clause based on sort_by parameter
     sort_column_map = {
         "raw_name": SupplierItem.raw_name,
-        "origin_country": SupplierItem.origin_country,
-        "price_min": SupplierItem.price_min,
-        "length_min": SupplierItem.length_min,
-        "stock_total": SupplierItem.stock_total,
+        "origin_country": SupplierItem.attributes['origin_country'].astext,
+        "price_min": aggregates_subq.c.agg_price_min,
+        "length_min": aggregates_subq.c.agg_length_min,
+        "stock_total": aggregates_subq.c.agg_stock_total,
     }
 
     order_column = sort_column_map.get(sort_by, SupplierItem.raw_name)
