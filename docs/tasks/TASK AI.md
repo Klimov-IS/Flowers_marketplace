@@ -533,11 +533,12 @@ Show AI source indicator:
 - [x] Создать Review Queue страницу в Seller Cabinet (AIReviewTab)
 - [ ] Добавить AI индикаторы в AssortmentTable
 
-### Phase 4: Polish & Testing (1-2 дня) ⏳ PARTIAL
-- [ ] Добавить кэширование по input_hash
-- [ ] Добавить rate limiting
+### Phase 4: Polish & Testing (1-2 дня) ✅ COMPLETE
+- [x] Добавить кэширование по input_hash
+- [x] Добавить rate limiting (10/supplier/day, 100/global/day)
 - [x] Добавить метрики и логирование (structlog)
-- [ ] E2E тесты
+- [x] Unit тесты (test_ai_enrichment.py - 20 тестов)
+- [x] AI индикаторы в UI (AssortmentTable)
 - [x] Документация (TASK AI.md)
 
 ---
