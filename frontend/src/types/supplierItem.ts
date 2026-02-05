@@ -15,10 +15,12 @@ export interface OfferVariant {
 
 export interface ItemAttributes {
   flower_type?: string;
+  subtype?: string;      // кустовая, спрей, пионовидная
   variety?: string;
   origin_country?: string;
   colors?: string[];
   farm?: string;
+  clean_name?: string;   // Чистое название: Тип + Субтип + Сорт
   _sources?: Record<string, 'ai' | 'manual' | 'parser'>;
   _confidences?: Record<string, number>;
   _locked?: string[];

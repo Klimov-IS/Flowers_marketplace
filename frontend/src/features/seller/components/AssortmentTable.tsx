@@ -260,28 +260,38 @@ function ItemRow({
           )}
         </td>
 
-        {/* Name - always editable */}
+        {/* Name - show clean_name as primary, raw_name as secondary */}
         <td className="px-3 py-3">
           <div className="flex items-center gap-1">
             <EditableCell
-              value={item.raw_name}
+              value={item.attributes?.clean_name || item.raw_name}
               type="text"
               onSave={async (val) => onUpdateItem(item.id, 'raw_name', val)}
               className="font-medium text-gray-900"
             />
-            {item.attributes?._sources?.flower_type === 'ai' && (
+            {item.attributes?._sources?.clean_name === 'ai' && (
               <AIIndicator
                 source="ai"
-                confidence={item.attributes?._confidences?.flower_type}
+                confidence={item.attributes?._confidences?.clean_name}
               />
             )}
           </div>
-          {item.source_file && (
+          {/* Show raw_name as secondary info when different from clean_name */}
+          {item.attributes?.clean_name && item.attributes.clean_name !== item.raw_name && (
+            <div
+              className="text-xs text-gray-400 mt-0.5 px-2 truncate max-w-xs"
+              title={item.raw_name}
+            >
+              Исходное: {item.raw_name}
+            </div>
+          )}
+          {item.source_file && !item.attributes?.clean_name && (
             <div className="text-xs text-gray-400 mt-0.5 px-2">{item.source_file}</div>
           )}
           {item.attributes?.flower_type && (
             <div className="text-xs text-purple-600 mt-0.5 px-2">
               {item.attributes.flower_type}
+              {item.attributes.subtype && ` ${item.attributes.subtype.toLowerCase()}`}
               {item.attributes.variety && ` ${item.attributes.variety}`}
             </div>
           )}

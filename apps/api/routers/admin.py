@@ -336,6 +336,7 @@ async def get_supplier_items(
             or_(
                 SupplierItem.raw_name.ilike(search_term),
                 SupplierItem.name_norm.ilike(search_term),
+                SupplierItem.attributes['clean_name'].astext.ilike(search_term),
             )
         )
 
