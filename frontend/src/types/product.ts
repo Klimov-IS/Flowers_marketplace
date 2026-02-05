@@ -15,6 +15,7 @@ export interface Offer {
   id: string;
   supplier: Supplier;
   sku: NormalizedSKU;
+  display_title: string | null;  // Clean name: Тип + Субтип + Сорт
   length_cm: number | null;
   pack_type: string | null;
   pack_qty: number | null;

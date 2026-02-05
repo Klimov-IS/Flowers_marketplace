@@ -37,6 +37,8 @@ export default function CatalogPage() {
     if (!offer) return;
 
     const quantity = quantities[offerId] || 1;
+    // Use display_title for clean name, fallback to sku.title
+    const productName = offer.display_title || offer.sku.title;
 
     dispatch(
       addToCart({
@@ -45,7 +47,7 @@ export default function CatalogPage() {
         item: {
           product_id: offer.sku.id,
           offer_id: offer.id,
-          name: offer.sku.title,
+          name: productName,
           price: offer.price_min,
           quantity,
           stock: offer.stock_qty || undefined,
@@ -56,7 +58,7 @@ export default function CatalogPage() {
 
     // Reset quantity after adding
     setQuantities((prev) => ({ ...prev, [offerId]: 1 }));
-    alert(`Добавлено в корзину: ${offer.sku.title} (${quantity} шт)`);
+    alert(`Добавлено в корзину: ${productName} (${quantity} шт)`);
   };
 
   const getQuantity = (offerId: string) => quantities[offerId] || 1;
@@ -144,7 +146,9 @@ export default function CatalogPage() {
             <div className="aspect-square bg-gray-200 rounded-lg mb-4 flex items-center justify-center">
               <span className="text-gray-400">Изображение</span>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-1">{offer.sku.title}</h3>
+            <h3 className="font-semibold text-gray-900 mb-1">
+              {offer.display_title || offer.sku.title}
+            </h3>
             <p className="text-sm text-gray-600 mb-2">{offer.supplier.name}</p>
 
             {offer.length_cm && (
