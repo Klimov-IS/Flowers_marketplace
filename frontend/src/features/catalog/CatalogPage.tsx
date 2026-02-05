@@ -210,18 +210,18 @@ export default function CatalogPage() {
 
               {/* Content Block */}
               <div className="flex-grow">
-                {/* Country */}
+                {/* Title - первым */}
+                <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2 min-h-[2.5rem]">
+                  {offer.display_title || offer.sku.title}
+                </h3>
+
+                {/* Country - под названием */}
                 {offer.origin_country && (
                   <p className="text-xs text-gray-500 mb-1">
                     <span className="mr-1">{getCountryFlag(offer.origin_country)}</span>
                     {getCountryName(offer.origin_country)}
                   </p>
                 )}
-
-                {/* Title */}
-                <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2 min-h-[2.5rem]">
-                  {offer.display_title || offer.sku.title}
-                </h3>
 
                 {/* Colors */}
                 {colorsText && (
