@@ -1,4 +1,4 @@
-import { getCountryFlag, getCountryName } from '../../../utils/catalogFormatters';
+// Note: getCountryFlag/getCountryName moved to inline since we now use Russian country names
 
 // Product types matching database values (Russian)
 const PRODUCT_TYPES = [
@@ -12,17 +12,10 @@ const PRODUCT_TYPES = [
   { value: 'Писташ', label: 'Писташ' },
 ];
 
-// Countries
-const COUNTRIES = ['EC', 'NL', 'CO', 'KE', 'RU'];
-
-// Colors with swatches
-const COLORS = [
-  { value: 'белый', color: '#ffffff' },
-  { value: 'красный', color: '#e53935' },
-  { value: 'розовый', color: '#ec407a' },
-  { value: 'жёлтый', color: '#fdd835' },
-  { value: 'оранжевый', color: '#ff9800' },
-  { value: 'зелёный', color: '#43a047' },
+// Countries matching actual database values (Russian names)
+const COUNTRIES = [
+  { value: 'Эквадор', label: 'Эквадор', flag: '🇪🇨' },
+  { value: 'Израиль', label: 'Израиль', flag: '🇮🇱' },
 ];
 
 interface FilterSidebarProps {
@@ -53,13 +46,7 @@ export default function FilterSidebar({ filters, onFilterChange, onReset }: Filt
     onFilterChange('origin_country', updated.length > 0 ? updated : undefined);
   };
 
-  const handleColorToggle = (color: string) => {
-    const current = filters.colors || [];
-    const updated = current.includes(color)
-      ? current.filter((c) => c !== color)
-      : [...current, color];
-    onFilterChange('colors', updated.length > 0 ? updated : undefined);
-  };
+  // Note: handleColorToggle removed - colors filter hidden until data is available
 
   return (
     <aside className="w-64 flex-shrink-0 bg-white rounded-lg border border-gray-200 p-5 h-fit sticky top-24">
@@ -103,46 +90,23 @@ export default function FilterSidebar({ filters, onFilterChange, onReset }: Filt
         </h3>
         <div className="space-y-2">
           {COUNTRIES.map((country) => (
-            <label key={country} className="flex items-center gap-2 cursor-pointer group">
+            <label key={country.value} className="flex items-center gap-2 cursor-pointer group">
               <input
                 type="checkbox"
-                checked={filters.origin_country?.includes(country) || false}
-                onChange={() => handleCountryToggle(country)}
+                checked={filters.origin_country?.includes(country.value) || false}
+                onChange={() => handleCountryToggle(country.value)}
                 className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
               <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                {getCountryFlag(country)} {getCountryName(country)}
+                {country.flag} {country.label}
               </span>
             </label>
           ))}
         </div>
       </div>
 
-      {/* Color */}
-      <div className="mb-5 pb-4 border-b border-gray-100">
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          Цвет
-        </h3>
-        <div className="grid grid-cols-3 gap-2">
-          {COLORS.map((color) => (
-            <button
-              key={color.value}
-              onClick={() => handleColorToggle(color.value)}
-              className={`flex flex-col items-center gap-1 p-2 rounded-md border transition-colors ${
-                filters.colors?.includes(color.value)
-                  ? 'border-primary-500 bg-primary-50'
-                  : 'border-transparent hover:bg-gray-50'
-              }`}
-            >
-              <span
-                className="w-6 h-6 rounded-full border border-gray-300"
-                style={{ backgroundColor: color.color }}
-              />
-              <span className="text-[10px] text-gray-600">{color.value}</span>
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Color filter hidden - no data in database yet */}
+      {/* TODO: Enable when colors data is populated in supplier_items */}
 
       {/* Length */}
       <div className="mb-5 pb-4 border-b border-gray-100">
@@ -192,22 +156,8 @@ export default function FilterSidebar({ filters, onFilterChange, onReset }: Filt
         </div>
       </div>
 
-      {/* In Stock Toggle */}
-      <div>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <div className="relative">
-            <input
-              type="checkbox"
-              checked={filters.in_stock || false}
-              onChange={(e) => onFilterChange('in_stock', e.target.checked || undefined)}
-              className="sr-only peer"
-            />
-            <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-primary-600 transition-colors" />
-            <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
-          </div>
-          <span className="text-sm text-gray-700">Только в наличии</span>
-        </label>
-      </div>
+      {/* In Stock filter hidden - stock_qty is NULL for all offers in database */}
+      {/* TODO: Enable when stock_qty data is populated during price list import */}
     </aside>
   );
 }

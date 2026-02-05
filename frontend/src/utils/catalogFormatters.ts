@@ -3,7 +3,9 @@
  */
 
 // Country code to flag and name mapping
+// Supports both ISO codes (EC, NL) and Russian names (Эквадор, Израиль)
 const COUNTRY_DATA: Record<string, { flag: string; name: string }> = {
+  // ISO codes
   EC: { flag: '🇪🇨', name: 'Эквадор' },
   NL: { flag: '🇳🇱', name: 'Нидерланды' },
   CO: { flag: '🇨🇴', name: 'Колумбия' },
@@ -14,6 +16,13 @@ const COUNTRY_DATA: Record<string, { flag: string; name: string }> = {
   IT: { flag: '🇮🇹', name: 'Италия' },
   IL: { flag: '🇮🇱', name: 'Израиль' },
   ET: { flag: '🇪🇹', name: 'Эфиопия' },
+  // Russian names (for database values)
+  'Эквадор': { flag: '🇪🇨', name: 'Эквадор' },
+  'Израиль': { flag: '🇮🇱', name: 'Израиль' },
+  'Нидерланды': { flag: '🇳🇱', name: 'Нидерланды' },
+  'Колумбия': { flag: '🇨🇴', name: 'Колумбия' },
+  'Кения': { flag: '🇰🇪', name: 'Кения' },
+  'Россия': { flag: '🇷🇺', name: 'Россия' },
 };
 
 // Pack type translations
@@ -24,28 +33,31 @@ const PACK_TYPE_LABELS: Record<string, string> = {
 };
 
 /**
- * Get country flag emoji by country code
+ * Get country flag emoji by country code or Russian name
  */
-export function getCountryFlag(code: string | null | undefined): string {
-  if (!code) return '';
-  return COUNTRY_DATA[code.toUpperCase()]?.flag || '';
+export function getCountryFlag(country: string | null | undefined): string {
+  if (!country) return '';
+  // Try direct lookup first (for Russian names), then uppercase (for ISO codes)
+  return COUNTRY_DATA[country]?.flag || COUNTRY_DATA[country.toUpperCase()]?.flag || '🌍';
 }
 
 /**
- * Get country name by country code
+ * Get country name by country code or Russian name
  */
-export function getCountryName(code: string | null | undefined): string {
-  if (!code) return '';
-  return COUNTRY_DATA[code.toUpperCase()]?.name || code;
+export function getCountryName(country: string | null | undefined): string {
+  if (!country) return '';
+  // Try direct lookup first (for Russian names), then uppercase (for ISO codes)
+  return COUNTRY_DATA[country]?.name || COUNTRY_DATA[country.toUpperCase()]?.name || country;
 }
 
 /**
  * Format country display: "🇪🇨 Эквадор"
  */
-export function formatCountry(code: string | null | undefined): string {
-  if (!code) return '';
-  const data = COUNTRY_DATA[code.toUpperCase()];
-  if (!data) return code;
+export function formatCountry(country: string | null | undefined): string {
+  if (!country) return '';
+  // Try direct lookup first (for Russian names), then uppercase (for ISO codes)
+  const data = COUNTRY_DATA[country] || COUNTRY_DATA[country.toUpperCase()];
+  if (!data) return country;
   return `${data.flag} ${data.name}`;
 }
 
