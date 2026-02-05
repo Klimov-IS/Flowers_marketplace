@@ -1,8 +1,5 @@
-import ColumnFilter, {
-  FilterValue,
-  FilterOption,
-  STATUS_OPTIONS,
-} from './ColumnFilter';
+import ColumnFilter, { STATUS_OPTIONS } from './ColumnFilter';
+import type { FilterValue, FilterOption } from './ColumnFilter';
 
 // Country options
 const COUNTRY_OPTIONS: FilterOption[] = [

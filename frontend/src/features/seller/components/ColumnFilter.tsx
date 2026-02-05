@@ -42,7 +42,7 @@ export default function ColumnFilter({
   options,
   value,
   onChange,
-  placeholder,
+  placeholder: _placeholder,
   suffix,
 }: ColumnFilterProps) {
   const [isOpen, setIsOpen] = useState(false);
