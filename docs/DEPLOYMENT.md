@@ -61,72 +61,72 @@ ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
 
 ## Деплой / Обновление
 
-### Автоматический деплой (рекомендуется)
+### Автоматический деплой (РЕКОМЕНДУЕТСЯ)
+
+**Одна команда для полного деплоя:**
 
 ```bash
-# 1. Подключиться к серверу
-ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
-
-# 2. Запустить скрипт деплоя
-cd /opt/flower-market
-./deploy.sh
+# С локальной машины (Windows/Mac/Linux):
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236 "cd /opt/flower-market && ./deploy.sh"
 ```
 
-Скрипт выполнит:
-- `git pull` (если есть .git)
-- Установку Python зависимостей
-- Миграции БД (`alembic upgrade head`)
-- Сборку frontend (`npm run build`)
-- Перезапуск API сервиса
-- Reload nginx
+**Полный процесс:**
+```bash
+# 1. Закоммитить и запушить изменения (локально)
+git add <files>
+git commit -m "feat(scope): description"
+git push origin main
 
-### Ручной деплой
+# 2. Деплой на сервер (одна команда!)
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236 "cd /opt/flower-market && ./deploy.sh"
+```
+
+Скрипт `deploy.sh` автоматически выполняет:
+1. `git pull origin main` — получение последнего кода
+2. `pip install -r requirements.txt` — установка Python зависимостей
+3. `alembic upgrade head` — миграции БД
+4. `npm run build` — сборка frontend с правильными путями
+5. `systemctl restart flower-api` — перезапуск API
+6. `nginx -t && systemctl reload nginx` — перезагрузка nginx
+
+### Важные детали SSH подключения
+
+| Параметр | Значение | Примечание |
+|----------|----------|------------|
+| **User** | `ubuntu` | ⚠️ НЕ root! |
+| **Key** | `~/.ssh/yandex-cloud-wb-reputation` | Обязателен |
+| **IP** | `158.160.217.236` | Yandex Cloud |
+| **SCP Flag** | `-O` | Для Windows/старых клиентов |
+
+⚠️ **Частые ошибки:**
+- Использование `root@` вместо `ubuntu@` — доступ запрещён
+- Забыли указать `-i ~/.ssh/...` — Permission denied
+- SCP без `-O` флага — "message too long" на Windows
+
+### Ручной деплой (только в крайних случаях)
+
+Если git pull не работает, можно загрузить архив вручную:
 
 ```bash
-# 1. Локально: создать архив
-cd ~/Desktop/проекты/Маркетплейс
-tar --exclude='venv' --exclude='node_modules' --exclude='.git' \
-    --exclude='__pycache__' --exclude='frontend/dist' \
-    -czvf /tmp/flower-market.tar.gz .
+# 1. Локально: создать архив (ВАЖНО: исключить лишнее!)
+cd "c:\Users\79025\Desktop\проекты\Маркетплейс"
+tar -czvf deploy.tar.gz apps packages infra frontend/dist --exclude='__pycache__' --exclude='*.pyc'
 
-# 2. Загрузить на сервер
-scp -i ~/.ssh/yandex-cloud-wb-reputation \
-    /tmp/flower-market.tar.gz \
-    ubuntu@158.160.217.236:/opt/flower-market/
+# 2. Загрузить на сервер (⚠️ флаг -O обязателен на Windows!)
+scp -O -i ~/.ssh/yandex-cloud-wb-reputation deploy.tar.gz ubuntu@158.160.217.236:~/
 
-# 3. На сервере: распаковать и развернуть
-ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
-cd /opt/flower-market
-
-# Сохранить конфиги
-cp .env .env.bak
-cp docker-compose.db.yml docker-compose.db.yml.bak
-
-# Распаковать
-tar -xzf flower-market.tar.gz
-rm flower-market.tar.gz
-
-# Восстановить конфиги
-mv .env.bak .env
-mv docker-compose.db.yml.bak docker-compose.db.yml
-
-# Установить зависимости
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Миграции
-alembic upgrade head
-
-# Собрать frontend
-cd frontend
-npm ci
-VITE_BASE_PATH=/flower/ VITE_API_BASE_URL=/flower/api npm run build
-cd ..
-
-# Перезапустить сервисы
-sudo systemctl restart flower-api
-sudo systemctl reload nginx
+# 3. На сервере: распаковать и перезапустить
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236 "
+  sudo tar -xzf ~/deploy.tar.gz -C /opt/flower-market/
+  sudo systemctl restart flower-api
+  rm ~/deploy.tar.gz
+"
 ```
+
+**Когда использовать ручной деплой:**
+- GitHub недоступен с сервера
+- Нужно задеплоить незакоммиченные изменения
+- Проблемы с git credentials
 
 ---
 
@@ -244,6 +244,33 @@ location /flower/ {
 
 ## Troubleshooting
 
+### SSH/SCP проблемы
+
+**Permission denied (publickey)**
+```bash
+# Забыли указать ключ! Правильно:
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
+```
+
+**Please login as user "NONE" rather than "root"**
+```bash
+# Yandex Cloud не разрешает root. Используйте ubuntu:
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236  # ✅
+ssh -i ~/.ssh/yandex-cloud-wb-reputation root@158.160.217.236    # ❌
+```
+
+**SCP: Received message too long**
+```bash
+# На Windows добавьте флаг -O для legacy протокола:
+scp -O -i ~/.ssh/yandex-cloud-wb-reputation file.tar.gz ubuntu@158.160.217.236:~/
+```
+
+**Could not open connection to authentication agent**
+```bash
+# SSH agent не запущен. Используйте -i напрямую:
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
+```
+
 ### API не запускается
 
 ```bash
@@ -260,6 +287,9 @@ cat /opt/flower-market/.env
 # 3. PostgreSQL не запущен
 sudo docker ps
 sudo docker compose -f /opt/flower-market/docker-compose.db.yml up -d
+
+# 4. AttributeError в моделях — проверить что код синхронизирован
+cd /opt/flower-market && git status
 ```
 
 ### Frontend показывает 404
