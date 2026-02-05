@@ -271,6 +271,14 @@ async def get_supplier_items(
     length_max: Optional[int] = Query(None, description="Maximum length filter (cm)"),
     stock_min: Optional[int] = Query(None, description="Minimum stock filter"),
     stock_max: Optional[int] = Query(None, description="Maximum stock filter"),
+    sort_by: Optional[str] = Query(
+        None,
+        description="Sort by field (raw_name, origin_country, price_min, length_min, stock_total)"
+    ),
+    sort_dir: Optional[str] = Query(
+        "asc",
+        description="Sort direction (asc, desc)"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> SupplierItemsListResponse:
     """
@@ -370,7 +378,23 @@ async def get_supplier_items(
 
     # Apply pagination and ordering
     offset = (page - 1) * per_page
-    items_query = base_query.order_by(SupplierItem.raw_name).offset(offset).limit(per_page)
+
+    # Build order clause based on sort_by parameter
+    sort_column_map = {
+        "raw_name": SupplierItem.raw_name,
+        "origin_country": SupplierItem.origin_country,
+        "price_min": SupplierItem.price_min,
+        "length_min": SupplierItem.length_min,
+        "stock_total": SupplierItem.stock_total,
+    }
+
+    order_column = sort_column_map.get(sort_by, SupplierItem.raw_name)
+    if sort_dir == "desc":
+        order_clause = order_column.desc().nullslast()
+    else:
+        order_clause = order_column.asc().nullslast()
+
+    items_query = base_query.order_by(order_clause).offset(offset).limit(per_page)
 
     items_result = await db.execute(items_query)
     supplier_items = items_result.scalars().all()

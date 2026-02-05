@@ -63,4 +63,13 @@ export interface SupplierItemsParams {
   length_max?: number;
   stock_min?: number;
   stock_max?: number;
+  // Sorting
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
+}
+
+// Sort state for table headers
+export interface SortState {
+  field: string | null;
+  direction: 'asc' | 'desc' | null;
 }

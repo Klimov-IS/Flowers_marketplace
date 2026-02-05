@@ -86,6 +86,8 @@ export const supplierApi = createApi({
         length_max,
         stock_min,
         stock_max,
+        sort_by,
+        sort_dir,
       }) => {
         const params = new URLSearchParams();
         if (q) params.append('q', q);
@@ -121,6 +123,9 @@ export const supplierApi = createApi({
         if (length_max !== undefined) params.append('length_max', String(length_max));
         if (stock_min !== undefined) params.append('stock_min', String(stock_min));
         if (stock_max !== undefined) params.append('stock_max', String(stock_max));
+        // Sorting
+        if (sort_by) params.append('sort_by', sort_by);
+        if (sort_dir) params.append('sort_dir', sort_dir);
 
         const queryString = params.toString();
         return `/admin/suppliers/${supplier_id}/items${queryString ? `?${queryString}` : ''}`;

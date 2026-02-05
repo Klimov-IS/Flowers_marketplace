@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { SupplierItem, OfferVariant } from '../../../types/supplierItem';
+import type { SupplierItem, OfferVariant, SortState } from '../../../types/supplierItem';
 import {
   useUpdateSupplierItemMutation,
   useUpdateOfferCandidateMutation,
@@ -10,6 +10,9 @@ import EditableSelect from './EditableSelect';
 import EditableColorSelect from './EditableColorSelect';
 import AIIndicator from './AIIndicator';
 import Badge from '../../../components/ui/Badge';
+import FilterableHeader from './FilterableHeader';
+import type { FilterValue } from './ColumnFilter';
+import type { ColumnFilters } from './FilterBar';
 
 interface AssortmentTableProps {
   items: SupplierItem[];
@@ -21,6 +24,12 @@ interface AssortmentTableProps {
   // Selection props
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
+  // Filter props
+  filters?: ColumnFilters;
+  onFilterChange?: (key: keyof ColumnFilters, value: FilterValue | null) => void;
+  // Sort props
+  sort?: SortState;
+  onSortChange?: (field: string) => void;
 }
 
 const PACK_TYPE_OPTIONS = [
@@ -461,6 +470,29 @@ function ItemRow({
   );
 }
 
+// Filter options for headers
+const COUNTRY_FILTER_OPTIONS = [
+  { value: 'Эквадор', label: 'Эквадор' },
+  { value: 'Колумбия', label: 'Колумбия' },
+  { value: 'Нидерланды', label: 'Нидерланды' },
+  { value: 'Кения', label: 'Кения' },
+  { value: 'Израиль', label: 'Израиль' },
+  { value: 'Россия', label: 'Россия' },
+  { value: 'Эфиопия', label: 'Эфиопия' },
+  { value: 'Италия', label: 'Италия' },
+  { value: null, label: 'Не указана' },
+];
+
+const COLOR_FILTER_OPTIONS = [
+  { value: 'красный', label: 'Красный' },
+  { value: 'белый', label: 'Белый' },
+  { value: 'розовый', label: 'Розовый' },
+  { value: 'желтый', label: 'Желтый' },
+  { value: 'оранжевый', label: 'Оранжевый' },
+  { value: 'микс', label: 'Микс' },
+  { value: null, label: 'Не указан' },
+];
+
 export default function AssortmentTable({
   items,
   isLoading,
@@ -470,6 +502,10 @@ export default function AssortmentTable({
   onRestoreItem,
   selectedIds,
   onSelectionChange,
+  filters,
+  onFilterChange,
+  sort,
+  onSortChange,
 }: AssortmentTableProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [updateSupplierItem] = useUpdateSupplierItemMutation();
@@ -589,27 +625,82 @@ export default function AssortmentTable({
               </th>
             )}
             <th className="w-10 px-2 py-3" /> {/* Expand */}
-            <th className="px-3 py-3 font-medium" style={{ width: '18%' }}>
-              Название
-            </th>
-            <th className="px-3 py-3 font-medium" style={{ width: '10%' }}>
-              Страна
-            </th>
-            <th className="px-3 py-3 font-medium" style={{ width: '12%' }}>
-              Цвет
-            </th>
-            <th className="px-3 py-3 font-medium" style={{ width: '12%' }}>
-              Размеры
-            </th>
+
+            {/* Название - sortable only */}
+            <FilterableHeader
+              label="Название"
+              sortField="raw_name"
+              currentSort={sort}
+              onSort={onSortChange}
+              width="18%"
+            />
+
+            {/* Страна - filter + sort */}
+            <FilterableHeader
+              label="Страна"
+              sortField="origin_country"
+              currentSort={sort}
+              onSort={onSortChange}
+              filterType="multiselect"
+              filterOptions={COUNTRY_FILTER_OPTIONS}
+              filterValue={filters?.origin_country}
+              onFilterChange={onFilterChange ? (v) => onFilterChange('origin_country', v) : undefined}
+              width="10%"
+            />
+
+            {/* Цвет - filter only (array, no sort) */}
+            <FilterableHeader
+              label="Цвет"
+              filterType="multiselect"
+              filterOptions={COLOR_FILTER_OPTIONS}
+              filterValue={filters?.colors}
+              onFilterChange={onFilterChange ? (v) => onFilterChange('colors', v) : undefined}
+              width="12%"
+            />
+
+            {/* Размеры - filter + sort */}
+            <FilterableHeader
+              label="Размеры"
+              sortField="length_min"
+              currentSort={sort}
+              onSort={onSortChange}
+              filterType="range"
+              filterValue={filters?.length}
+              onFilterChange={onFilterChange ? (v) => onFilterChange('length', v) : undefined}
+              filterSuffix="см"
+              width="12%"
+            />
+
+            {/* Упаковка - no filter/sort */}
             <th className="px-3 py-3 font-medium" style={{ width: '12%' }}>
               Упаковка
             </th>
-            <th className="px-3 py-3 font-medium" style={{ width: '12%' }}>
-              Цена
-            </th>
-            <th className="px-3 py-3 font-medium" style={{ width: '12%' }}>
-              Остаток
-            </th>
+
+            {/* Цена - filter + sort */}
+            <FilterableHeader
+              label="Цена"
+              sortField="price_min"
+              currentSort={sort}
+              onSort={onSortChange}
+              filterType="range"
+              filterValue={filters?.price}
+              onFilterChange={onFilterChange ? (v) => onFilterChange('price', v) : undefined}
+              filterSuffix="р"
+              width="12%"
+            />
+
+            {/* Остаток - filter + sort */}
+            <FilterableHeader
+              label="Остаток"
+              sortField="stock_total"
+              currentSort={sort}
+              onSort={onSortChange}
+              filterType="range"
+              filterValue={filters?.stock}
+              onFilterChange={onFilterChange ? (v) => onFilterChange('stock', v) : undefined}
+              width="12%"
+            />
+
             <th className="px-3 py-3 font-medium" style={{ width: '12%' }}>
               Действия
             </th>
