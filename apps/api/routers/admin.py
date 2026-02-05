@@ -160,6 +160,7 @@ class SupplierItemResponse(BaseModel):
     source_file: Optional[str] = None
     variants_count: int = 0
     variants: List[OfferVariantResponse] = []
+    attributes: Optional[dict] = None
 
     class Config:
         from_attributes = True
@@ -388,6 +389,7 @@ async def get_supplier_items(
                 source_file=source_file,
                 variants_count=len(variants),
                 variants=variant_responses,
+                attributes=item.attributes,
             )
         )
 
@@ -877,6 +879,7 @@ async def update_supplier_item(
         source_file=None,
         variants_count=len(variants),
         variants=variant_responses,
+        attributes=item.attributes,
     )
 
 

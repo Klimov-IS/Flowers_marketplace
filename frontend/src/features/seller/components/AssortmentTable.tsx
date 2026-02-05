@@ -8,6 +8,7 @@ import StockIndicator from './StockIndicator';
 import EditableCell from './EditableCell';
 import EditableSelect from './EditableSelect';
 import EditableColorSelect from './EditableColorSelect';
+import AIIndicator from './AIIndicator';
 import Badge from '../../../components/ui/Badge';
 
 interface AssortmentTableProps {
@@ -222,32 +223,58 @@ function ItemRow({
 
         {/* Name - always editable */}
         <td className="px-3 py-3">
-          <EditableCell
-            value={item.raw_name}
-            type="text"
-            onSave={async (val) => onUpdateItem(item.id, 'raw_name', val)}
-            className="font-medium text-gray-900"
-          />
+          <div className="flex items-center gap-1">
+            <EditableCell
+              value={item.raw_name}
+              type="text"
+              onSave={async (val) => onUpdateItem(item.id, 'raw_name', val)}
+              className="font-medium text-gray-900"
+            />
+            {item.attributes?._sources?.flower_type === 'ai' && (
+              <AIIndicator
+                source="ai"
+                confidence={item.attributes?._confidences?.flower_type}
+              />
+            )}
+          </div>
           {item.source_file && (
             <div className="text-xs text-gray-400 mt-0.5 px-2">{item.source_file}</div>
+          )}
+          {item.attributes?.flower_type && (
+            <div className="text-xs text-purple-600 mt-0.5 px-2">
+              {item.attributes.flower_type}
+              {item.attributes.variety && ` ${item.attributes.variety}`}
+            </div>
           )}
         </td>
 
         {/* Origin - dropdown select */}
         <td className="px-3 py-3">
-          <EditableSelect
-            value={item.origin_country}
-            options={COUNTRY_OPTIONS}
-            onSave={async (val) => onUpdateItem(item.id, 'origin_country', val)}
-          />
+          <div className="flex items-center gap-1">
+            <EditableSelect
+              value={item.origin_country}
+              options={COUNTRY_OPTIONS}
+              onSave={async (val) => onUpdateItem(item.id, 'origin_country', val)}
+            />
+            <AIIndicator
+              source={item.attributes?._sources?.origin_country}
+              confidence={item.attributes?._confidences?.origin_country}
+            />
+          </div>
         </td>
 
         {/* Colors - multi-select */}
         <td className="px-3 py-3">
-          <EditableColorSelect
-            value={item.colors || []}
-            onSave={async (colors) => onUpdateItem(item.id, 'colors', colors)}
-          />
+          <div className="flex items-center gap-1">
+            <EditableColorSelect
+              value={item.colors || []}
+              onSave={async (colors) => onUpdateItem(item.id, 'colors', colors)}
+            />
+            <AIIndicator
+              source={item.attributes?._sources?.colors}
+              confidence={item.attributes?._confidences?.colors}
+            />
+          </div>
         </td>
 
         {/* Length - editable if single variant */}

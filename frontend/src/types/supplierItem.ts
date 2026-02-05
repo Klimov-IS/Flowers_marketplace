@@ -13,6 +13,17 @@ export interface OfferVariant {
   validation: 'ok' | 'warn' | 'error';
 }
 
+export interface ItemAttributes {
+  flower_type?: string;
+  variety?: string;
+  origin_country?: string;
+  colors?: string[];
+  farm?: string;
+  _sources?: Record<string, 'ai' | 'manual' | 'parser'>;
+  _confidences?: Record<string, number>;
+  _locked?: string[];
+}
+
 export interface SupplierItem {
   id: string;
   raw_name: string;
@@ -27,6 +38,7 @@ export interface SupplierItem {
   source_file: string | null;
   variants_count: number;
   variants: OfferVariant[];
+  attributes?: ItemAttributes;
 }
 
 export interface SupplierItemsResponse {

@@ -1,10 +1,11 @@
 """AI Enrichment Service for normalizing supplier items."""
-from datetime import datetime
+import os
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -19,6 +20,10 @@ logger = get_logger(__name__)
 # Confidence thresholds
 CONFIDENCE_AUTO_APPLY = 0.90
 CONFIDENCE_APPLY_WITH_MARK = 0.70
+
+# Rate limiting (configurable via env vars)
+RATE_LIMIT_PER_SUPPLIER_PER_DAY = int(os.getenv("AI_RATE_LIMIT_PER_SUPPLIER", "10"))
+RATE_LIMIT_GLOBAL_PER_DAY = int(os.getenv("AI_RATE_LIMIT_GLOBAL", "100"))
 
 
 class AIEnrichmentService:
@@ -71,6 +76,29 @@ class AIEnrichmentService:
                 "reason": f"Too many rows: {len(items_needing_ai)} > {self.ai_service.max_rows}",
             }
 
+        # Compute input hash for caching
+        input_hash = self._compute_input_hash(items_needing_ai)
+
+        # Check for cached AI run with same input
+        cached_result = await self._check_cache(input_hash, items_needing_ai)
+        if cached_result:
+            logger.info(
+                "ai_enrichment_cached",
+                cached_ai_run_id=cached_result["cached_from_ai_run_id"],
+                items_applied=cached_result["items_applied"],
+            )
+            return cached_result
+
+        # Check rate limits
+        rate_limit_result = await self._check_rate_limits(supplier_id)
+        if rate_limit_result:
+            logger.warning(
+                "ai_enrichment_rate_limited",
+                supplier_id=str(supplier_id),
+                reason=rate_limit_result["reason"],
+            )
+            return rate_limit_result
+
         # Create AI run record
         ai_run = AIRun(
             supplier_id=supplier_id,
@@ -79,7 +107,7 @@ class AIEnrichmentService:
             model_name=self.ai_service.client.model if self.ai_service.client else "unknown",
             status=AIRunStatus.RUNNING.value,
             row_count=len(items_needing_ai),
-            input_hash=self._compute_input_hash(items_needing_ai),
+            input_hash=input_hash,
             started_at=datetime.utcnow(),
         )
         self.db.add(ai_run)
@@ -284,6 +312,149 @@ class AIEnrichmentService:
         """Compute hash of input for caching."""
         rows = [{"raw_name": item.raw_name} for item in items]
         return AIService.compute_input_hash(rows)
+
+    async def _check_cache(
+        self,
+        input_hash: str,
+        items: list[SupplierItem],
+    ) -> Optional[dict]:
+        """
+        Check if there's a cached AI run with same input.
+
+        If found, apply cached suggestions to current items.
+        Returns result dict if cache hit, None otherwise.
+        """
+        # Look for succeeded AI run with same input hash
+        result = await self.db.execute(
+            select(AIRun).where(
+                AIRun.input_hash == input_hash,
+                AIRun.status == AIRunStatus.SUCCEEDED.value,
+            ).order_by(AIRun.created_at.desc()).limit(1)
+        )
+        cached_run = result.scalar_one_or_none()
+
+        if not cached_run:
+            return None
+
+        # Get suggestions from cached run
+        suggestions_result = await self.db.execute(
+            select(AISuggestion).where(
+                AISuggestion.ai_run_id == cached_run.id,
+            )
+        )
+        cached_suggestions = suggestions_result.scalars().all()
+
+        if not cached_suggestions:
+            return None
+
+        # Build mapping from row_index to item
+        # For cache reuse, we match by raw_name since items are new instances
+        name_to_item = {item.raw_name: item for item in items}
+
+        # Get original items' raw_names from cached suggestions
+        # We need to reconstruct row_index -> raw_name mapping
+        original_items_result = await self.db.execute(
+            select(SupplierItem.id, SupplierItem.raw_name).where(
+                SupplierItem.id.in_([s.target_id for s in cached_suggestions])
+            )
+        )
+        original_items = {row.id: row.raw_name for row in original_items_result.fetchall()}
+
+        # Apply cached suggestions to current items
+        stats = {
+            "auto_applied": 0,
+            "applied_with_mark": 0,
+            "needs_review": 0,
+            "items_applied": 0,
+        }
+        applied_items = set()
+
+        for suggestion in cached_suggestions:
+            # Get original raw_name
+            original_raw_name = original_items.get(suggestion.target_id)
+            if not original_raw_name:
+                continue
+
+            # Find matching item in current batch
+            item = name_to_item.get(original_raw_name)
+            if not item:
+                continue
+
+            # Create FieldExtraction-like object for application
+            extraction = FieldExtraction(
+                value=suggestion.suggested_value.get("value"),
+                confidence=float(suggestion.confidence),
+            )
+
+            # Apply based on confidence
+            if suggestion.confidence >= Decimal(str(CONFIDENCE_AUTO_APPLY)):
+                self._apply_suggestion_to_item(item, suggestion.field_name, extraction)
+                stats["auto_applied"] += 1
+                applied_items.add(item.id)
+            elif suggestion.confidence >= Decimal(str(CONFIDENCE_APPLY_WITH_MARK)):
+                self._apply_suggestion_to_item(item, suggestion.field_name, extraction)
+                stats["applied_with_mark"] += 1
+                applied_items.add(item.id)
+            else:
+                stats["needs_review"] += 1
+
+        # Mark modified items
+        for item in items:
+            if item.id in applied_items:
+                flag_modified(item, "attributes")
+
+        stats["items_applied"] = len(applied_items)
+
+        await self.db.commit()
+
+        return {
+            "status": "cached",
+            "cached_from_ai_run_id": str(cached_run.id),
+            **stats,
+        }
+
+    async def _check_rate_limits(self, supplier_id: UUID) -> Optional[dict]:
+        """
+        Check if rate limits are exceeded.
+
+        Returns error dict if rate limited, None otherwise.
+        """
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Check supplier-specific limit
+        supplier_count_result = await self.db.execute(
+            select(func.count(AIRun.id)).where(
+                AIRun.supplier_id == supplier_id,
+                AIRun.created_at >= today_start,
+                AIRun.status != AIRunStatus.FAILED.value,  # Don't count failed runs
+            )
+        )
+        supplier_count = supplier_count_result.scalar() or 0
+
+        if supplier_count >= RATE_LIMIT_PER_SUPPLIER_PER_DAY:
+            return {
+                "status": "rate_limited",
+                "reason": f"Supplier limit exceeded: {supplier_count}/{RATE_LIMIT_PER_SUPPLIER_PER_DAY} runs today",
+                "retry_after": "tomorrow",
+            }
+
+        # Check global limit
+        global_count_result = await self.db.execute(
+            select(func.count(AIRun.id)).where(
+                AIRun.created_at >= today_start,
+                AIRun.status != AIRunStatus.FAILED.value,
+            )
+        )
+        global_count = global_count_result.scalar() or 0
+
+        if global_count >= RATE_LIMIT_GLOBAL_PER_DAY:
+            return {
+                "status": "rate_limited",
+                "reason": f"Global limit exceeded: {global_count}/{RATE_LIMIT_GLOBAL_PER_DAY} runs today",
+                "retry_after": "tomorrow",
+            }
+
+        return None
 
 
 async def run_ai_enrichment_for_batch(
