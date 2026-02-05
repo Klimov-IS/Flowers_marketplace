@@ -10,9 +10,14 @@ const initialState: FiltersState = {
   q: '',
   product_type: undefined,
   length_cm: undefined,
+  length_min: undefined,
+  length_max: undefined,
   price_min: undefined,
   price_max: undefined,
   supplier_id: undefined,
+  origin_country: undefined,
+  colors: undefined,
+  in_stock: undefined,
   limit: 24,
   offset: 0,
   sortBy: 'price_asc',
@@ -42,6 +47,26 @@ const filtersSlice = createSlice({
       state.length_cm = action.payload;
       state.offset = 0;
     },
+    setLengthRange: (
+      state,
+      action: PayloadAction<{ min?: number; max?: number }>
+    ) => {
+      state.length_min = action.payload.min;
+      state.length_max = action.payload.max;
+      state.offset = 0;
+    },
+    setOriginCountry: (state, action: PayloadAction<string[] | undefined>) => {
+      state.origin_country = action.payload;
+      state.offset = 0;
+    },
+    setColors: (state, action: PayloadAction<string[] | undefined>) => {
+      state.colors = action.payload;
+      state.offset = 0;
+    },
+    setInStock: (state, action: PayloadAction<boolean | undefined>) => {
+      state.in_stock = action.payload;
+      state.offset = 0;
+    },
     setSupplierFilter: (state, action: PayloadAction<string | undefined>) => {
       state.supplier_id = action.payload;
       state.offset = 0;
@@ -60,9 +85,14 @@ const filtersSlice = createSlice({
       state.q = '';
       state.product_type = undefined;
       state.length_cm = undefined;
+      state.length_min = undefined;
+      state.length_max = undefined;
       state.price_min = undefined;
       state.price_max = undefined;
       state.supplier_id = undefined;
+      state.origin_country = undefined;
+      state.colors = undefined;
+      state.in_stock = undefined;
       state.offset = 0;
       state.sortBy = 'price_asc';
     },
@@ -74,6 +104,10 @@ export const {
   setProductType,
   setPriceRange,
   setLengthFilter,
+  setLengthRange,
+  setOriginCountry,
+  setColors,
+  setInStock,
   setSupplierFilter,
   setSortBy,
   setPage,

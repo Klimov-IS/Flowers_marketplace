@@ -1,13 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useGetOffersQuery } from './catalogApi';
 import { useAppSelector } from '../../hooks/useAppSelector';
 import { useAppDispatch } from '../../hooks/useAppDispatch';
-import { setSearchQuery, setProductType, resetFilters } from './filtersSlice';
+import {
+  setSearchQuery,
+  setProductType,
+  setLengthRange,
+  setPriceRange,
+  setOriginCountry,
+  setColors,
+  setInStock,
+  resetFilters,
+} from './filtersSlice';
 import { addToCart } from '../buyer/cartSlice';
 import { useDebounce } from '../../hooks/useDebounce';
 import Card from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
+import FilterSidebar from './components/FilterSidebar';
 import { getFlowerImage, getDefaultFlowerImage } from '../../utils/flowerImages';
 import {
   getCountryFlag,
@@ -30,15 +40,6 @@ export default function CatalogPage() {
   }, [debouncedSearch, dispatch]);
 
   const { data, isLoading, error } = useGetOffersQuery(filters);
-
-  const productTypes = [
-    { value: undefined, label: 'Все' },
-    { value: 'rose', label: 'Розы' },
-    { value: 'tulip', label: 'Тюльпаны' },
-    { value: 'peony', label: 'Пионы' },
-    { value: 'hydrangea', label: 'Гортензия' },
-    { value: 'chrysanthemum', label: 'Хризантема' },
-  ];
 
   const handleAddToCart = (offerId: string) => {
     const offer = data?.offers.find((o) => o.id === offerId);
@@ -75,6 +76,44 @@ export default function CatalogPage() {
     setQuantities((prev) => ({ ...prev, [offerId]: Math.max(1, qty) }));
   };
 
+  // Handler for FilterSidebar
+  const handleFilterChange = useCallback(
+    (key: string, value: unknown) => {
+      switch (key) {
+        case 'product_type':
+          dispatch(setProductType(value as string | undefined));
+          break;
+        case 'origin_country':
+          dispatch(setOriginCountry(value as string[] | undefined));
+          break;
+        case 'colors':
+          dispatch(setColors(value as string[] | undefined));
+          break;
+        case 'length_min':
+          dispatch(setLengthRange({ min: value as number | undefined, max: filters.length_max }));
+          break;
+        case 'length_max':
+          dispatch(setLengthRange({ min: filters.length_min, max: value as number | undefined }));
+          break;
+        case 'price_min':
+          dispatch(setPriceRange({ min: value as number | undefined, max: filters.price_max }));
+          break;
+        case 'price_max':
+          dispatch(setPriceRange({ min: filters.price_min, max: value as number | undefined }));
+          break;
+        case 'in_stock':
+          dispatch(setInStock(value as boolean | undefined));
+          break;
+      }
+    },
+    [dispatch, filters.length_min, filters.length_max, filters.price_min, filters.price_max]
+  );
+
+  const handleResetFilters = useCallback(() => {
+    dispatch(resetFilters());
+    setSearchInput('');
+  }, [dispatch]);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Hero Section */}
@@ -87,68 +126,68 @@ export default function CatalogPage() {
         </p>
       </div>
 
-      {/* Search & Filters */}
-      <Card className="p-6 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
+      {/* Main Layout: Sidebar + Content */}
+      <div className="flex gap-6">
+        {/* Sidebar Filters */}
+        <FilterSidebar
+          filters={{
+            product_type: filters.product_type,
+            origin_country: filters.origin_country,
+            colors: filters.colors,
+            length_min: filters.length_min,
+            length_max: filters.length_max,
+            price_min: filters.price_min,
+            price_max: filters.price_max,
+            in_stock: filters.in_stock,
+          }}
+          onFilterChange={handleFilterChange}
+          onReset={handleResetFilters}
+        />
+
+        {/* Products Area */}
+        <div className="flex-1 min-w-0">
+          {/* Search Bar */}
+          <div className="mb-4">
             <Input
               type="search"
               placeholder="Поиск по названию, сорту или поставщику..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
+              className="w-full"
             />
           </div>
-          <Button variant="secondary" onClick={() => dispatch(resetFilters())}>
-            Сбросить фильтры
-          </Button>
-        </div>
 
-        {/* Product Type Pills */}
-        <div className="flex flex-wrap gap-2 mt-4">
-          {productTypes.map((type) => (
-            <button
-              key={type.label}
-              onClick={() => dispatch(setProductType(type.value))}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                filters.product_type === type.value
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {type.label}
-            </button>
-          ))}
-        </div>
-      </Card>
+          {/* Results Count */}
+          <div className="mb-4">
+            <p className="text-gray-600">
+              {isLoading ? 'Загрузка...' : `Найдено: ${data?.total || 0} товаров`}
+            </p>
+          </div>
 
-      {/* Results */}
-      <div className="mb-4">
-        <p className="text-gray-600">
-          {isLoading ? 'Загрузка...' : `Найдено: ${data?.total || 0} товаров`}
-        </p>
-      </div>
+          {/* Loading State */}
+          {isLoading && (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+            </div>
+          )}
 
-      {/* Products Grid */}
-      {isLoading && (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-        </div>
-      )}
+          {/* Error State */}
+          {error && (
+            <Card className="p-6 text-center text-red-600">
+              Ошибка загрузки данных. Проверьте подключение к API.
+            </Card>
+          )}
 
-      {error && (
-        <Card className="p-6 text-center text-red-600">
-          Ошибка загрузки данных. Проверьте подключение к API.
-        </Card>
-      )}
+          {/* Empty State */}
+          {data && data.offers.length === 0 && (
+            <Card className="p-12 text-center text-gray-500">
+              <p className="text-lg">Товары не найдены</p>
+              <p className="mt-2">Попробуйте изменить фильтры или поисковый запрос</p>
+            </Card>
+          )}
 
-      {data && data.offers.length === 0 && (
-        <Card className="p-12 text-center text-gray-500">
-          <p className="text-lg">Товары не найдены</p>
-          <p className="mt-2">Попробуйте изменить фильтры или поисковый запрос</p>
-        </Card>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Products Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {data?.offers.map((offer) => {
           const packInfo = formatPackInfo(offer.pack_type, offer.pack_qty);
           const tierInfo = formatTier(offer.tier_min_qty, offer.tier_max_qty);
@@ -252,6 +291,8 @@ export default function CatalogPage() {
             </Card>
           );
         })}
+          </div>
+        </div>
       </div>
     </div>
   );

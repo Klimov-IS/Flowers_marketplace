@@ -98,6 +98,9 @@ async def list_offers(
     price_min: Decimal | None = Query(None, description="Filter by min price"),
     price_max: Decimal | None = Query(None, description="Filter by max price"),
     supplier_id: UUID | None = Query(None, description="Filter by supplier"),
+    origin_country: list[str] | None = Query(None, description="Filter by origin countries"),
+    colors: list[str] | None = Query(None, description="Filter by colors"),
+    in_stock: bool | None = Query(None, description="Filter by in stock (stock_qty > 0)"),
     is_active: bool = Query(True, description="Filter by active status"),
     limit: int = Query(100, ge=1, le=500, description="Max results"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
@@ -153,6 +156,39 @@ async def list_offers(
 
     if price_max is not None:
         query = query.where(Offer.price_min <= price_max)
+
+    # Filter by in_stock (stock_qty > 0)
+    if in_stock is True:
+        query = query.where(Offer.stock_qty > 0)
+
+    # Filter by origin_country or colors (requires join with supplier_items)
+    if origin_country or colors:
+        # Join with supplier_items through sku_mappings for attribute filtering
+        query = query.join(
+            SKUMapping,
+            (SKUMapping.normalized_sku_id == Offer.normalized_sku_id)
+            & (SKUMapping.status == MappingStatus.CONFIRMED.value),
+        ).join(
+            SupplierItem,
+            (SupplierItem.id == SKUMapping.supplier_item_id)
+            & (SupplierItem.supplier_id == Offer.supplier_id),
+        )
+
+        if origin_country:
+            # Filter by origin_country in attributes JSONB
+            query = query.where(
+                SupplierItem.attributes["origin_country"].astext.in_(origin_country)
+            )
+
+        if colors:
+            # Filter by colors array in attributes JSONB (any match)
+            # Check if any of the requested colors is in the colors array
+            color_conditions = []
+            for color in colors:
+                color_conditions.append(
+                    SupplierItem.attributes["colors"].contains([color])
+                )
+            query = query.where(or_(*color_conditions))
 
     # Join with normalized_skus for text search and product_type filter
     if q or product_type:

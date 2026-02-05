@@ -22,6 +22,13 @@ export const catalogApi = createApi({
         if (filters.price_min) params.append('price_min', String(filters.price_min));
         if (filters.price_max) params.append('price_max', String(filters.price_max));
         if (filters.supplier_id) params.append('supplier_id', filters.supplier_id);
+        if (filters.origin_country?.length) {
+          filters.origin_country.forEach((c) => params.append('origin_country', c));
+        }
+        if (filters.colors?.length) {
+          filters.colors.forEach((c) => params.append('colors', c));
+        }
+        if (filters.in_stock !== undefined) params.append('in_stock', String(filters.in_stock));
         if (filters.limit) params.append('limit', String(filters.limit));
         if (filters.offset) params.append('offset', String(filters.offset));
 

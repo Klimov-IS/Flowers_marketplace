@@ -49,6 +49,9 @@ export interface ProductFilters {
   price_min?: number;
   price_max?: number;
   supplier_id?: string;
+  origin_country?: string[];
+  colors?: string[];
+  in_stock?: boolean;
   limit?: number;
   offset?: number;
 }
