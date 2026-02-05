@@ -3,12 +3,15 @@
 SYSTEM_PROMPT_EXTRACTION = """Ты AI-ассистент для нормализации данных о цветах в B2B маркетплейсе.
 
 ## Твоя задача
-Извлечь структурированные атрибуты из названий товаров-цветов.
+Извлечь структурированные атрибуты из названий товаров-цветов и сформировать чистое название для витрины.
 
 ## Известные значения
 
 ### Типы цветов:
 {flower_types}
+
+### Субтипы по типам:
+{subtypes_by_type}
 
 ### Страны происхождения:
 {countries}
@@ -22,30 +25,53 @@ SYSTEM_PROMPT_EXTRACTION = """Ты AI-ассистент для нормализ
    - Обычно первое слово в названии
    - Confidence высокий (0.95+) если точное совпадение со списком
 
-2. **variety** - сорт/название сорта (Бабалу, Фридом, Эксплорер...)
-   - Слово(а) после типа цветка
-   - НЕ включает размер, страну, ферму
+2. **subtype** - субтип цветка (кустовая, спрей, пионовидная, одноголовая...)
+   - Обычно идёт сразу после типа цветка
+   - НЕ путать с сортом! Субтип - это классификация внутри типа
+   - Примеры для розы: кустовая, спрей, пионовидная
+   - Примеры для хризантемы: кустовая, одноголовая
+   - Примеры для гвоздики: кустовая, спрей
+   - Пиши в нижнем регистре
+   - Confidence 0.90+ если из известного списка
+
+3. **variety** - сорт/название сорта (Бабалу, Фридом, Эксплорер, Lydia...)
+   - Слово(а) после типа и субтипа
+   - НЕ включает размер, страну, ферму, цвет
+   - НЕ включает субтип (кустовая, спрей и т.д.)
    - Confidence 0.85-0.95 обычно
 
-3. **origin_country** - страна происхождения
+4. **origin_country** - страна происхождения
    - Часто в скобках: "(Эквадор)", "(Ecuador)"
    - Или в конце названия
    - Confidence высокий если в скобках
 
-4. **length_cm** - длина стебля в сантиметрах
+5. **length_cm** - длина стебля в сантиметрах
    - Форматы: "50 см", "60cm", просто "50" рядом с "см"
    - Диапазон обычно 30-150 см
    - Confidence 0.95+ если явно указано
 
-5. **colors** - цвета (массив)
+6. **colors** - цвета (массив)
    - Слова цветов в названии
    - Может быть несколько: ["красный", "белый"]
    - "микс" и "биколор" - особые значения
 
-6. **farm** - название фермы/производителя
+7. **farm** - название фермы/производителя
    - Обычно в конце названия ЗАГЛАВНЫМИ БУКВАМИ
    - Примеры: FRAMA FLOWERS, NARANJO, ALEXANDRA FARMS
    - Confidence 0.80-0.90
+
+8. **clean_name** - ЧИСТОЕ НАЗВАНИЕ для витрины маркетплейса
+   - Формат: "{{Тип}} {{субтип}} {{Сорт}}"
+   - Субтип пишем в нижнем регистре, сорт как есть (обычно с заглавной)
+   - НЕ включать: длину, страну, цвет, ферму, цену
+   - Если субтипа нет: "{{Тип}} {{Сорт}}"
+   - Если сорта нет: "{{Тип}} {{субтип}}" или просто "{{Тип}}"
+   - Примеры:
+     - "Роза Explorer" (тип + сорт)
+     - "Роза кустовая Lydia" (тип + субтип + сорт)
+     - "Хризантема кустовая Балтика" (тип + субтип + сорт)
+     - "Гвоздика спрей" (тип + субтип, сорт не определён)
+   - Confidence 0.90+ если тип определён
 
 ## Правила confidence
 
@@ -63,11 +89,13 @@ SYSTEM_PROMPT_EXTRACTION = """Ты AI-ассистент для нормализ
       "row_index": 0,
       "extracted": {{
         "flower_type": {{"value": "Роза", "confidence": 0.98}},
-        "variety": {{"value": "Бабалу", "confidence": 0.92}},
+        "subtype": {{"value": "кустовая", "confidence": 0.95}},
+        "variety": {{"value": "Lydia", "confidence": 0.92}},
         "origin_country": {{"value": "Эквадор", "confidence": 0.95}},
         "length_cm": {{"value": 50, "confidence": 0.99}},
         "colors": {{"value": ["красный"], "confidence": 0.85}},
-        "farm": {{"value": "FRAMA FLOWERS", "confidence": 0.88}}
+        "farm": {{"value": "FRAMA FLOWERS", "confidence": 0.88}},
+        "clean_name": {{"value": "Роза кустовая Lydia", "confidence": 0.95}}
       }},
       "needs_review": false,
       "rationale": "Стандартный формат названия"
@@ -79,22 +107,45 @@ SYSTEM_PROMPT_EXTRACTION = """Ты AI-ассистент для нормализ
 
 Вход: "Роза Бабалу 50 см (Эквадор) FRAMA FLOWERS"
 - flower_type: Роза (0.99)
+- subtype: null (нет субтипа)
 - variety: Бабалу (0.95)
 - length_cm: 50 (0.99)
 - origin_country: Эквадор (0.98)
 - farm: FRAMA FLOWERS (0.90)
+- clean_name: "Роза Бабалу" (0.95)
 
-Вход: "Гвоздика кустовая микс 60"
+Вход: "Роза кустовая Lydia красная 40 см (Эквадор)"
+- flower_type: Роза (0.99)
+- subtype: кустовая (0.98)
+- variety: Lydia (0.92)
+- length_cm: 40 (0.99)
+- colors: ["красный"] (0.95)
+- origin_country: Эквадор (0.98)
+- clean_name: "Роза кустовая Lydia" (0.97)
+
+Вход: "Гвоздика спрей микс 60"
 - flower_type: Гвоздика (0.95)
-- variety: кустовая (0.85)
+- subtype: спрей (0.95)
+- variety: null (микс - это цвет, не сорт)
 - length_cm: 60 (0.80) - нет "см", но похоже на размер
 - colors: ["микс"] (0.90)
+- clean_name: "Гвоздика спрей" (0.93)
 
 Вход: "Хризантема Балтика белая Голландия"
 - flower_type: Хризантема (0.98)
+- subtype: null (не указан)
 - variety: Балтика (0.90)
 - colors: ["белый"] (0.95)
 - origin_country: Нидерланды (0.92) - Голландия = Нидерланды
+- clean_name: "Хризантема Балтика" (0.94)
+
+Вход: "Хризантема кустовая Сантини белая 70см"
+- flower_type: Хризантема (0.99)
+- subtype: кустовая (0.98)
+- variety: Сантини (0.88)
+- length_cm: 70 (0.95)
+- colors: ["белый"] (0.95)
+- clean_name: "Хризантема кустовая Сантини" (0.96)
 """
 
 SYSTEM_PROMPT_COLUMN_MAPPING = """Ты AI-ассистент для определения структуры CSV/Excel файлов с прайс-листами цветов.
@@ -151,10 +202,30 @@ def build_extraction_prompt(
     flower_types: list[str],
     countries: list[str],
     colors: list[str],
+    subtypes_by_type: dict[str, list[str]] | None = None,
 ) -> str:
-    """Build system prompt with known values."""
+    """Build system prompt with known values from database.
+
+    Args:
+        flower_types: List of flower type names (Роза, Гвоздика...)
+        countries: List of country names
+        colors: List of color names
+        subtypes_by_type: Dict mapping type name to list of subtypes
+                         e.g. {"Роза": ["кустовая", "спрей", "пионовидная"]}
+    """
+    # Format subtypes by type
+    if subtypes_by_type:
+        subtypes_lines = []
+        for type_name, subtypes in sorted(subtypes_by_type.items()):
+            if subtypes:
+                subtypes_lines.append(f"- {type_name}: {', '.join(subtypes)}")
+        subtypes_formatted = "\n".join(subtypes_lines) if subtypes_lines else "Нет данных о субтипах"
+    else:
+        subtypes_formatted = "Нет данных о субтипах"
+
     return SYSTEM_PROMPT_EXTRACTION.format(
-        flower_types=", ".join(flower_types[:30]),  # Limit to avoid token overflow
+        flower_types=", ".join(flower_types[:50]),  # Increased limit for better coverage
+        subtypes_by_type=subtypes_formatted,
         countries=", ".join(countries[:15]),
         colors=", ".join(colors[:20]),
     )

@@ -343,6 +343,7 @@ class ImportService:
             "origin_country": origin_country,
             "colors": normalized.colors if normalized.colors else [],
             "flower_type": normalized.flower_type,
+            "subtype": normalized.flower_subtype,  # кустовая, спрей, пионовидная
             "variety": normalized.variety,
             "farm": normalized.farm,
             "clean_name": normalized.clean_name,
@@ -483,6 +484,7 @@ class ImportService:
             "origin_country": origin_country,
             "colors": normalized.colors if normalized.colors else [],
             "flower_type": normalized.flower_type,
+            "subtype": normalized.flower_subtype,  # кустовая, спрей, пионовидная
             "variety": normalized.variety,
             "farm": normalized.farm,
             "clean_name": normalized.clean_name,

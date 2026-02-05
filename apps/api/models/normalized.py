@@ -222,6 +222,13 @@ class Offer(Base, UUIDMixin, TimestampMixin):
     availability: Mapped[str] = mapped_column(String, nullable=False, default="unknown")
     stock_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Display
+    display_title: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Clean name for display (Тип + Субтип + Сорт)",
+    )
+
     # Publishing
     is_active: Mapped[bool] = mapped_column(nullable=False, default=True, index=True)
     published_at: Mapped[str] = mapped_column(nullable=False, server_default="now()")

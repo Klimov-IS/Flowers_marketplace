@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from packages.core.ai.schemas import AIExtractionResponse, RowSuggestion, FieldExtraction
+from packages.core.ai.prompts import build_extraction_prompt
 from packages.core.ai.service import AIService
 
 
@@ -201,3 +202,145 @@ class TestConfidenceTiers:
             assert auto == 0 and marked == 1 and review == 0
         else:
             assert auto == 0 and marked == 0 and review == 1
+
+
+class TestCleanNamePrompt:
+    """Tests for clean_name in AI prompt."""
+
+    def test_prompt_includes_clean_name_instructions(self):
+        """Test that prompt includes clean_name extraction rules."""
+        prompt = build_extraction_prompt(
+            flower_types=["Роза", "Гвоздика"],
+            countries=["Эквадор"],
+            colors=["красный"],
+        )
+
+        assert "clean_name" in prompt
+        assert "Тип + Субтип + Сорт" in prompt or "Тип}" in prompt
+        assert "витрины" in prompt.lower() or "display" in prompt.lower()
+
+    def test_prompt_includes_subtype_instructions(self):
+        """Test that prompt includes subtype extraction rules."""
+        prompt = build_extraction_prompt(
+            flower_types=["Роза"],
+            countries=["Эквадор"],
+            colors=["красный"],
+        )
+
+        assert "subtype" in prompt.lower()
+        assert "кустовая" in prompt.lower() or "спрей" in prompt.lower()
+
+    def test_prompt_with_subtypes_by_type(self):
+        """Test that subtypes_by_type is included in prompt."""
+        subtypes_by_type = {
+            "Роза": ["кустовая", "спрей", "пионовидная"],
+            "Хризантема": ["кустовая", "одноголовая"],
+        }
+
+        prompt = build_extraction_prompt(
+            flower_types=["Роза", "Хризантема"],
+            countries=["Эквадор"],
+            colors=["красный"],
+            subtypes_by_type=subtypes_by_type,
+        )
+
+        assert "Роза: кустовая, спрей, пионовидная" in prompt
+        assert "Хризантема: кустовая, одноголовая" in prompt
+
+    def test_prompt_without_subtypes(self):
+        """Test that prompt works without subtypes_by_type."""
+        prompt = build_extraction_prompt(
+            flower_types=["Роза"],
+            countries=["Эквадор"],
+            colors=["красный"],
+            subtypes_by_type=None,
+        )
+
+        assert "Нет данных о субтипах" in prompt
+
+    def test_prompt_with_empty_subtypes(self):
+        """Test that prompt handles empty subtypes dict."""
+        prompt = build_extraction_prompt(
+            flower_types=["Роза"],
+            countries=["Эквадор"],
+            colors=["красный"],
+            subtypes_by_type={},
+        )
+
+        assert "Нет данных о субтипах" in prompt
+
+
+class TestCleanNameExtraction:
+    """Tests for clean_name field processing."""
+
+    def test_apply_clean_name_suggestion(self):
+        """Test that clean_name suggestion is applied."""
+        service = AIService(enabled=False)
+        existing = {"_sources": {}, "_locked": []}
+        suggestions = {
+            "clean_name": FieldExtraction(value="Роза кустовая Lydia", confidence=0.95)
+        }
+
+        result, sources, auto, marked, review = service.apply_suggestions_to_attributes(
+            existing, suggestions
+        )
+
+        assert result["clean_name"] == "Роза кустовая Lydia"
+        assert sources["clean_name"] == "ai"
+        assert auto == 1
+
+    def test_apply_subtype_suggestion(self):
+        """Test that subtype suggestion is applied."""
+        service = AIService(enabled=False)
+        existing = {"_sources": {}, "_locked": []}
+        suggestions = {
+            "subtype": FieldExtraction(value="кустовая", confidence=0.92)
+        }
+
+        result, sources, auto, marked, review = service.apply_suggestions_to_attributes(
+            existing, suggestions
+        )
+
+        assert result["subtype"] == "кустовая"
+        assert sources["subtype"] == "ai"
+        assert auto == 1
+
+    def test_clean_name_not_overwritten_when_locked(self):
+        """Test that locked clean_name is not overwritten."""
+        service = AIService(enabled=False)
+        existing = {
+            "clean_name": "Роза Explorer",
+            "_sources": {"clean_name": "manual"},
+            "_locked": ["clean_name"]
+        }
+        suggestions = {
+            "clean_name": FieldExtraction(value="Роза кустовая Lydia", confidence=0.99)
+        }
+
+        result, _, auto, _, _ = service.apply_suggestions_to_attributes(
+            existing, suggestions
+        )
+
+        assert result["clean_name"] == "Роза Explorer"
+        assert auto == 0
+
+    def test_multiple_new_fields_applied(self):
+        """Test that multiple new fields (subtype, clean_name) are applied together."""
+        service = AIService(enabled=False)
+        existing = {"_sources": {}, "_locked": []}
+        suggestions = {
+            "flower_type": FieldExtraction(value="Роза", confidence=0.98),
+            "subtype": FieldExtraction(value="кустовая", confidence=0.95),
+            "variety": FieldExtraction(value="Lydia", confidence=0.90),
+            "clean_name": FieldExtraction(value="Роза кустовая Lydia", confidence=0.95),
+        }
+
+        result, sources, auto, marked, review = service.apply_suggestions_to_attributes(
+            existing, suggestions
+        )
+
+        assert result["flower_type"] == "Роза"
+        assert result["subtype"] == "кустовая"
+        assert result["variety"] == "Lydia"
+        assert result["clean_name"] == "Роза кустовая Lydia"
+        assert auto == 4  # All high confidence

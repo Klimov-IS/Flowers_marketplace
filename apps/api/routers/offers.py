@@ -51,6 +51,7 @@ class OfferDetail(BaseModel):
     id: UUID
     supplier: SupplierInfo
     sku: SKUInfo
+    display_title: str | None  # Clean name: Тип + Субтип + Сорт
     length_cm: int | None
     pack_type: str | None
     pack_qty: int | None
@@ -185,6 +186,9 @@ async def list_offers(
     # Build response
     offer_details = []
     for offer in offers:
+        # Use display_title if available, fallback to sku.title
+        title = offer.display_title or offer.normalized_sku.title
+
         offer_details.append(
             OfferDetail(
                 id=offer.id,
@@ -198,6 +202,7 @@ async def list_offers(
                     variety=offer.normalized_sku.variety,
                     title=offer.normalized_sku.title,
                 ),
+                display_title=title,
                 length_cm=offer.length_cm,
                 pack_type=offer.pack_type,
                 pack_qty=offer.pack_qty,

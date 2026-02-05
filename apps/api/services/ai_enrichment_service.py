@@ -11,6 +11,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from apps.api.logging_config import get_logger
 from apps.api.models.ai import AIRun, AISuggestion, AIRunStatus, AISuggestionStatus
+from apps.api.models.catalog import FlowerType, FlowerSubtype
 from apps.api.models.items import SupplierItem
 from packages.core.ai import AIService
 from packages.core.ai.schemas import FieldExtraction
@@ -33,6 +34,50 @@ class AIEnrichmentService:
         """Initialize with database session."""
         self.db = db
         self.ai_service = AIService()
+
+    async def _get_catalog_context(self) -> dict:
+        """
+        Load flower types and subtypes from database for AI prompt.
+
+        Returns:
+            Dict with:
+            - flower_types: list of canonical type names
+            - subtypes_by_type: dict mapping type name to list of subtype names
+        """
+        # Load active flower types
+        types_result = await self.db.execute(
+            select(FlowerType.canonical_name)
+            .where(FlowerType.is_active == True)
+            .order_by(FlowerType.canonical_name)
+        )
+        flower_types = [t for t in types_result.scalars()]
+
+        # Load subtypes with their type names
+        subtypes_result = await self.db.execute(
+            select(FlowerSubtype.name, FlowerType.canonical_name)
+            .join(FlowerType, FlowerSubtype.type_id == FlowerType.id)
+            .where(FlowerSubtype.is_active == True)
+            .where(FlowerType.is_active == True)
+        )
+
+        # Group subtypes by type
+        subtypes_by_type: dict[str, list[str]] = {}
+        for row in subtypes_result:
+            subtype_name, type_name = row
+            if type_name not in subtypes_by_type:
+                subtypes_by_type[type_name] = []
+            subtypes_by_type[type_name].append(subtype_name.lower())
+
+        logger.debug(
+            "catalog_context_loaded",
+            flower_types_count=len(flower_types),
+            subtypes_count=sum(len(v) for v in subtypes_by_type.values()),
+        )
+
+        return {
+            "flower_types": flower_types,
+            "subtypes_by_type": subtypes_by_type,
+        }
 
     async def enrich_supplier_items(
         self,
@@ -114,6 +159,9 @@ class AIEnrichmentService:
         await self.db.flush()
 
         try:
+            # Load catalog context from DB (flower types, subtypes)
+            catalog_context = await self._get_catalog_context()
+
             # Prepare rows for AI
             rows = [
                 {
@@ -124,8 +172,12 @@ class AIEnrichmentService:
                 for i, item in enumerate(items_needing_ai)
             ]
 
-            # Call AI service
-            response = await self.ai_service.extract_attributes_batch(rows)
+            # Call AI service with catalog context
+            response = await self.ai_service.extract_attributes_batch(
+                rows,
+                flower_types=catalog_context["flower_types"] or None,
+                subtypes_by_type=catalog_context["subtypes_by_type"] or None,
+            )
 
             # Update AI run with token usage
             ai_run.tokens_input = response.tokens_input

@@ -130,6 +130,13 @@ class PublishService:
         mapping_dict = {m.supplier_item_id: m.normalized_sku_id for m in mappings}
         log.debug("publish.mappings_fetched", count=len(mapping_dict))
 
+        # Load supplier items to get clean_name from attributes
+        result = await self.db.execute(
+            select(SupplierItem).where(SupplierItem.id.in_(candidate_item_ids))
+        )
+        supplier_items = result.scalars().all()
+        item_dict = {item.id: item for item in supplier_items}
+
         # Step 5: Deactivate old offers (transaction)
         result = await self.db.execute(
             update(Offer)
@@ -160,11 +167,29 @@ class PublishService:
                 )
                 continue
 
+            # Get clean_name from supplier_item attributes
+            supplier_item = item_dict.get(candidate.supplier_item_id)
+            display_title = None
+            if supplier_item and supplier_item.attributes:
+                display_title = supplier_item.attributes.get("clean_name")
+                # Fallback: build from attributes if clean_name not set
+                if not display_title:
+                    attrs = supplier_item.attributes
+                    parts = []
+                    if attrs.get("flower_type"):
+                        parts.append(attrs["flower_type"])
+                    if attrs.get("subtype"):
+                        parts.append(attrs["subtype"].lower())
+                    if attrs.get("variety"):
+                        parts.append(attrs["variety"])
+                    display_title = " ".join(parts) if parts else None
+
             # Create new offer
             offer = Offer(
                 supplier_id=supplier_id,
                 normalized_sku_id=sku_id,
                 source_import_batch_id=import_batch.id,
+                display_title=display_title,
                 length_cm=candidate.length_cm,
                 pack_type=candidate.pack_type,
                 pack_qty=candidate.pack_qty,

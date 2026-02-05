@@ -39,11 +39,36 @@
 
 ---
 
-## 3) Dictionary (dictionary_entries): типы, назначение, структура
+## 3) Dictionary и иерархический каталог цветов
 
-`dictionary_entries` хранит “управляемые знания” для нормализации.
+### 3.0 Иерархический каталог цветов (NEW)
 
-### 3.1 Общая структура записи
+Помимо `dictionary_entries`, система использует **иерархический каталог цветов** для более точной нормализации:
+
+```
+flower_categories (опционально)
+    └── flower_types (Роза, Хризантема, Эвкалипт)
+          ├── flower_subtypes (Кустовая, Спрей, Пионовидная)
+          │     └── subtype_synonyms
+          ├── type_synonyms (роза, розы, rose → Роза)
+          └── flower_varieties (Explorer, Freedom, Red Naomi)
+                └── variety_synonyms (эксплорер → Explorer)
+```
+
+**Преимущества иерархического каталога:**
+- Субтипы привязаны к типам (кустовая роза vs кустовая хризантема)
+- Сорта связаны с типом/субтипом
+- Синонимы хранятся в отдельных таблицах с индексами
+- Триграммный индекс для fuzzy search сортов
+- Редактирование через админку без изменения кода
+
+**API каталога:** `GET /admin/catalog/lookup` — возвращает словари для парсера.
+
+### 3.1 dictionary_entries (legacy)
+
+`dictionary_entries` хранит "управляемые знания" для нормализации (цвета, страны, pack_type).
+
+**Общая структура записи:**
 - `dict_type`: строка (тип словаря)
 - `key`: ключ
 - `value`: каноническое значение
@@ -51,11 +76,17 @@
 - `rules`: json с правилами (regex/replace/extract)
 - `status`: active/deprecated
 
+> **Note:** Типы цветов (product_type) теперь управляются через `flower_types` + `type_synonyms`.
+> `dictionary_entries` остаётся для: country, pack_type, stopwords, regex_rule, variety_alias.
+
 ### 3.2 Набор dict_type для MVP
-1) `product_type`
-- key: "роза"
-- value: "rose"
-- synonyms: ["rose", "розы", "roses", "роза спрей", "кустовая роза", "спрей"]
+
+> **UPDATE:** `product_type` теперь управляется через `flower_types` + `type_synonyms`.
+> Используйте API `/admin/catalog/types` для добавления новых типов цветов.
+
+1) ~~`product_type`~~ → **Перенесено в `flower_types`**
+- Используйте `/admin/catalog/types` для управления
+- Пример: "Роза" с синонимами ["роза", "розы", "rose", "roses"]
 
 2) `country`
 - key: "эквадор"
@@ -151,23 +182,29 @@
 - применяем regex_rule: длина/страна/упаковка/подтип/grade/бренд
 - сохраняем в `supplier_items.attributes`
 
-3) **Detect product_type**
+3) **Detect product_type** (из иерархического каталога)
 Приоритет:
-- из raw_group (если он “Розы/Гвоздика/Зелень/…”)
-- иначе по словарю `product_type` (по токенам)
+- из raw_group (если он "Розы/Гвоздика/Зелень/…")
+- иначе по `flower_types` + `type_synonyms` (из БД с кэшем TTL=5мин)
+- fallback на hardcoded FLOWER_TYPES_FALLBACK
 
-4) **Detect variety**
+4) **Detect subtype** (NEW)
+- После определения type_id ищем субтип в `flower_subtypes` + `subtype_synonyms`
+- Примеры: "кустовая" → "Кустовая", "спрей" → "Спрей"
+
+5) **Detect variety**
 - если встречаются латинские токены (Explorer, Mondial, Pink Floyd…), используем их как первичную variety
-- затем прогоняем через `variety_alias` (если есть)
+- затем прогоняем через `flower_varieties` + `variety_synonyms` (если есть в каталоге)
+- fallback на `variety_alias` из dictionary_entries
 - если variety не уверена → оставляем NULL и отправляем на manual-review (если product_type тоже не уверен)
 
-5) **Candidate search в normalized_skus**
+6) **Candidate search в normalized_skus**
 Методы (по приоритету):
 - Exact match: (product_type + variety) совпали по нормализованному виду
 - High similarity (trgm): сравнение с title/variety
 - Token overlap: пересечение токенов (без стоп-слов)
 
-6) **Create/Update sku_mappings**
+7) **Create/Update sku_mappings**
 - создаём 1..N предложений (N<=5) для ручного выбора
 - лучший кандидат идёт с максимальным confidence
 
@@ -682,9 +719,117 @@ Total: 0.05 (VERY LOW - likely bundle/mix)
 
 ---
 
-## 13) Связанные документы
+## 13) AI Обогащение (AI Enrichment)
+
+### 13.1 Обзор
+
+После детерминированного парсинга система может использовать AI (DeepSeek API) для:
+- Извлечения атрибутов, которые парсер не смог определить
+- Генерации `clean_name` — чистого названия для витрины
+- Валидации извлечённых данных
+
+### 13.2 Извлекаемые поля
+
+AI извлекает следующие атрибуты из `raw_name`:
+
+| Поле | Описание | Пример |
+|------|----------|--------|
+| `flower_type` | Тип цветка | Роза, Хризантема |
+| `subtype` | Субтип (кустовая, спрей) | кустовая, спрей |
+| `variety` | Сорт | Explorer, Lydia |
+| `origin_country` | Страна происхождения | Эквадор |
+| `length_cm` | Длина стебля | 50 |
+| `colors` | Цвета (массив) | ["красный"] |
+| `farm` | Ферма/производитель | FRAMA FLOWERS |
+| `clean_name` | **Чистое название для витрины** | Роза кустовая Lydia |
+
+### 13.3 Формат clean_name
+
+**Формат:** `{Тип} {субтип} {Сорт}`
+
+**Правила:**
+- Субтип пишется в нижнем регистре
+- Сорт сохраняет оригинальный регистр
+- Не включаются: длина, страна, цена, ферма, цвет
+
+**Примеры:**
+| raw_name | clean_name |
+|----------|------------|
+| Роза Explorer 50см (Эквадор) FRAMA | Роза Explorer |
+| Роза кустовая Lydia красная 40см | Роза кустовая Lydia |
+| Хризантема Балтика белая Голландия | Хризантема Балтика |
+| Гвоздика спрей микс 60 | Гвоздика спрей |
+
+### 13.4 Confidence и применение
+
+AI возвращает confidence для каждого поля:
+
+| Confidence | Статус | Действие |
+|------------|--------|----------|
+| >= 0.90 | AUTO_APPLIED | Применяется автоматически |
+| 0.70-0.89 | APPLIED_WITH_MARK | Применяется, помечается как AI |
+| < 0.70 | NEEDS_REVIEW | В очередь на проверку |
+
+### 13.5 Источники данных для промпта
+
+AI промпт получает актуальные данные из БД:
+- `flower_types` — список активных типов цветов
+- `flower_subtypes` — субтипы сгруппированные по типам
+- Fallback на hardcoded справочники если БД недоступна
+
+**Кэширование:** TTL = 5 минут
+
+### 13.6 Хранение результатов
+
+AI-извлечённые атрибуты сохраняются в `supplier_items.attributes`:
+
+```json
+{
+  "flower_type": "Роза",
+  "subtype": "кустовая",
+  "variety": "Lydia",
+  "clean_name": "Роза кустовая Lydia",
+  "_sources": {
+    "flower_type": "ai",
+    "subtype": "ai",
+    "variety": "ai",
+    "clean_name": "ai"
+  },
+  "_confidences": {
+    "flower_type": 0.98,
+    "subtype": 0.95,
+    "variety": 0.92,
+    "clean_name": 0.96
+  }
+}
+```
+
+### 13.7 Публикация с clean_name
+
+При публикации офферов (`publish_service`):
+1. Загружается `clean_name` из `supplier_item.attributes`
+2. Если отсутствует — генерируется из `flower_type + subtype + variety`
+3. Сохраняется в `offers.display_title`
+
+**API ответ:**
+```json
+{
+  "offers": [{
+    "display_title": "Роза кустовая Lydia",
+    "length_cm": 50,
+    "price_min": 120,
+    "sku": {"product_type": "Роза", "variety": "Lydia"}
+  }]
+}
+```
+
+---
+
+## 14) Связанные документы
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — общая архитектура
 - [WORKFLOWS.md](WORKFLOWS.md) — бизнес-процессы
 - [DATA_LIFECYCLE.md](DATA_LIFECYCLE.md) — жизненный цикл данных
 - [ADMIN_API.md](ADMIN_API.md) — API документация
+- [IMPORT_PIPELINE.md](IMPORT_PIPELINE.md) — пайплайн импорта
+- [DDL_SCHEMA.md](DDL_SCHEMA.md) — схема БД

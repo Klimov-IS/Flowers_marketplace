@@ -80,6 +80,7 @@ class AIService:
         flower_types: Optional[list[str]] = None,
         countries: Optional[list[str]] = None,
         colors: Optional[list[str]] = None,
+        subtypes_by_type: Optional[dict[str, list[str]]] = None,
     ) -> AIExtractionResponse:
         """
         Extract attributes from rows using AI.
@@ -89,6 +90,8 @@ class AIService:
             flower_types: Known flower types (uses defaults if not provided)
             countries: Known countries (uses defaults if not provided)
             colors: Known colors (uses defaults if not provided)
+            subtypes_by_type: Dict mapping type name to list of subtypes
+                             e.g. {"Роза": ["кустовая", "спрей"]}
 
         Returns:
             AIExtractionResponse with suggestions
@@ -108,8 +111,10 @@ class AIService:
         countries = countries or DEFAULT_COUNTRIES
         colors = colors or DEFAULT_COLORS
 
-        # Build prompts
-        system_prompt = build_extraction_prompt(flower_types, countries, colors)
+        # Build prompts with subtypes from DB
+        system_prompt = build_extraction_prompt(
+            flower_types, countries, colors, subtypes_by_type
+        )
         user_prompt = build_user_extraction_prompt(rows)
 
         # Call API

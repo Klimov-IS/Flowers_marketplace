@@ -34,11 +34,13 @@ class ParserExtracted(BaseModel):
     """What the deterministic parser already extracted."""
 
     flower_type: Optional[str] = None
+    subtype: Optional[str] = None  # кустовая, спрей, пионовидная...
     variety: Optional[str] = None
     origin_country: Optional[str] = None
     length_cm: Optional[int] = None
     colors: list[str] = Field(default_factory=list)
     farm: Optional[str] = None
+    clean_name: Optional[str] = None  # Чистое название: Тип + Субтип + Сорт
 
 
 class RowInput(BaseModel):
@@ -55,6 +57,7 @@ class KnownValues(BaseModel):
     """Known values for validation/suggestion."""
 
     flower_types: list[str] = Field(default_factory=list)
+    subtypes_by_type: dict[str, list[str]] = Field(default_factory=dict)  # {"Роза": ["кустовая", "спрей"]}
     countries: list[str] = Field(default_factory=list)
     colors: list[str] = Field(default_factory=list)
 
