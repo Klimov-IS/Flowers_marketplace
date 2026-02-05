@@ -8,6 +8,7 @@ import { useDebounce } from '../../hooks/useDebounce';
 import Card from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
+import { getFlowerImage, getDefaultFlowerImage } from '../../utils/flowerImages';
 
 export default function CatalogPage() {
   const dispatch = useAppDispatch();
@@ -143,8 +144,16 @@ export default function CatalogPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {data?.offers.map((offer) => (
           <Card key={offer.id} className="p-4">
-            <div className="aspect-square bg-gray-200 rounded-lg mb-4 flex items-center justify-center">
-              <span className="text-gray-400">Изображение</span>
+            <div className="aspect-square bg-gray-100 rounded-lg mb-4 overflow-hidden">
+              <img
+                src={getFlowerImage(offer.sku.product_type)}
+                alt={offer.display_title || offer.sku.title}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = getDefaultFlowerImage();
+                }}
+              />
             </div>
             <h3 className="font-semibold text-gray-900 mb-1">
               {offer.display_title || offer.sku.title}
