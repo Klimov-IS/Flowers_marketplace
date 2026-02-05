@@ -1,7 +1,8 @@
 # ТЗ: Страница Каталога — Витрина для Покупателя
 
-## Статус: Фаза 1 завершена (Прототип)
+## Статус: Фаза 4 завершена (Sidebar Filters)
 ## Прототип: `prototype/catalog_page.html` ✅
+## Production: http://158.160.217.236/flower/
 
 ---
 
@@ -39,11 +40,21 @@
 |---------|--------|----------|
 | Hero Section | ✅ | Баннер с заголовком |
 | Поиск | ✅ | Текстовый поиск с debounce |
-| Фильтр по типу | ✅ | Pills: Все, Розы, Тюльпаны, Пионы, Гортензия, Хризантема |
-| Грид карточек | ✅ | 4 колонки на desktop |
+| Sidebar Layout | ✅ | 260px sidebar + content grid |
+| Фильтр по типу | ✅ | Checkboxes в sidebar (rosa, carnation, etc.) |
+| Фильтр по стране | ✅ | Checkboxes с флагами (EC, NL, CO, KE, RU) |
+| Фильтр по цвету | ✅ | Color swatches grid |
+| Фильтр по длине | ✅ | Range inputs (min/max) |
+| Фильтр по цене | ✅ | Range inputs (min/max) |
+| Только в наличии | ✅ | Toggle switch |
+| Грид карточек | ✅ | 3 колонки на desktop (с sidebar) |
 | Изображения | ✅ | По типу цветка (flowerImages.ts) |
-| Цена | ✅ | price_min с ₽ |
-| Остаток | ✅ | stock_qty |
+| Страна | ✅ | Флаг + название (origin_country) |
+| Цвета | ✅ | Через запятую (colors[]) |
+| Упаковка | ✅ | pack_type + pack_qty |
+| Цена | ✅ | price_min с ₽, compact layout |
+| Остаток | ✅ | stock_qty справа от цены |
+| Тир | ✅ | tier_min_qty/tier_max_qty под остатком |
 | Поставщик | ✅ | supplier.name |
 | Корзина | ✅ | Базовая функциональность |
 
@@ -196,13 +207,18 @@ class OfferDetail(BaseModel):
     colors: list[str] = []                  # ["белый", "кремовый"]
 ```
 
-### 4.3 Новые фильтры в GET /offers
+### 4.3 Новые фильтры в GET /offers ✅ РЕАЛИЗОВАНО
 
-| Параметр | Тип | Описание |
-|----------|-----|----------|
-| `origin_country` | `list[str]` | Фильтр по странам (EC, NL, CO) |
-| `colors` | `list[str]` | Фильтр по цветам |
-| `in_stock` | `bool` | Только с остатком > 0 |
+| Параметр | Тип | Описание | Статус |
+|----------|-----|----------|--------|
+| `origin_country` | `list[str]` | Фильтр по странам (EC, NL, CO) | ✅ |
+| `colors` | `list[str]` | Фильтр по цветам | ✅ |
+| `in_stock` | `bool` | Только с остатком > 0 | ✅ |
+
+**Реализация:**
+- `origin_country` — фильтрует через JSONB `supplier_items.attributes['origin_country']`
+- `colors` — фильтрует через JSONB array `supplier_items.attributes['colors']` (ANY match)
+- `in_stock` — фильтрует `offers.stock_qty > 0`
 
 ### 4.4 Агрегация для фильтров (новый endpoint)
 
@@ -234,19 +250,21 @@ GET /offers/facets
 
 ## 5. Frontend Компоненты
 
-### 5.1 Структура файлов (изменения)
+### 5.1 Структура файлов (реализовано)
 
 ```
 frontend/src/features/catalog/
-├── CatalogPage.tsx           # EDIT: Добавить фильтры
-├── catalogApi.ts             # EDIT: Добавить facets endpoint
-├── filtersSlice.ts           # EDIT: Расширить state
+├── CatalogPage.tsx           # ✅ Sidebar layout + product grid
+├── catalogApi.ts             # ✅ Filters: origin_country, colors, in_stock
+├── filtersSlice.ts           # ✅ Extended state + actions
 └── components/
-    ├── ProductCard.tsx       # NEW: Выделить карточку
-    ├── FilterPanel.tsx       # NEW: Панель фильтров
-    ├── CountryFlag.tsx       # NEW: Флаг страны
-    ├── ColorBadges.tsx       # NEW: Цвета через запятую
-    └── TierBadge.tsx         # NEW: Бейдж тира
+    └── FilterSidebar.tsx     # ✅ Sidebar с фильтрами
+
+frontend/src/utils/
+└── catalogFormatters.ts      # ✅ getCountryFlag, formatPackInfo, formatTier, formatColors
+
+frontend/src/types/
+└── product.ts                # ✅ Extended ProductFilters interface
 ```
 
 ### 5.2 ProductCard Component
@@ -471,10 +489,10 @@ WHERE o.supplier_id = si.supplier_id
 - [x] Компактный блок цены (цена слева, остаток+тир справа)
 - [x] Мобильная адаптация
 
-### Фаза 2: Backend API ✅ ЧАСТИЧНО
+### Фаза 2: Backend API ✅ ЗАВЕРШЕНО
 - [x] Добавить `origin_country`, `colors` в OfferDetail
 - [x] Связать offers с supplier_items через sku_mappings
-- [ ] Добавить фильтры в GET /offers (origin_country, colors, in_stock)
+- [x] Добавить фильтры в GET /offers (origin_country, colors, in_stock)
 - [ ] Создать endpoint GET /offers/facets (опционально для V2)
 
 ### Фаза 3: Frontend — Карточка ✅ ЗАВЕРШЕНО
@@ -482,10 +500,11 @@ WHERE o.supplier_id = si.supplier_id
 - [x] Добавить утилиты: catalogFormatters.ts (getCountryFlag, formatPackInfo, formatTier, formatColors)
 - [x] Компактный price-block с выровненными метриками
 
-### Фаза 4: Frontend — Фильтры (V2)
-- [ ] Создать FilterPanel компонент (sidebar)
-- [ ] Расширить filtersSlice (origin_country, colors, in_stock)
-- [ ] Интегрировать в CatalogPage
+### Фаза 4: Frontend — Фильтры ✅ ЗАВЕРШЕНО
+- [x] Создать FilterSidebar компонент (sidebar 260px)
+- [x] Расширить filtersSlice (origin_country[], colors[], in_stock, length_min, length_max)
+- [x] Интегрировать в CatalogPage (flex layout: sidebar + content)
+- [x] Добавить catalogApi с новыми filter parameters
 
 ### Фаза 5: Тестирование
 - [ ] Unit тесты для форматирования
