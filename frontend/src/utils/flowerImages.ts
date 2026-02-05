@@ -25,7 +25,8 @@ const FLOWER_TYPE_TO_SLUG: Record<string, string> = {
   'eucalyptus': 'eucalyptus',
 };
 
-const BASE_PATH = '/images/flowers';
+// Base path includes /flower prefix for production nginx routing
+const BASE_PATH = '/flower/images/flowers';
 const DEFAULT_IMAGE = `${BASE_PATH}/default.jpg.png`;
 
 /**
