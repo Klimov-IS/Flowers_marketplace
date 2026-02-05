@@ -1,14 +1,15 @@
 import { getCountryFlag, getCountryName } from '../../../utils/catalogFormatters';
 
-// Product types with Russian labels
+// Product types matching database values (Russian)
 const PRODUCT_TYPES = [
-  { value: 'rose', label: 'Роза' },
-  { value: 'carnation', label: 'Гвоздика' },
-  { value: 'gypsophila', label: 'Гипсофила' },
-  { value: 'ruscus', label: 'Рускус' },
-  { value: 'alstroemeria', label: 'Альстромерия' },
-  { value: 'eucalyptus', label: 'Эвкалипт' },
-  { value: 'protea', label: 'Протея' },
+  { value: 'Роза', label: 'Роза' },
+  { value: 'Гвоздика', label: 'Гвоздика' },
+  { value: 'Гипсофила', label: 'Гипсофила' },
+  { value: 'Рускус', label: 'Рускус' },
+  { value: 'Альстромерия', label: 'Альстромерия' },
+  { value: 'Эвкалипт', label: 'Эвкалипт' },
+  { value: 'Протея', label: 'Протея' },
+  { value: 'Писташ', label: 'Писташ' },
 ];
 
 // Countries
