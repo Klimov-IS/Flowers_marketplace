@@ -7,7 +7,6 @@ import {
 import StockIndicator from './StockIndicator';
 import EditableCell from './EditableCell';
 import EditableSelect from './EditableSelect';
-import EditableColorSelect from './EditableColorSelect';
 import AIIndicator from './AIIndicator';
 import Badge from '../../../components/ui/Badge';
 import { getFlowerImage, getDefaultFlowerImage } from '../../../utils/flowerImages';
@@ -261,52 +260,31 @@ function ItemRow({
           )}
         </td>
 
-        {/* Name - show clean_name as primary, raw_name as secondary */}
+        {/* Name - single line only */}
         <td className="px-3 py-3">
-          <div className="flex items-start gap-3">
+          <div className="flex items-center gap-3">
             {/* Thumbnail */}
             <img
               src={getFlowerImage(item.attributes?.flower_type)}
               alt=""
-              className="w-10 h-10 rounded object-cover flex-shrink-0 bg-gray-100"
+              className="w-8 h-8 rounded object-cover flex-shrink-0 bg-gray-100"
               loading="lazy"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = getDefaultFlowerImage();
               }}
             />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1">
-                <EditableCell
-                  value={item.attributes?.clean_name || item.raw_name}
-                  type="text"
-                  onSave={async (val) => onUpdateItem(item.id, 'raw_name', val)}
-                  className="font-medium text-gray-900"
+            <div className="flex items-center gap-1 min-w-0">
+              <EditableCell
+                value={item.attributes?.clean_name || item.raw_name}
+                type="text"
+                onSave={async (val) => onUpdateItem(item.id, 'raw_name', val)}
+                className="font-medium text-gray-900 truncate"
+              />
+              {item.attributes?._sources?.clean_name === 'ai' && (
+                <AIIndicator
+                  source="ai"
+                  confidence={item.attributes?._confidences?.clean_name}
                 />
-                {item.attributes?._sources?.clean_name === 'ai' && (
-                  <AIIndicator
-                    source="ai"
-                    confidence={item.attributes?._confidences?.clean_name}
-                  />
-                )}
-              </div>
-              {/* Show raw_name as secondary info when different from clean_name */}
-              {item.attributes?.clean_name && item.attributes.clean_name !== item.raw_name && (
-                <div
-                  className="text-xs text-gray-400 mt-0.5 truncate max-w-xs"
-                  title={item.raw_name}
-                >
-                  Исходное: {item.raw_name}
-                </div>
-              )}
-              {item.source_file && !item.attributes?.clean_name && (
-                <div className="text-xs text-gray-400 mt-0.5">{item.source_file}</div>
-              )}
-              {item.attributes?.flower_type && (
-                <div className="text-xs text-purple-600 mt-0.5">
-                  {item.attributes.flower_type}
-                  {item.attributes.subtype && ` ${item.attributes.subtype.toLowerCase()}`}
-                  {item.attributes.variety && ` ${item.attributes.variety}`}
-                </div>
               )}
             </div>
           </div>
@@ -327,13 +305,12 @@ function ItemRow({
           </div>
         </td>
 
-        {/* Colors - multi-select */}
+        {/* Colors - text comma-separated */}
         <td className="px-3 py-3">
           <div className="flex items-center gap-1">
-            <EditableColorSelect
-              value={item.colors || []}
-              onSave={async (colors) => onUpdateItem(item.id, 'colors', colors)}
-            />
+            <span className="text-gray-600 text-sm truncate">
+              {item.colors && item.colors.length > 0 ? item.colors.join(', ') : '—'}
+            </span>
             <AIIndicator
               source={item.attributes?._sources?.colors}
               confidence={item.attributes?._confidences?.colors}
