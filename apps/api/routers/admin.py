@@ -319,25 +319,6 @@ async def get_supplier_items(
         .subquery('aggregates')
     )
 
-    # Create subquery to detect possible duplicates
-    # Items with same (flower_type, variety) for the same supplier
-    flower_type_col = SupplierItem.attributes['flower_type'].astext
-    variety_col = SupplierItem.attributes['variety'].astext
-
-    duplicates_subq = (
-        select(
-            flower_type_col.label('dup_flower_type'),
-            variety_col.label('dup_variety'),
-        )
-        .where(SupplierItem.supplier_id == supplier_id)
-        .where(SupplierItem.status != 'deleted')
-        .where(flower_type_col.isnot(None))
-        .where(variety_col.isnot(None))
-        .group_by(flower_type_col, variety_col)
-        .having(func.count() > 1)
-        .subquery('duplicates')
-    )
-
     # Build base query with aggregates join
     base_query = (
         select(SupplierItem)
@@ -457,22 +438,21 @@ async def get_supplier_items(
     item_ids = [item.id for item in supplier_items]
 
     # Fetch duplicate (flower_type, variety) combinations for this supplier
-    duplicate_combos_query = (
-        select(
-            SupplierItem.attributes['flower_type'].astext.label('ft'),
-            SupplierItem.attributes['variety'].astext.label('var'),
-        )
-        .where(SupplierItem.supplier_id == supplier_id)
-        .where(SupplierItem.status != 'deleted')
-        .where(SupplierItem.attributes['flower_type'].astext.isnot(None))
-        .where(SupplierItem.attributes['variety'].astext.isnot(None))
-        .group_by(
-            SupplierItem.attributes['flower_type'].astext,
-            SupplierItem.attributes['variety'].astext,
-        )
-        .having(func.count() > 1)
-    )
-    duplicate_result = await db.execute(duplicate_combos_query)
+    # Use raw SQL to avoid SQLAlchemy parameter binding issues with GROUP BY
+    from sqlalchemy import text
+    duplicate_sql = text("""
+        SELECT
+            attributes->>'flower_type' as ft,
+            attributes->>'variety' as var
+        FROM supplier_items
+        WHERE supplier_id = :supplier_id
+            AND status != 'deleted'
+            AND attributes->>'flower_type' IS NOT NULL
+            AND attributes->>'variety' IS NOT NULL
+        GROUP BY attributes->>'flower_type', attributes->>'variety'
+        HAVING COUNT(*) > 1
+    """)
+    duplicate_result = await db.execute(duplicate_sql, {"supplier_id": supplier_id})
     duplicate_combos = {(row.ft, row.var) for row in duplicate_result.all()}
 
     # Load all offer candidates for these items
