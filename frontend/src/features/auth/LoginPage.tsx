@@ -63,7 +63,14 @@ export default function LoginPage() {
     } catch (err: any) {
       console.error('Login error:', err);
       if (err.data?.detail) {
-        setErrorMessage(err.data.detail);
+        // Handle both string and array of validation errors (Pydantic format)
+        if (typeof err.data.detail === 'string') {
+          setErrorMessage(err.data.detail);
+        } else if (Array.isArray(err.data.detail)) {
+          setErrorMessage(err.data.detail.map((d: any) => d.msg).join(', '));
+        } else {
+          setErrorMessage('Ошибка валидации данных');
+        }
       } else {
         setErrorMessage('Ошибка входа. Проверьте email и пароль.');
       }
