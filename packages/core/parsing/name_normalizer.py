@@ -112,6 +112,28 @@ FLOWER_TYPES_FALLBACK: Dict[str, str] = {
     "матиола": "Матиола",
     "маттиола": "Матиола",  # alias
     "оксипеталум": "Оксипеталум",
+    # Хвойные и декоративные
+    "туя": "Туя",
+    "туи": "Туя",
+    "сосна": "Сосна",
+    "ель": "Ель",
+    "можжевельник": "Можжевельник",
+    "самшит": "Самшит",
+    # Экзотика
+    "стрелиция": "Стрелиция",
+    "протея": "Протея",
+    "банксия": "Банксия",
+    "скабиоза": "Скабиоза",
+    "целозия": "Целозия",
+    "цинерария": "Цинерария",
+    # Зелень
+    "аралия": "Аралия",
+    "берграс": "Берграс",
+    "папоротник": "Папоротник",
+    "питтоспорум": "Питтоспорум",
+    "робеллини": "Робеллини",
+    "тласпи": "Тласпи",
+    "флокс": "Флокс",
 }
 
 # Fallback subtypes (synonym -> {name, type_slug})
@@ -525,9 +547,31 @@ def _extract_colors(text: str) -> Tuple[List[str], str]:
 
 def _clean_variety(text: str) -> str:
     """Clean up variety name after extraction."""
+    if not text:
+        return ""
+
     # Remove common suffixes/noise
     text = re.sub(r"\s*[-–—]\s*", " ", text)  # Replace dashes with spaces
-    text = re.sub(r"\s+", " ", text)  # Multiple spaces to one
+
+    # Fix unbalanced parentheses
+    # If there's an opening paren without closing, remove from paren to end
+    if "(" in text and ")" not in text:
+        text = re.sub(r"\s*\([^)]*$", "", text)
+    # If there's a closing paren without opening, remove from start to paren
+    if ")" in text and "(" not in text:
+        text = re.sub(r"^[^(]*\)\s*", "", text)
+
+    # Remove trailing numbers that might be leftover pack qty
+    text = re.sub(r"\s+\d{1,3}\s*$", "", text)
+
+    # Remove country abbreviations like "Экв", "Гол", "Кол" at end
+    text = re.sub(r"\s+(Экв|Гол|Кол|Кен|Изр)\s*$", "", text, flags=re.IGNORECASE)
+
+    # Remove slashes that might remain
+    text = re.sub(r"[/\\]+", " ", text)
+
+    # Clean up multiple spaces
+    text = re.sub(r"\s+", " ", text)
     text = text.strip(" ,;.()[]")
 
     # Capitalize words properly
@@ -613,13 +657,80 @@ def _detect_bundle_list(text: str) -> Tuple[bool, List[str], List[str]]:
     return False, [], warnings
 
 
+def _extract_pack_qty(text: str) -> Tuple[Optional[int], str]:
+    """
+    Extract pack quantity from text BEFORE garbage cleanup.
+
+    Handles patterns like:
+    - "(25)" - just number in parens
+    - "(50/10)" - bundle format (e.g., 50 stems in packs of 10)
+    - "(25 шт)" - with explicit "шт"
+    - "(б)", "(с)", "(м)" - size abbreviations (большой/средний/маленький)
+
+    Returns:
+        Tuple of (pack_qty or None, cleaned text)
+    """
+    pack_qty = None
+
+    # Pattern 1: (number/number) at end - bundle format like "(50/10)"
+    pattern1 = r"\s*\((\d{1,3})[/\\](\d{1,3})\)\s*$"
+    match1 = re.search(pattern1, text)
+    if match1:
+        # First number is usually total, second is pack size
+        qty = int(match1.group(2))  # Use pack size
+        if 1 <= qty <= 100:
+            pack_qty = qty
+        text = text[:match1.start()].strip()
+        return pack_qty, text
+
+    # Pattern 2: (number) at end
+    pattern2 = r"\s*\((\d{1,3})\)\s*$"
+    match2 = re.search(pattern2, text)
+    if match2:
+        qty = int(match2.group(1))
+        if 1 <= qty <= 100:
+            pack_qty = qty
+        text = text[:match2.start()].strip()
+        return pack_qty, text
+
+    # Pattern 3: (number шт) anywhere
+    pattern3 = r"\s*\((\d{1,3})\s*шт\.?\)\s*"
+    match3 = re.search(pattern3, text, re.IGNORECASE)
+    if match3:
+        qty = int(match3.group(1))
+        if 1 <= qty <= 100:
+            pack_qty = qty
+        text = text[:match3.start()] + text[match3.end():]
+        text = text.strip()
+        return pack_qty, text
+
+    # Pattern 4: Size abbreviations (б), (с), (м) for большой/средний/маленький
+    pattern4 = r"\s*\([бсмБСМbsm]\)\s*$"
+    match4 = re.search(pattern4, text)
+    if match4:
+        # Just remove, no qty extracted (it's a size indicator)
+        text = text[:match4.start()].strip()
+        return None, text
+
+    # Pattern 5: "х10", "х12" at end (multiply indicator)
+    pattern5 = r"\s*[хxХX](\d{1,2})\s*$"
+    match5 = re.search(pattern5, text)
+    if match5:
+        qty = int(match5.group(1))
+        if 1 <= qty <= 50:
+            pack_qty = qty
+        text = text[:match5.start()].strip()
+        return pack_qty, text
+
+    return pack_qty, text
+
+
 def _clean_garbage_from_text(text: str) -> str:
     """Remove garbage patterns from text (header text that leaked in)."""
     for pattern in GARBAGE_PATTERNS:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE)
 
-    # Clean up slashes and extra punctuation
-    text = re.sub(r"[/\\]+", " ", text)
+    # Clean up extra punctuation (but NOT slashes - those are handled in _extract_pack_qty)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
@@ -656,6 +767,9 @@ def normalize_name(
     result.bundle_varieties = bundle_varieties
     result.warnings = bundle_warnings
 
+    # 0.3 Extract pack_qty BEFORE garbage cleanup (to preserve slashes in patterns like 50/10)
+    _, text = _extract_pack_qty(text)
+
     # 0.5 Clean garbage from text (header text that leaked in)
     text = _clean_garbage_from_text(text)
 
@@ -680,11 +794,9 @@ def normalize_name(
     # 6. Extract subtype (NEW: кустовая, спрей, etc.)
     result.flower_subtype, text = _extract_subtype(text, subtype_lookup)
 
-    # 6.5 Remove pack_qty patterns before variety extraction
-    # These are already extracted separately but pollute variety name
-    text = re.sub(r"\s*\(\d{1,3}\)\s*$", "", text)  # "(20)" at end
-    text = re.sub(r"\s*\(\d{1,3}\s*шт\)", "", text, flags=re.IGNORECASE)  # "(20 шт)"
-    text = re.sub(r"\s*х\d{1,2}\s*$", "", text, flags=re.IGNORECASE)  # "х12" at end
+    # 6.5 Additional cleanup for any remaining pack patterns (second pass)
+    # These might have been missed or be in different positions
+    _, text = _extract_pack_qty(text)  # Second pass with cleaned text
     text = text.strip()
 
     # 7. Remaining text is the variety

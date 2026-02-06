@@ -1517,3 +1517,141 @@ async def get_order_metrics(
     metrics = await order_service.get_order_metrics()
 
     return OrderMetricsResponse(**metrics)
+
+
+# Reparse endpoint
+class ReparseResponse(BaseModel):
+    """Schema for reparse response."""
+
+    total: int
+    updated: int
+    unchanged: int
+    errors: int
+    sample_changes: list = Field(default_factory=list)
+
+
+@router.post("/supplier-items/reparse", response_model=ReparseResponse)
+async def reparse_supplier_items(
+    supplier_id: Optional[UUID] = Query(None, description="Limit to specific supplier"),
+    dry_run: bool = Query(False, description="Don't save changes, just preview"),
+    db: AsyncSession = Depends(get_db),
+) -> ReparseResponse:
+    """
+    Re-parse all supplier items with the updated parser.
+
+    This endpoint re-runs the name normalization parser on existing
+    supplier_items to update flower_type, variety, clean_name, etc.
+    after parser improvements.
+
+    Args:
+        supplier_id: Optional supplier UUID to limit reparse
+        dry_run: If True, returns what would change without saving
+        db: Database session
+
+    Returns:
+        Statistics about updated items
+    """
+    from packages.core.parsing.name_normalizer import normalize_name
+
+    # Build query
+    stmt = select(SupplierItem).where(SupplierItem.status != "deleted")
+    if supplier_id:
+        stmt = stmt.where(SupplierItem.supplier_id == supplier_id)
+
+    result = await db.execute(stmt)
+    items = result.scalars().all()
+
+    stats = {
+        "total": len(items),
+        "updated": 0,
+        "unchanged": 0,
+        "errors": 0,
+        "sample_changes": [],
+    }
+
+    for item in items:
+        try:
+            # Parse with new parser
+            normalized = normalize_name(item.raw_name)
+
+            # Build new attributes
+            new_attrs = {
+                "flower_type": normalized.flower_type,
+                "subtype": normalized.flower_subtype,
+                "variety": normalized.variety,
+                "clean_name": normalized.clean_name,
+                "farm": normalized.farm,
+            }
+
+            # Add bundle detection
+            if normalized.is_bundle_list:
+                new_attrs["is_bundle_list"] = True
+                new_attrs["bundle_varieties"] = normalized.bundle_varieties
+                new_attrs["needs_review"] = True
+                new_attrs["review_reason"] = "bundle_list_detected"
+
+            if normalized.warnings:
+                new_attrs["warnings"] = normalized.warnings
+
+            # Compare with existing
+            existing = item.attributes or {}
+            old_clean = existing.get("clean_name")
+            new_clean = new_attrs.get("clean_name")
+
+            # Check if anything changed
+            changed = False
+            for key in ["flower_type", "subtype", "variety", "clean_name"]:
+                if existing.get(key) != new_attrs.get(key):
+                    changed = True
+                    break
+
+            if changed:
+                # Preserve existing fields that shouldn't be overwritten
+                merged = dict(existing)
+
+                # Preserve locked fields
+                locked = merged.get("_locked", [])
+                existing_sources = merged.get("_sources", {})
+
+                # Update with new parser values (except locked)
+                for key, value in new_attrs.items():
+                    if key not in locked and value is not None:
+                        merged[key] = value
+                        if key not in ["_sources", "_confidences", "_locked"]:
+                            existing_sources[key] = "parser"
+
+                merged["_sources"] = existing_sources
+
+                # Track sample changes (limit to 20)
+                if len(stats["sample_changes"]) < 20:
+                    stats["sample_changes"].append({
+                        "id": str(item.id),
+                        "raw_name": item.raw_name[:60],
+                        "old_clean": old_clean,
+                        "new_clean": new_clean,
+                        "old_type": existing.get("flower_type"),
+                        "new_type": new_attrs.get("flower_type"),
+                    })
+
+                if not dry_run:
+                    item.attributes = merged
+                    flag_modified(item, "attributes")
+
+                stats["updated"] += 1
+            else:
+                stats["unchanged"] += 1
+
+        except Exception as e:
+            stats["errors"] += 1
+            logger.error("reparse_error", item_id=str(item.id), error=str(e))
+
+    if not dry_run:
+        await db.commit()
+        logger.info(
+            "reparse_completed",
+            total=stats["total"],
+            updated=stats["updated"],
+            supplier_id=str(supplier_id) if supplier_id else "all",
+        )
+
+    return ReparseResponse(**stats)
