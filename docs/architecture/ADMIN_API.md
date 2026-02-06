@@ -528,6 +528,161 @@ curl http://localhost:8000/admin/imports/{uuid}
 
 ---
 
+### List Supplier Imports
+
+**Endpoint**: `GET /admin/suppliers/{supplier_id}/imports`
+
+**Description**: List import batches for a supplier with pagination and statistics.
+
+**Query parameters**:
+- `page` (optional, default 1): Page number
+- `per_page` (optional, default 10): Results per page
+
+**Response** (200 OK):
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "source_filename": "price_list.xlsx",
+      "status": "published",
+      "imported_at": "2026-02-06T08:47:00Z",
+      "raw_rows_count": 161,
+      "supplier_items_count": 154,
+      "offer_candidates_count": 154,
+      "parse_errors_count": 7
+    }
+  ],
+  "total": 10,
+  "page": 1,
+  "per_page": 10
+}
+```
+
+**Example**:
+```bash
+curl "http://localhost:8000/admin/suppliers/{uuid}/imports?page=1&per_page=10"
+```
+
+**Status codes**:
+- 200: Success
+- 404: Supplier not found
+
+---
+
+### Get Parse Events
+
+**Endpoint**: `GET /admin/imports/{import_batch_id}/parse-events`
+
+**Description**: Get parsing errors and warnings for an import batch.
+
+**Query parameters**:
+- `severity` (optional): Filter by severity (error, warning, info)
+
+**Response** (200 OK):
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "severity": "error",
+      "code": "INVALID_PRICE",
+      "message": "Invalid price: Empty price",
+      "row_ref": "row_15",
+      "created_at": "2026-02-06T08:47:00Z"
+    }
+  ],
+  "total": 7
+}
+```
+
+**Example**:
+```bash
+curl "http://localhost:8000/admin/imports/{uuid}/parse-events?severity=error"
+```
+
+**Status codes**:
+- 200: Success
+- 404: Import batch not found
+
+**Notes**:
+- `row_ref`: Reference to the original row (e.g., "row_15")
+- `code`: Error code for programmatic handling (INVALID_PRICE, BUNDLE_LIST_DETECTED, etc.)
+- Events are ordered by created_at ASC
+
+---
+
+### Delete Import Batch
+
+**Endpoint**: `DELETE /admin/imports/{import_batch_id}`
+
+**Description**: Delete an import batch and all related data (raw_rows, offer_candidates, parse_events).
+
+**Response** (200 OK):
+```json
+{
+  "id": "uuid",
+  "message": "Import batch deleted successfully",
+  "deleted_counts": {
+    "raw_rows": 161,
+    "offer_candidates": 154,
+    "parse_events": 7
+  }
+}
+```
+
+**Example**:
+```bash
+curl -X DELETE http://localhost:8000/admin/imports/{uuid}
+```
+
+**Status codes**:
+- 200: Successfully deleted
+- 404: Import batch not found
+
+**Notes**:
+- **Important**: Does NOT delete `supplier_items` — they may be linked to other imports
+- Deletes: `raw_rows`, `offer_candidates`, `parse_events`, `parse_runs`
+- This action is **irreversible**
+
+---
+
+### Reparse Import Batch
+
+**Endpoint**: `POST /admin/imports/{import_batch_id}/reparse`
+
+**Description**: Re-run parsing on existing raw_rows to regenerate offer_candidates.
+
+**Response** (200 OK):
+```json
+{
+  "batch_id": "uuid",
+  "status": "parsed",
+  "raw_rows_count": 161,
+  "supplier_items_count": 154,
+  "offer_candidates_count": 154,
+  "parse_events_count": 7
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/admin/imports/{uuid}/reparse
+```
+
+**Status codes**:
+- 200: Successfully reparsed
+- 404: Import batch not found
+- 500: Reparse failed
+
+**Notes**:
+- Deletes old `offer_candidates` and `parse_events` before reparsing
+- Useful after updating parsing rules or fixing dictionary entries
+- Does not touch `raw_rows` (they are immutable)
+- Updates the batch status based on parsing result
+
+---
+
 ## Dictionary Management
 
 ### Bootstrap Dictionary
@@ -2323,6 +2478,7 @@ curl "http://localhost:8000/offers?product_type=rose"
 
 ## Version History
 
+- **v0.6.0** (2026-02-06): Добавлены Import History endpoints — список импортов, ошибки парсинга, удаление, перепарсинг
 - **v0.5.0** (2026-02-05): Добавлен Flower Catalog API — иерархический справочник типов/субтипов/сортов цветов
 - **v0.4.0** (2026-02-03): Документация расширена: аутентификация, таблица содержания, русский язык
 - **v0.3.0** (2025-01-13): Task 3 complete - Order flow (buyers, orders, supplier order management)
