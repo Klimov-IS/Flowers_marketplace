@@ -20,13 +20,14 @@ def extract_length_cm(text: str) -> Optional[int]:
         return None
 
     # Pattern: digits followed by optional space and "см" or "cm"
-    pattern = r"(?<!\d)(\d{2,3})\s*(?:см|cm)\b"
+    # Updated to match "120см(1)" where parenthesis follows immediately
+    pattern = r"(?<!\d)(\d{2,3})\s*(?:см|cm)(?:\b|\(|$)"
     match = re.search(pattern, text, re.IGNORECASE)
 
     if match:
         length = int(match.group(1))
-        # Validate reasonable range (30-120 cm)
-        if 30 <= length <= 120:
+        # Validate reasonable range (30-150 cm for tall stems like magnolia)
+        if 30 <= length <= 150:
             return length
 
     return None

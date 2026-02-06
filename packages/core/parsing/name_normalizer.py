@@ -91,6 +91,27 @@ FLOWER_TYPES_FALLBACK: Dict[str, str] = {
     "вероника": "Вероника",
     "дельфиниум": "Дельфиниум",
     "дельфиниумы": "Дельфиниум",
+    # Декоративная зелень (added 06.02.2026)
+    "аспарагус": "Аспарагус",
+    "брассика": "Брассика",
+    "кипарис": "Кипарис",
+    "корилус": "Корилус",
+    "леукадендрон": "Леукадендрон",
+    "лигустер": "Лигустер",
+    "лигуструм": "Лигустер",  # alias
+    "магнолия": "Магнолия",
+    "магнум": "Магнум",  # likely a variety, but parser sees it as type
+    "нобилис": "Нобилис",
+    "пинус": "Пинус",
+    "мережка": "Мережка",
+    # Дополнительные цветы
+    "амариллис": "Амариллис",
+    "бруния": "Бруния",
+    "ваксфлауэр": "Ваксфлауэр",
+    "клематис": "Клематис",
+    "матиола": "Матиола",
+    "маттиола": "Матиола",  # alias
+    "оксипеталум": "Оксипеталум",
 }
 
 # Fallback subtypes (synonym -> {name, type_slug})
@@ -358,14 +379,20 @@ class NormalizedName:
 
 def _extract_length(text: str) -> Tuple[Optional[int], str]:
     """Extract length and return remaining text."""
-    pattern = r"(\d{2,3})\s*(?:см|cm)\b"
+    # Pattern matches "120см", "60 см", "120см(1)" where parenthesis follows
+    pattern = r"(?<!\d)(\d{2,3})\s*(?:см|cm)(?:\b|\(|$)"
     match = re.search(pattern, text, re.IGNORECASE)
 
     if match:
         length = int(match.group(1))
         if 30 <= length <= 150:
-            # Remove the match from text
-            clean_text = text[: match.start()] + text[match.end() :]
+            # Remove the length part from text (keep any trailing parenthesis)
+            # Find where "см" or "cm" ends
+            end_pos = match.end()
+            # Don't consume trailing parenthesis
+            if end_pos > 0 and text[end_pos - 1:end_pos] == "(":
+                end_pos -= 1
+            clean_text = text[: match.start()] + text[end_pos:]
             return length, clean_text.strip()
 
     return None, text
@@ -549,6 +576,13 @@ def normalize_name(
 
     # 6. Extract subtype (NEW: кустовая, спрей, etc.)
     result.flower_subtype, text = _extract_subtype(text, subtype_lookup)
+
+    # 6.5 Remove pack_qty patterns before variety extraction
+    # These are already extracted separately but pollute variety name
+    text = re.sub(r"\s*\(\d{1,3}\)\s*$", "", text)  # "(20)" at end
+    text = re.sub(r"\s*\(\d{1,3}\s*шт\)", "", text, flags=re.IGNORECASE)  # "(20 шт)"
+    text = re.sub(r"\s*х\d{1,2}\s*$", "", text, flags=re.IGNORECASE)  # "х12" at end
+    text = text.strip()
 
     # 7. Remaining text is the variety
     result.variety = _clean_variety(text) if text else None

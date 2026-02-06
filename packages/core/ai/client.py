@@ -1,4 +1,5 @@
 """DeepSeek API client for AI-assisted normalization."""
+import asyncio
 import json
 import os
 from typing import Any, Optional
@@ -25,7 +26,8 @@ class DeepSeekClient:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         model: Optional[str] = None,
-        timeout: float = 60.0,
+        timeout: float = 120.0,
+        max_retries: int = 2,
     ):
         """
         Initialize DeepSeek client.
@@ -34,12 +36,14 @@ class DeepSeekClient:
             api_key: DeepSeek API key (or from DEEPSEEK_API_KEY env var)
             base_url: API base URL (or from DEEPSEEK_BASE_URL env var)
             model: Model name (or from DEEPSEEK_MODEL env var)
-            timeout: Request timeout in seconds
+            timeout: Request timeout in seconds (default 120s for large batches)
+            max_retries: Number of retry attempts on network errors (default 2)
         """
         self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
         self.base_url = base_url or os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
         self.model = model or os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
         self.timeout = timeout
+        self.max_retries = max_retries
 
         if not self.api_key:
             raise DeepSeekError("DEEPSEEK_API_KEY not set")
@@ -81,24 +85,38 @@ class DeepSeekClient:
         if response_format:
             payload["response_format"] = response_format
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            try:
-                response = await client.post(
-                    f"{self.base_url}/v1/chat/completions",
-                    headers=headers,
-                    json=payload,
-                )
-                response.raise_for_status()
-                return response.json()
+        last_error: Optional[Exception] = None
 
-            except httpx.HTTPStatusError as e:
-                error_body = e.response.text
-                raise DeepSeekError(
-                    f"API error: {e.response.status_code} - {error_body}",
-                    status_code=e.response.status_code,
-                )
-            except httpx.RequestError as e:
-                raise DeepSeekError(f"Request failed: {str(e)}")
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            for attempt in range(self.max_retries + 1):
+                try:
+                    response = await client.post(
+                        f"{self.base_url}/v1/chat/completions",
+                        headers=headers,
+                        json=payload,
+                    )
+                    response.raise_for_status()
+                    return response.json()
+
+                except httpx.HTTPStatusError as e:
+                    error_body = e.response.text
+                    raise DeepSeekError(
+                        f"API error: {e.response.status_code} - {error_body}",
+                        status_code=e.response.status_code,
+                    )
+                except httpx.RequestError as e:
+                    last_error = e
+                    if attempt < self.max_retries:
+                        # Exponential backoff: 1s, 2s
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                    raise DeepSeekError(
+                        f"Request failed after {self.max_retries + 1} attempts: {str(e)}"
+                    )
+
+        # Should not reach here, but just in case
+        if last_error:
+            raise DeepSeekError(f"Request failed: {str(last_error)}")
 
     async def extract_json(
         self,

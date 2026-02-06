@@ -92,14 +92,20 @@ class TestLengthExtractor:
 
     def test_extract_length_out_of_range(self):
         """Test that out-of-range lengths are rejected."""
-        assert extract_length_cm("Роза 150см") is None  # Too long
+        assert extract_length_cm("Роза 160см") is None  # Too long (>150)
         assert extract_length_cm("Роза 20см") is None  # Too short
 
     def test_extract_length_valid_range(self):
-        """Test lengths within valid range."""
+        """Test lengths within valid range (30-150cm)."""
         assert extract_length_cm("Роза 40см") == 40
         assert extract_length_cm("Роза 80см") == 80
         assert extract_length_cm("Роза 120см") == 120
+        assert extract_length_cm("Магнолия 150см") == 150  # Extended range for tall stems
+
+    def test_extract_length_with_trailing_parenthesis(self):
+        """Test extracting length when parenthesis follows (e.g., 120см(1))."""
+        assert extract_length_cm("Магнолия 120см(1)") == 120
+        assert extract_length_cm("Оксипеталум 60 см (10)") == 60
 
     def test_extract_length_not_found(self):
         """Test when length is not in text."""
@@ -138,3 +144,58 @@ class TestOriginExtractor:
         """Test case insensitivity."""
         assert extract_origin_country("Роза (ЭКВАДОР)") == "Ecuador"
         assert extract_origin_country("Роза эквАдор") == "Ecuador"
+
+
+class TestNameNormalizer:
+    """Tests for name normalizer (normalize_name function)."""
+
+    def test_new_flower_types(self):
+        """Test newly added flower types are recognized."""
+        from packages.core.parsing.name_normalizer import normalize_name
+
+        # Декоративная зелень
+        result = normalize_name("Аспарагус Экстра")
+        assert result.flower_type == "Аспарагус"
+
+        result = normalize_name("Магнолия 120см(1)")
+        assert result.flower_type == "Магнолия"
+
+        result = normalize_name("Брассика Крэйн Куин")
+        assert result.flower_type == "Брассика"
+
+        # Цветы
+        result = normalize_name("Амариллис Прополис")
+        assert result.flower_type == "Амариллис"
+
+        result = normalize_name("Матиола Ирон Дип Пинк")
+        assert result.flower_type == "Матиола"
+
+    def test_pack_qty_not_in_variety(self):
+        """Test that pack_qty patterns are removed from variety."""
+        from packages.core.parsing.name_normalizer import normalize_name
+
+        # Pattern: (20) at end
+        result = normalize_name("Гвоздика Алтаир (20)")
+        assert result.variety == "Алтаир"
+        assert "(20" not in (result.variety or "")
+
+        # Pattern: х12 at end
+        result = normalize_name("Амариллис лавли Нимф х12")
+        assert result.variety is not None
+        assert "х12" not in result.variety
+
+        # Pattern: (1) at end
+        result = normalize_name("Амариллис Прополис(1)")
+        assert result.variety is not None
+        assert "(1" not in result.variety
+
+    def test_length_extraction_with_trailing_parenthesis(self):
+        """Test length extraction when pack_qty follows."""
+        from packages.core.parsing.name_normalizer import normalize_name
+
+        result = normalize_name("Магнолия 120см(1)")
+        assert result.length_cm == 120
+        assert result.flower_type == "Магнолия"
+
+        result = normalize_name("Оксипеталум 60 см (10)")
+        assert result.length_cm == 60
