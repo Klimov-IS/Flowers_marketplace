@@ -5,13 +5,16 @@ import { RouterProvider } from 'react-router-dom';
 import { store } from './app/store';
 import { router } from './router';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ToastProvider } from './components/ui/Toast';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <Provider store={store}>
-        <RouterProvider router={router} />
+        <ToastProvider>
+          <RouterProvider router={router} />
+        </ToastProvider>
       </Provider>
     </ErrorBoundary>
   </StrictMode>

@@ -72,6 +72,61 @@ class ImportSummaryResponse(BaseModel):
     parse_events_count: int
 
 
+# Import history schemas
+class ImportBatchListItem(BaseModel):
+    """Schema for import batch in list view."""
+
+    id: UUID
+    source_filename: str | None
+    status: str
+    imported_at: datetime
+    raw_rows_count: int
+    supplier_items_count: int
+    offer_candidates_count: int
+    parse_errors_count: int
+
+    class Config:
+        from_attributes = True
+
+
+class ImportBatchListResponse(BaseModel):
+    """Schema for paginated list of import batches."""
+
+    items: List[ImportBatchListItem]
+    total: int
+    page: int
+    per_page: int
+
+
+class ParseEventItem(BaseModel):
+    """Schema for parse event/error."""
+
+    id: UUID
+    severity: str  # info, warn, error
+    code: str | None
+    message: str
+    row_ref: str | None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ParseEventsResponse(BaseModel):
+    """Schema for list of parse events."""
+
+    items: List[ParseEventItem]
+    total: int
+
+
+class ImportDeleteResponse(BaseModel):
+    """Schema for import deletion response."""
+
+    id: UUID
+    message: str
+    deleted_counts: dict  # { raw_rows, offer_candidates, parse_events }
+
+
 # AI Enrichment schemas
 class AIEnrichmentResponse(BaseModel):
     """Schema for AI enrichment response."""
@@ -937,6 +992,290 @@ async def get_import_summary(
 
     if not summary:
         raise HTTPException(status_code=404, detail="Import batch not found")
+
+    return summary
+
+
+# Import History endpoints
+@router.get("/suppliers/{supplier_id}/imports", response_model=ImportBatchListResponse)
+async def get_supplier_imports(
+    supplier_id: UUID,
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(10, ge=1, le=50, description="Items per page"),
+    db: AsyncSession = Depends(get_db),
+) -> ImportBatchListResponse:
+    """
+    Get paginated list of import batches for a supplier.
+
+    Returns import history with counts of rows, items, and errors.
+    """
+    # Verify supplier exists
+    supplier_result = await db.execute(
+        select(Supplier).where(Supplier.id == supplier_id)
+    )
+    if not supplier_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    # Count total
+    count_sql = text("""
+        SELECT COUNT(*) FROM import_batches
+        WHERE supplier_id = :supplier_id
+    """)
+    count_result = await db.execute(count_sql, {"supplier_id": supplier_id})
+    total = count_result.scalar() or 0
+
+    # Get paginated imports with counts
+    offset = (page - 1) * per_page
+    data_sql = text("""
+        SELECT
+            ib.id,
+            ib.source_filename,
+            ib.status,
+            ib.imported_at,
+            COALESCE((SELECT COUNT(*) FROM raw_rows WHERE import_batch_id = ib.id), 0) as raw_rows_count,
+            COALESCE((SELECT COUNT(DISTINCT si.id) FROM supplier_items si
+                      JOIN offer_candidates oc ON oc.supplier_item_id = si.id
+                      WHERE oc.import_batch_id = ib.id), 0) as supplier_items_count,
+            COALESCE((SELECT COUNT(*) FROM offer_candidates WHERE import_batch_id = ib.id), 0) as offer_candidates_count,
+            COALESCE((SELECT COUNT(*) FROM parse_events pe
+                      JOIN parse_runs pr ON pe.parse_run_id = pr.id
+                      WHERE pr.import_batch_id = ib.id AND pe.severity = 'error'), 0) as parse_errors_count
+        FROM import_batches ib
+        WHERE ib.supplier_id = :supplier_id
+        ORDER BY ib.imported_at DESC
+        LIMIT :limit OFFSET :offset
+    """)
+
+    data_result = await db.execute(
+        data_sql,
+        {"supplier_id": supplier_id, "limit": per_page, "offset": offset}
+    )
+    rows = data_result.all()
+
+    items = [
+        ImportBatchListItem(
+            id=row.id,
+            source_filename=row.source_filename,
+            status=row.status,
+            imported_at=row.imported_at,
+            raw_rows_count=row.raw_rows_count,
+            supplier_items_count=row.supplier_items_count,
+            offer_candidates_count=row.offer_candidates_count,
+            parse_errors_count=row.parse_errors_count,
+        )
+        for row in rows
+    ]
+
+    logger.info(
+        "supplier_imports_fetched",
+        supplier_id=str(supplier_id),
+        total=total,
+        page=page,
+    )
+
+    return ImportBatchListResponse(
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
+
+
+@router.get("/imports/{import_batch_id}/parse-events", response_model=ParseEventsResponse)
+async def get_import_parse_events(
+    import_batch_id: UUID,
+    severity: Optional[str] = Query(None, description="Filter by severity: info, warn, error"),
+    db: AsyncSession = Depends(get_db),
+) -> ParseEventsResponse:
+    """
+    Get parse events (errors/warnings) for an import batch.
+    """
+    # Verify import exists
+    batch_result = await db.execute(
+        select(ImportBatch).where(ImportBatch.id == import_batch_id)
+    )
+    if not batch_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Import batch not found")
+
+    # Build query
+    where_clause = "pr.import_batch_id = :import_batch_id"
+    params: dict = {"import_batch_id": import_batch_id}
+
+    if severity:
+        where_clause += " AND pe.severity = :severity"
+        params["severity"] = severity
+
+    data_sql = text(f"""
+        SELECT
+            pe.id,
+            pe.severity,
+            pe.code,
+            pe.message,
+            rr.row_ref,
+            pe.created_at
+        FROM parse_events pe
+        JOIN parse_runs pr ON pe.parse_run_id = pr.id
+        LEFT JOIN raw_rows rr ON pe.raw_row_id = rr.id
+        WHERE {where_clause}
+        ORDER BY pe.created_at ASC
+        LIMIT 100
+    """)
+
+    data_result = await db.execute(data_sql, params)
+    rows = data_result.all()
+
+    items = [
+        ParseEventItem(
+            id=row.id,
+            severity=row.severity,
+            code=row.code,
+            message=row.message,
+            row_ref=row.row_ref,
+            created_at=row.created_at,
+        )
+        for row in rows
+    ]
+
+    return ParseEventsResponse(items=items, total=len(items))
+
+
+@router.delete("/imports/{import_batch_id}", response_model=ImportDeleteResponse)
+async def delete_import_batch(
+    import_batch_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ImportDeleteResponse:
+    """
+    Delete an import batch and all related data.
+
+    Deletes: offer_candidates, parse_events, parse_runs, raw_rows, import_batch.
+    Does NOT delete supplier_items (they may be linked to other imports).
+    """
+    # Verify import exists
+    batch_result = await db.execute(
+        select(ImportBatch).where(ImportBatch.id == import_batch_id)
+    )
+    batch = batch_result.scalar_one_or_none()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Import batch not found")
+
+    deleted_counts = {
+        "offer_candidates": 0,
+        "parse_events": 0,
+        "parse_runs": 0,
+        "raw_rows": 0,
+    }
+
+    # Delete offer_candidates
+    delete_oc = text("""
+        DELETE FROM offer_candidates WHERE import_batch_id = :batch_id
+    """)
+    result = await db.execute(delete_oc, {"batch_id": import_batch_id})
+    deleted_counts["offer_candidates"] = result.rowcount
+
+    # Delete parse_events via parse_runs
+    delete_pe = text("""
+        DELETE FROM parse_events
+        WHERE parse_run_id IN (SELECT id FROM parse_runs WHERE import_batch_id = :batch_id)
+    """)
+    result = await db.execute(delete_pe, {"batch_id": import_batch_id})
+    deleted_counts["parse_events"] = result.rowcount
+
+    # Delete parse_runs
+    delete_pr = text("""
+        DELETE FROM parse_runs WHERE import_batch_id = :batch_id
+    """)
+    result = await db.execute(delete_pr, {"batch_id": import_batch_id})
+    deleted_counts["parse_runs"] = result.rowcount
+
+    # Delete raw_rows
+    delete_rr = text("""
+        DELETE FROM raw_rows WHERE import_batch_id = :batch_id
+    """)
+    result = await db.execute(delete_rr, {"batch_id": import_batch_id})
+    deleted_counts["raw_rows"] = result.rowcount
+
+    # Delete import_batch
+    await db.delete(batch)
+    await db.commit()
+
+    logger.info(
+        "import_batch_deleted",
+        batch_id=str(import_batch_id),
+        deleted_counts=deleted_counts,
+    )
+
+    return ImportDeleteResponse(
+        id=import_batch_id,
+        message="Import batch deleted successfully",
+        deleted_counts=deleted_counts,
+    )
+
+
+@router.post("/imports/{import_batch_id}/reparse", response_model=ImportSummaryResponse)
+async def reparse_import_batch(
+    import_batch_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ImportSummaryResponse:
+    """
+    Re-parse an import batch from raw_rows.
+
+    Deletes existing offer_candidates and parse_events,
+    then re-runs the parsing pipeline.
+    """
+    # Verify import exists
+    batch_result = await db.execute(
+        select(ImportBatch).where(ImportBatch.id == import_batch_id)
+    )
+    batch = batch_result.scalar_one_or_none()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Import batch not found")
+
+    logger.info(
+        "reparse_started",
+        batch_id=str(import_batch_id),
+        supplier_id=str(batch.supplier_id),
+    )
+
+    # Delete existing offer_candidates for this batch
+    delete_oc = text("""
+        DELETE FROM offer_candidates WHERE import_batch_id = :batch_id
+    """)
+    await db.execute(delete_oc, {"batch_id": import_batch_id})
+
+    # Delete existing parse_events
+    delete_pe = text("""
+        DELETE FROM parse_events
+        WHERE parse_run_id IN (SELECT id FROM parse_runs WHERE import_batch_id = :batch_id)
+    """)
+    await db.execute(delete_pe, {"batch_id": import_batch_id})
+
+    # Delete existing parse_runs
+    delete_pr = text("""
+        DELETE FROM parse_runs WHERE import_batch_id = :batch_id
+    """)
+    await db.execute(delete_pr, {"batch_id": import_batch_id})
+
+    await db.commit()
+
+    # Re-run parsing
+    import_service = ImportService(db)
+    await import_service.parse_raw_rows(import_batch_id)
+
+    # Update batch status
+    batch.status = "parsed"
+    await db.commit()
+
+    # Get updated summary
+    summary = await import_service.get_import_summary(import_batch_id)
+
+    logger.info(
+        "reparse_completed",
+        batch_id=str(import_batch_id),
+        items_count=summary.supplier_items_count if summary else 0,
+    )
+
+    if not summary:
+        raise HTTPException(status_code=500, detail="Failed to get summary after reparse")
 
     return summary
 

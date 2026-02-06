@@ -64,6 +64,58 @@ export interface AISuggestionActionResponse {
   message: string;
 }
 
+// Import History types
+export interface ImportBatchListItem {
+  id: string;
+  source_filename: string | null;
+  status: string;
+  imported_at: string;
+  raw_rows_count: number;
+  supplier_items_count: number;
+  offer_candidates_count: number;
+  parse_errors_count: number;
+}
+
+export interface ImportBatchListResponse {
+  items: ImportBatchListItem[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+export interface ParseEventItem {
+  id: string;
+  severity: string;
+  code: string | null;
+  message: string;
+  row_ref: string | null;
+  created_at: string;
+}
+
+export interface ParseEventsResponse {
+  items: ParseEventItem[];
+  total: number;
+}
+
+export interface ImportDeleteResponse {
+  id: string;
+  message: string;
+  deleted_counts: {
+    raw_rows: number;
+    offer_candidates: number;
+    parse_events: number;
+  };
+}
+
+export interface ImportSummaryResponse {
+  batch_id: string;
+  status: string;
+  raw_rows_count: number;
+  supplier_items_count: number;
+  offer_candidates_count: number;
+  parse_events_count: number;
+}
+
 // In development, Vite proxy handles /offers, /orders, /admin routes
 // In production, set VITE_API_BASE_URL to the actual API URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -283,6 +335,41 @@ export const supplierApi = createApi({
       invalidatesTags: ['ImportBatches'],
     }),
 
+    // Import History endpoints
+    getSupplierImports: builder.query<
+      ImportBatchListResponse,
+      { supplier_id: string; page?: number; per_page?: number }
+    >({
+      query: ({ supplier_id, page = 1, per_page = 10 }) =>
+        `/admin/suppliers/${supplier_id}/imports?page=${page}&per_page=${per_page}`,
+      providesTags: ['ImportBatches'],
+    }),
+
+    getParseEvents: builder.query<ParseEventsResponse, { import_id: string; severity?: string }>({
+      query: ({ import_id, severity }) => {
+        const params = new URLSearchParams();
+        if (severity) params.append('severity', severity);
+        const queryStr = params.toString();
+        return `/admin/imports/${import_id}/parse-events${queryStr ? `?${queryStr}` : ''}`;
+      },
+    }),
+
+    deleteImport: builder.mutation<ImportDeleteResponse, string>({
+      query: (importId) => ({
+        url: `/admin/imports/${importId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['ImportBatches', 'SupplierItems'],
+    }),
+
+    reparseImport: builder.mutation<ImportSummaryResponse, string>({
+      query: (importId) => ({
+        url: `/admin/imports/${importId}/reparse`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['ImportBatches', 'SupplierItems'],
+    }),
+
     // Update Supplier Item (for editable table)
     updateSupplierItem: builder.mutation<
       SupplierItem,
@@ -435,4 +522,9 @@ export const {
   useBulkDeleteItemsMutation,
   useBulkHideItemsMutation,
   useBulkRestoreItemsMutation,
+  // Import history
+  useGetSupplierImportsQuery,
+  useGetParseEventsQuery,
+  useDeleteImportMutation,
+  useReparseImportMutation,
 } = supplierApi;
