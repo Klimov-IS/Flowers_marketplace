@@ -12,6 +12,7 @@ export interface SupplierItemUpdateData {
   raw_name?: string;
   origin_country?: string | null;
   colors?: string[];
+  variety?: string;  // Сорт цветка
 }
 
 export interface OfferCandidateUpdateData {

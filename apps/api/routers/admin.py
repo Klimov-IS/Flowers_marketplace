@@ -184,6 +184,7 @@ class SupplierItemUpdate(BaseModel):
     raw_name: Optional[str] = None
     origin_country: Optional[str] = None
     colors: Optional[List[str]] = None
+    variety: Optional[str] = None  # Сорт цветка
 
 
 class OfferCandidateUpdate(BaseModel):
@@ -976,6 +977,11 @@ async def update_supplier_item(
         if "colors" not in locked:
             attributes["colors"] = data.colors
             sources["colors"] = "manual"
+
+    if data.variety is not None:
+        if "variety" not in locked:
+            attributes["variety"] = data.variety
+            sources["variety"] = "manual"
 
     # Update sources metadata
     attributes["_sources"] = sources
