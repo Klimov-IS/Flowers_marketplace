@@ -19,10 +19,7 @@ import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import FilterSidebar from './components/FilterSidebar';
 import { getFlowerImage, getDefaultFlowerImage } from '../../utils/flowerImages';
-import {
-  formatPackInfo,
-  formatTier,
-} from '../../utils/catalogFormatters';
+import { formatTier } from '../../utils/catalogFormatters';
 
 export default function CatalogPage() {
   const dispatch = useAppDispatch();
@@ -42,7 +39,12 @@ export default function CatalogPage() {
     const offer = data?.offers.find((o) => o.id === offerId);
     if (!offer) return;
 
-    const quantity = quantities[offerId] || 1;
+    const qty = quantities[offerId] || 1;
+    // Если продажа упаковками, qty = кол-во упаковок, иначе = штуки
+    const isPackSale = !!offer.pack_qty;
+    const packQty = offer.pack_qty || 1;
+    const actualQuantity = isPackSale ? qty * packQty : qty;
+
     // Use display_title for clean name, fallback to sku.title
     const productName = offer.display_title || offer.sku.title;
 
@@ -55,7 +57,7 @@ export default function CatalogPage() {
           offer_id: offer.id,
           name: productName,
           price: offer.price_min,
-          quantity,
+          quantity: actualQuantity,
           stock: offer.stock_qty || undefined,
           length_cm: offer.length_cm || undefined,
         },
@@ -64,7 +66,11 @@ export default function CatalogPage() {
 
     // Reset quantity after adding
     setQuantities((prev) => ({ ...prev, [offerId]: 1 }));
-    alert(`Добавлено в корзину: ${productName} (${quantity} шт)`);
+
+    // Информативное сообщение
+    const unitLabel = isPackSale ? 'упак.' : 'шт';
+    const details = isPackSale ? `${qty} ${unitLabel} = ${actualQuantity} шт` : `${actualQuantity} шт`;
+    alert(`Добавлено в корзину: ${productName} (${details})`);
   };
 
   const getQuantity = (offerId: string) => quantities[offerId] || 1;
@@ -186,8 +192,19 @@ export default function CatalogPage() {
           {/* Products Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {data?.offers.map((offer) => {
-          const packInfo = formatPackInfo(offer.pack_type, offer.pack_qty);
           const tierInfo = formatTier(offer.tier_min_qty, offer.tier_max_qty);
+
+          // Адаптивная логика: поштучно vs упаковками
+          const isPackSale = !!offer.pack_qty;
+          const packQty = offer.pack_qty || 1;
+          const pricePerUnit = parseFloat(offer.price_min) || 0;
+          const packPrice = isPackSale ? pricePerUnit * packQty : null;
+          const unitLabel = isPackSale ? 'упак.' : 'шт';
+
+          // Расчёт итого
+          const quantity = getQuantity(offer.id);
+          const totalQty = isPackSale ? quantity * packQty : quantity;
+          const totalPrice = totalQty * pricePerUnit;
 
           return (
             <Card key={offer.id} className="p-4 flex flex-col h-full">
@@ -206,38 +223,45 @@ export default function CatalogPage() {
 
               {/* Content Block - только название */}
               <div className="flex-grow">
-                {/* Title - полное название: Тип + Субтип + Сорт + Страна + Цвет + Длина */}
                 <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2 min-h-[3rem]">
                   {offer.display_title || offer.sku.title}
                 </h3>
-                {/* Убрано: country, colors, length - всё теперь в display_title */}
               </div>
 
               {/* Footer Block - pinned to bottom */}
               <div className="mt-auto pt-3 border-t border-gray-100">
-                {/* Price Block - цена + упаковка + tiers */}
-                <div className="flex justify-between items-start mb-2 min-h-[36px]">
-                  <span className="text-2xl font-bold text-primary-600">
-                    {offer.price_min} ₽
-                  </span>
-                  <div className="text-right">
-                    {/* Упаковка рядом с ценой */}
-                    {packInfo && (
-                      <p className="text-xs text-gray-600">{packInfo}</p>
+                {/* Price Block - адаптивное отображение */}
+                <div className="mb-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-2xl font-bold text-primary-600">
+                        {offer.price_min} ₽
+                      </span>
+                      <span className="text-sm text-gray-500"> / шт</span>
+                    </div>
+                    {isPackSale && (
+                      <div className="text-right">
+                        <p className="text-xs text-gray-600">упак. {packQty} шт</p>
+                      </div>
                     )}
-                    {/* Tiers (мин. заказ) */}
-                    {tierInfo && (
-                      <p className="text-xs text-green-600">{tierInfo}</p>
-                    )}
-                    {/* Убран: stock_qty (остаток) */}
                   </div>
+                  {/* Цена за упаковку */}
+                  {packPrice && (
+                    <p className="text-sm text-gray-600">
+                      = {packPrice.toLocaleString('ru-RU')} ₽ / упак.
+                    </p>
+                  )}
+                  {/* Tiers (мин. заказ) */}
+                  {tierInfo && (
+                    <p className="text-xs text-green-600 mt-1">{tierInfo}</p>
+                  )}
                 </div>
 
                 {/* Supplier */}
                 <p className="text-xs text-gray-400 mb-2">{offer.supplier.name}</p>
 
-                {/* Quantity Controls */}
-                <div className="flex items-center gap-2 mb-3">
+                {/* Quantity Controls с единицей измерения */}
+                <div className="flex items-center gap-2 mb-2">
                   <button
                     onClick={() => setQuantity(offer.id, getQuantity(offer.id) - 1)}
                     className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700"
@@ -247,7 +271,7 @@ export default function CatalogPage() {
                   <input
                     type="number"
                     min="1"
-                    value={getQuantity(offer.id)}
+                    value={quantity}
                     onChange={(e) => setQuantity(offer.id, parseInt(e.target.value) || 1)}
                     className="w-16 text-center border border-gray-300 rounded px-2 py-1"
                   />
@@ -257,7 +281,17 @@ export default function CatalogPage() {
                   >
                     +
                   </button>
+                  <span className="text-sm text-gray-600">{unitLabel}</span>
                 </div>
+
+                {/* Итого */}
+                <p className="text-sm text-gray-700 mb-3">
+                  {isPackSale ? (
+                    <>Итого: {totalQty} шт × {pricePerUnit} ₽ = <span className="font-semibold">{totalPrice.toLocaleString('ru-RU')} ₽</span></>
+                  ) : (
+                    <>Итого: <span className="font-semibold">{totalPrice.toLocaleString('ru-RU')} ₽</span></>
+                  )}
+                </p>
 
                 <Button
                   className="w-full"
