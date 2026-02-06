@@ -368,9 +368,18 @@ class NormalizedName:
     colors: List[str] = field(default_factory=list)
     clean_name: Optional[str] = None  # Type + Variety only
 
+    # Bundle detection (NEW)
+    is_bundle_list: bool = False  # Multiple varieties in one row
+    bundle_varieties: List[str] = field(default_factory=list)  # Extracted variety names
+    warnings: List[str] = field(default_factory=list)  # Parsing warnings
+
     def __post_init__(self):
         if self.colors is None:
             self.colors = []
+        if self.bundle_varieties is None:
+            self.bundle_varieties = []
+        if self.warnings is None:
+            self.warnings = []
 
 
 # =============================================================================
@@ -531,6 +540,91 @@ def _clean_variety(text: str) -> str:
 
 
 # =============================================================================
+# Bundle Detection (multiple varieties in one row)
+# =============================================================================
+
+# Garbage patterns that should not be in product names
+GARBAGE_PATTERNS = [
+    r"цена\s*за\s*шт",  # "Цена За Шт"
+    r"руб\.?(?:\s|$|/)",  # "Руб" or "Руб."
+    r"цена\s*за\s*упак",  # "Цена за упак"
+    r"штук[аи]?\b",  # "штука", "штуки"
+    r"упаков[ка]",  # "упаковка"
+    r"за\s*(?:шт|упак)",  # "за шт", "за упак"
+    r"прайс",  # "прайс"
+    r"наличи[ей]",  # "наличие"
+    r"остаток",  # "остаток"
+    r"количество",  # "количество"
+]
+
+# Minimum items to consider as bundle list
+BUNDLE_MIN_ITEMS = 3
+
+
+def _detect_bundle_list(text: str) -> Tuple[bool, List[str], List[str]]:
+    """
+    Detect if text contains a bundle list (multiple varieties comma-separated).
+
+    Args:
+        text: Text to analyze
+
+    Returns:
+        Tuple of (is_bundle, extracted_varieties, warnings)
+    """
+    warnings = []
+    varieties = []
+
+    # Check for garbage patterns first
+    text_lower = text.lower()
+    for pattern in GARBAGE_PATTERNS:
+        if re.search(pattern, text_lower):
+            warnings.append(f"garbage_text_detected: {pattern}")
+
+    # Split by comma and analyze
+    parts = [p.strip() for p in text.split(",") if p.strip()]
+
+    # Check if this looks like a variety list
+    if len(parts) >= BUNDLE_MIN_ITEMS:
+        # Additional heuristics:
+        # 1. Most parts should be short (variety names are typically 1-3 words)
+        # 2. Parts shouldn't contain numbers (prices, lengths)
+        # 3. Parts shouldn't be too long (>30 chars suggests it's not a variety)
+
+        valid_variety_count = 0
+        for part in parts:
+            part_clean = part.strip()
+            # Skip if has numbers (likely price/length)
+            if re.search(r"\d", part_clean):
+                continue
+            # Skip if too long
+            if len(part_clean) > 40:
+                continue
+            # Skip if too short (likely garbage)
+            if len(part_clean) < 2:
+                continue
+            # Looks like a variety name
+            valid_variety_count += 1
+            varieties.append(part_clean)
+
+        # If we have 3+ valid varieties, it's a bundle list
+        if valid_variety_count >= BUNDLE_MIN_ITEMS:
+            return True, varieties, warnings + ["bundle_list_detected"]
+
+    return False, [], warnings
+
+
+def _clean_garbage_from_text(text: str) -> str:
+    """Remove garbage patterns from text (header text that leaked in)."""
+    for pattern in GARBAGE_PATTERNS:
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+
+    # Clean up slashes and extra punctuation
+    text = re.sub(r"[/\\]+", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+# =============================================================================
 # Main Normalization Functions
 # =============================================================================
 
@@ -555,6 +649,15 @@ def normalize_name(
 
     result = NormalizedName(original=raw_name)
     text = raw_name.strip()
+
+    # 0. Detect bundle list FIRST (before other extractions)
+    is_bundle, bundle_varieties, bundle_warnings = _detect_bundle_list(text)
+    result.is_bundle_list = is_bundle
+    result.bundle_varieties = bundle_varieties
+    result.warnings = bundle_warnings
+
+    # 0.5 Clean garbage from text (header text that leaked in)
+    text = _clean_garbage_from_text(text)
 
     # Extract in order: farm, country, length, colors, type, subtype
     # Each step cleans the text for the next
@@ -593,7 +696,13 @@ def normalize_name(
         parts.append(result.flower_type)
     if result.flower_subtype:
         parts.append(result.flower_subtype.lower())
-    if result.variety:
+
+    # For bundles, don't include the full variety list in clean_name
+    if result.is_bundle_list:
+        count = len(result.bundle_varieties)
+        parts.append(f"({count} сортов)")
+        result.variety = None  # Clear variety for bundles
+    elif result.variety:
         parts.append(result.variety)
 
     result.clean_name = " ".join(parts) if parts else raw_name

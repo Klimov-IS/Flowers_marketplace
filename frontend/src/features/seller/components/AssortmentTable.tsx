@@ -273,18 +273,38 @@ function ItemRow({
                 (e.target as HTMLImageElement).src = getDefaultFlowerImage();
               }}
             />
-            <div className="flex items-center gap-1 min-w-0">
-              <EditableCell
-                value={item.attributes?.clean_name || item.raw_name}
-                type="text"
-                onSave={async (val) => onUpdateItem(item.id, 'raw_name', val)}
-                className="font-medium text-gray-900 truncate"
-              />
-              {item.attributes?._sources?.clean_name === 'ai' && (
-                <AIIndicator
-                  source="ai"
-                  confidence={item.attributes?._confidences?.clean_name}
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <div className="flex items-center gap-1">
+                <EditableCell
+                  value={item.attributes?.clean_name || item.raw_name}
+                  type="text"
+                  onSave={async (val) => onUpdateItem(item.id, 'raw_name', val)}
+                  className="font-medium text-gray-900 truncate"
                 />
+                {item.attributes?._sources?.clean_name === 'ai' && (
+                  <AIIndicator
+                    source="ai"
+                    confidence={item.attributes?._confidences?.clean_name}
+                  />
+                )}
+              </div>
+              {/* Bundle warning */}
+              {item.attributes?.is_bundle_list && (
+                <div className="flex items-center gap-1">
+                  <span
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 rounded cursor-help"
+                    title={`Найдено ${item.attributes.bundle_varieties?.length || 0} сортов в одной строке. Нажмите чтобы разбить.`}
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {item.attributes.bundle_varieties?.length || '?'} сортов
+                  </span>
+                </div>
               )}
             </div>
           </div>

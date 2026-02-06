@@ -5,7 +5,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import cast, func, or_, select, literal
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1298,6 +1298,193 @@ async def bulk_restore_supplier_items(
         affected_count=affected,
         status="active",
         message=f"Restored {affected} items",
+    )
+
+
+# Bundle split endpoint
+class SplitBundleRequest(BaseModel):
+    """Request to split a bundle item into separate items."""
+
+    varieties: list[str] = Field(..., min_length=1, description="List of variety names to create")
+    delete_original: bool = Field(default=True, description="Delete original bundle item after split")
+
+
+class SplitBundleResponse(BaseModel):
+    """Response after splitting a bundle."""
+
+    original_item_id: UUID
+    created_count: int
+    created_item_ids: list[UUID]
+    original_deleted: bool
+    message: str
+
+
+@router.post("/supplier-items/{item_id}/split-bundle", response_model=SplitBundleResponse)
+async def split_bundle_item(
+    item_id: UUID,
+    request: SplitBundleRequest,
+    db: AsyncSession = Depends(get_db),
+) -> SplitBundleResponse:
+    """
+    Split a bundle item (multiple varieties in one row) into separate items.
+
+    This endpoint:
+    1. Validates the original item is a bundle
+    2. Creates new supplier items for each variety
+    3. Copies offer candidates with updated names
+    4. Optionally deletes or marks original as processed
+
+    Args:
+        item_id: Original bundle item UUID
+        request: Varieties to create and options
+        db: Database session
+
+    Returns:
+        Summary of split operation
+    """
+    from packages.core.parsing import generate_stable_key, normalize_name
+    from apps.api.models import OfferCandidate
+
+    # Find the original item
+    result = await db.execute(
+        select(SupplierItem).where(SupplierItem.id == item_id)
+    )
+    original_item = result.scalar_one_or_none()
+    if not original_item:
+        raise HTTPException(status_code=404, detail="Supplier item not found")
+
+    # Validate it's a bundle
+    attrs = original_item.attributes or {}
+    if not attrs.get("is_bundle_list"):
+        raise HTTPException(
+            status_code=400,
+            detail="Item is not a bundle list. Cannot split.",
+        )
+
+    # Get original offer candidates
+    result = await db.execute(
+        select(OfferCandidate).where(OfferCandidate.supplier_item_id == item_id)
+    )
+    original_candidates = result.scalars().all()
+
+    created_item_ids = []
+    flower_type = attrs.get("flower_type", "")
+
+    for variety in request.varieties:
+        variety = variety.strip()
+        if not variety:
+            continue
+
+        # Build new name: "FlowerType Variety"
+        new_name = f"{flower_type} {variety}" if flower_type else variety
+
+        # Generate stable key
+        stable_key = generate_stable_key(
+            supplier_id=original_item.supplier_id,
+            raw_name=new_name,
+            raw_group=None,
+        )
+
+        # Check if item already exists
+        result = await db.execute(
+            select(SupplierItem).where(
+                SupplierItem.supplier_id == original_item.supplier_id,
+                SupplierItem.stable_key == stable_key,
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            logger.warning(
+                "split_bundle_item_exists",
+                original_id=str(item_id),
+                variety=variety,
+                existing_id=str(existing.id),
+            )
+            continue
+
+        # Create new attributes
+        new_attrs = {
+            "flower_type": flower_type,
+            "variety": variety,
+            "clean_name": new_name,
+            "origin_country": attrs.get("origin_country"),
+            "colors": attrs.get("colors", []),
+            "_sources": {
+                "flower_type": "parser",
+                "variety": "manual",
+                "clean_name": "manual",
+            },
+            "_split_from": str(item_id),  # Track origin
+        }
+        new_attrs = {k: v for k, v in new_attrs.items() if v is not None}
+
+        # Create new supplier item
+        new_item = SupplierItem(
+            supplier_id=original_item.supplier_id,
+            stable_key=stable_key,
+            last_import_batch_id=original_item.last_import_batch_id,
+            raw_name=new_name,
+            raw_group=original_item.raw_group,
+            name_norm=normalize_name(new_name),
+            attributes=new_attrs,
+            status="active",
+        )
+        db.add(new_item)
+        await db.flush()
+
+        created_item_ids.append(new_item.id)
+
+        # Copy offer candidates
+        for oc in original_candidates:
+            new_candidate = OfferCandidate(
+                supplier_item_id=new_item.id,
+                import_batch_id=oc.import_batch_id,
+                validation=oc.validation,
+                length_cm=oc.length_cm,
+                pack_type=oc.pack_type,
+                pack_qty=oc.pack_qty,
+                price_type=oc.price_type,
+                price_min=oc.price_min,
+                price_max=oc.price_max,
+                currency=oc.currency,
+                tier_min_qty=oc.tier_min_qty,
+                tier_max_qty=oc.tier_max_qty,
+                availability=oc.availability,
+                stock_qty=oc.stock_qty,
+            )
+            db.add(new_candidate)
+
+    # Handle original item
+    original_deleted = False
+    if request.delete_original and created_item_ids:
+        original_item.status = "deleted"
+        original_item.deleted_at = datetime.utcnow()
+        original_deleted = True
+    elif created_item_ids:
+        # Mark as processed but keep
+        attrs["_split_completed"] = True
+        attrs["_split_into"] = [str(id) for id in created_item_ids]
+        attrs["is_bundle_list"] = False  # No longer a bundle
+        attrs["needs_review"] = False
+        original_item.attributes = attrs
+        flag_modified(original_item, "attributes")
+
+    await db.commit()
+
+    logger.info(
+        "bundle_split_completed",
+        original_id=str(item_id),
+        created_count=len(created_item_ids),
+        varieties=request.varieties,
+        original_deleted=original_deleted,
+    )
+
+    return SplitBundleResponse(
+        original_item_id=item_id,
+        created_count=len(created_item_ids),
+        created_item_ids=created_item_ids,
+        original_deleted=original_deleted,
+        message=f"Created {len(created_item_ids)} items from bundle",
     )
 
 

@@ -199,3 +199,41 @@ class TestNameNormalizer:
 
         result = normalize_name("Оксипеталум 60 см (10)")
         assert result.length_cm == 60
+
+    def test_bundle_list_detection(self):
+        """Test detection of multiple varieties in one row (bundle list)."""
+        from packages.core.parsing.name_normalizer import normalize_name
+
+        # Clear bundle list: many varieties comma-separated
+        result = normalize_name(
+            "Роза Аннабель, Амор Амор, Баттеркап, Джумилия, Ивана"
+        )
+        assert result.is_bundle_list is True
+        assert result.flower_type == "Роза"
+        assert len(result.bundle_varieties) >= 4
+        assert "Аннабель" in result.bundle_varieties
+        assert result.variety is None  # Should not have a single variety
+
+    def test_bundle_list_with_garbage_text(self):
+        """Test detection of bundle list with garbage header text."""
+        from packages.core.parsing.name_normalizer import normalize_name
+
+        # This contains "Цена За Шт./ Руб" garbage from CSV header
+        result = normalize_name(
+            "Роза Аннабель, Амор Амор, Баттеркап Цена За Шт./ Руб"
+        )
+        assert result.is_bundle_list is True
+        assert "garbage_text_detected" in result.warnings or len(result.warnings) > 0
+        # Garbage should be cleaned
+        assert "Руб" not in (result.clean_name or "")
+
+    def test_non_bundle_list(self):
+        """Test that normal names are not detected as bundles."""
+        from packages.core.parsing.name_normalizer import normalize_name
+
+        # Normal name with one variety
+        result = normalize_name("Роза Фридом 60 см (Эквадор)")
+        assert result.is_bundle_list is False
+        assert result.flower_type == "Роза"
+        assert result.variety == "Фридом"
+        assert result.bundle_varieties == []

@@ -42,6 +42,11 @@ class ParserExtracted(BaseModel):
     farm: Optional[str] = None
     clean_name: Optional[str] = None  # Чистое название: Тип + Субтип + Сорт
 
+    # Bundle detection (multiple varieties in one row)
+    is_bundle_list: bool = False
+    bundle_varieties: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
 
 class RowInput(BaseModel):
     """Input row for AI processing."""

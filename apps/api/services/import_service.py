@@ -391,6 +391,36 @@ class ImportService:
             "farm": normalized.farm,
             "clean_name": normalized.clean_name,
         }
+
+        # Add bundle detection flags if detected
+        if normalized.is_bundle_list:
+            attributes["is_bundle_list"] = True
+            attributes["bundle_varieties"] = normalized.bundle_varieties
+            attributes["needs_review"] = True
+            attributes["review_reason"] = "bundle_list_detected"
+            # Create parse event for bundle detection
+            await self._create_parse_event(
+                parse_run_id=parse_run_id,
+                raw_row_id=raw_row.id,
+                severity="warning",
+                code="BUNDLE_LIST_DETECTED",
+                message=f"Multiple varieties in one row: {len(normalized.bundle_varieties)} items",
+                payload={
+                    "varieties": normalized.bundle_varieties,
+                    "original": raw_name,
+                },
+            )
+            summary["parse_events_count"] += 1
+
+        # Add warnings if any
+        if normalized.warnings:
+            attributes["warnings"] = normalized.warnings
+            if not attributes.get("needs_review"):
+                # Check for garbage text warnings
+                if any("garbage" in w for w in normalized.warnings):
+                    attributes["needs_review"] = True
+                    attributes["review_reason"] = "garbage_text_detected"
+
         # Remove None values
         attributes = {k: v for k, v in attributes.items() if v is not None}
 
@@ -532,6 +562,34 @@ class ImportService:
             "farm": normalized.farm,
             "clean_name": normalized.clean_name,
         }
+
+        # Add bundle detection flags if detected (matrix format)
+        if normalized.is_bundle_list:
+            attributes["is_bundle_list"] = True
+            attributes["bundle_varieties"] = normalized.bundle_varieties
+            attributes["needs_review"] = True
+            attributes["review_reason"] = "bundle_list_detected"
+            await self._create_parse_event(
+                parse_run_id=parse_run_id,
+                raw_row_id=raw_row.id,
+                severity="warning",
+                code="BUNDLE_LIST_DETECTED",
+                message=f"Multiple varieties in one row: {len(normalized.bundle_varieties)} items",
+                payload={
+                    "varieties": normalized.bundle_varieties,
+                    "original": raw_name,
+                },
+            )
+            summary["parse_events_count"] += 1
+
+        # Add warnings if any
+        if normalized.warnings:
+            attributes["warnings"] = normalized.warnings
+            if not attributes.get("needs_review"):
+                if any("garbage" in w for w in normalized.warnings):
+                    attributes["needs_review"] = True
+                    attributes["review_reason"] = "garbage_text_detected"
+
         # Remove None values
         attributes = {k: v for k, v in attributes.items() if v is not None}
 

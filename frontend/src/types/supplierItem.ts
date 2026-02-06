@@ -24,6 +24,12 @@ export interface ItemAttributes {
   _sources?: Record<string, 'ai' | 'manual' | 'parser'>;
   _confidences?: Record<string, number>;
   _locked?: string[];
+  // Bundle detection
+  is_bundle_list?: boolean;      // Multiple varieties in one row
+  bundle_varieties?: string[];   // List of extracted variety names
+  needs_review?: boolean;        // Requires manual review
+  review_reason?: string;        // Reason for review (bundle_list_detected, garbage_text_detected)
+  warnings?: string[];           // Parser warnings
 }
 
 export interface SupplierItem {
