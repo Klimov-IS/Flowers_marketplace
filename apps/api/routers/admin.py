@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import cast, func, or_, select, literal
+from sqlalchemy import cast, func, or_, select, literal, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -478,7 +478,6 @@ async def get_supplier_items(
 
     # Fetch duplicate (flower_type, variety) combinations for this supplier
     # Use raw SQL to avoid SQLAlchemy parameter binding issues with GROUP BY
-    from sqlalchemy import text
     duplicate_sql = text("""
         SELECT
             attributes->>'flower_type' as ft,
@@ -645,8 +644,6 @@ async def get_flat_items(
     Joins offer_candidates with supplier_items for a flat table structure.
     Each row represents a single variant with its associated item data.
     """
-    from sqlalchemy import text
-
     # Verify supplier exists
     supplier_result = await db.execute(
         select(Supplier).where(Supplier.id == supplier_id)
@@ -655,9 +652,26 @@ async def get_flat_items(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
+    # Get the latest published import batch for this supplier
+    # to only show offer_candidates from the most recent import
+    latest_batch_sql = text("""
+        SELECT id FROM import_batches
+        WHERE supplier_id = :supplier_id AND status = 'published'
+        ORDER BY imported_at DESC
+        LIMIT 1
+    """)
+    latest_batch_result = await db.execute(latest_batch_sql, {"supplier_id": supplier_id})
+    latest_batch_row = latest_batch_result.first()
+    latest_batch_id = latest_batch_row.id if latest_batch_row else None
+
     # Build dynamic WHERE clause
     where_clauses = ["si.supplier_id = :supplier_id"]
     params = {"supplier_id": supplier_id}
+
+    # Only show offer_candidates from the latest import batch
+    if latest_batch_id:
+        where_clauses.append("oc.import_batch_id = :latest_batch_id")
+        params["latest_batch_id"] = latest_batch_id
 
     # Status filter
     if status:

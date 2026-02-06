@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { FlatOfferVariant, SortState } from '../../../types/supplierItem';
 import {
   useUpdateSupplierItemMutation,
@@ -13,10 +14,126 @@ import FilterableHeader from './FilterableHeader';
 import type { FilterValue } from './ColumnFilter';
 import type { ColumnFilters } from './FilterBar';
 
+// Simple modal for viewing variant details
+function VariantDetailsModal({
+  variant,
+  onClose,
+}: {
+  variant: FlatOfferVariant;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+      <div
+        className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <h3 className="text-lg font-medium text-gray-900">Детали варианта</h3>
+          <button
+            onClick={onClose}
+            className="p-1 text-gray-400 hover:text-gray-600 rounded"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="p-4 space-y-3">
+          {/* IDs */}
+          <div className="bg-gray-50 p-3 rounded-lg space-y-2">
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-500">Variant ID:</span>
+              <code className="text-xs bg-gray-200 px-2 py-0.5 rounded select-all">
+                {variant.variant_id}
+              </code>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-500">Item ID:</span>
+              <code className="text-xs bg-gray-200 px-2 py-0.5 rounded select-all">
+                {variant.item_id}
+              </code>
+            </div>
+          </div>
+
+          {/* Variant fields */}
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <span className="text-gray-500">Тип:</span>
+              <p className="font-medium">{variant.flower_type || '—'}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">Подтип:</span>
+              <p className="font-medium">{variant.subtype || '—'}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">Сорт:</span>
+              <p className="font-medium">{variant.variety || '—'}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">Страна:</span>
+              <p className="font-medium">{variant.origin_country || '—'}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">Цвета:</span>
+              <p className="font-medium">{variant.colors?.length ? variant.colors.join(', ') : '—'}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">Размер:</span>
+              <p className="font-medium">{variant.length_cm ? `${variant.length_cm} см` : '—'}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">Упаковка:</span>
+              <p className="font-medium">
+                {variant.pack_type || '—'} {variant.pack_qty ? `(${variant.pack_qty})` : ''}
+              </p>
+            </div>
+            <div>
+              <span className="text-gray-500">Цена:</span>
+              <p className="font-medium">{variant.price} ₽</p>
+            </div>
+            <div>
+              <span className="text-gray-500">Остаток:</span>
+              <p className="font-medium">{variant.stock ?? '—'}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">Статус:</span>
+              <p className="font-medium">{variant.item_status}</p>
+            </div>
+          </div>
+
+          {/* Raw name */}
+          <div className="text-sm">
+            <span className="text-gray-500">Исходное название:</span>
+            <p className="font-mono text-xs bg-gray-100 p-2 rounded mt-1 break-all">
+              {variant.raw_name}
+            </p>
+          </div>
+
+          {/* Source file */}
+          {variant.source_file && (
+            <div className="text-sm">
+              <span className="text-gray-500">Файл-источник:</span>
+              <p className="text-xs text-gray-600">{variant.source_file}</p>
+            </div>
+          )}
+        </div>
+        <div className="px-4 py-3 border-t bg-gray-50 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Закрыть
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface AssortmentTableProps {
   items: FlatOfferVariant[];
   isLoading?: boolean;
-  onViewDetails?: (variant: FlatOfferVariant) => void;
   // Selection props
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
@@ -273,7 +390,6 @@ const COLOR_FILTER_OPTIONS = [
 export default function AssortmentTable({
   items,
   isLoading,
-  onViewDetails,
   selectedIds,
   onSelectionChange,
   filters,
@@ -284,6 +400,9 @@ export default function AssortmentTable({
   const [updateSupplierItem] = useUpdateSupplierItemMutation();
   const [updateOfferCandidate] = useUpdateOfferCandidateMutation();
   const [deleteOfferCandidate] = useDeleteOfferCandidateMutation();
+
+  // Internal state for details modal
+  const [viewingVariant, setViewingVariant] = useState<FlatOfferVariant | null>(null);
 
   const hasSelection = !!selectedIds && !!onSelectionChange;
 
@@ -375,126 +494,136 @@ export default function AssortmentTable({
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <table className="w-full">
-        <thead className="bg-gray-50 border-b border-gray-200">
-          <tr className="text-left text-sm text-gray-600">
-            {/* Checkbox header */}
-            {hasSelection && (
-              <th className="w-10 px-2 py-3 text-center">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  ref={(el) => {
-                    if (el) el.indeterminate = someSelected;
-                  }}
-                  onChange={handleSelectAll}
-                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
-                  title={allSelected ? 'Снять выделение' : 'Выбрать все'}
-                />
+    <>
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr className="text-left text-sm text-gray-600">
+              {/* Checkbox header */}
+              {hasSelection && (
+                <th className="w-10 px-2 py-3 text-center">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSelected;
+                    }}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                    title={allSelected ? 'Снять выделение' : 'Выбрать все'}
+                  />
+                </th>
+              )}
+
+              {/* Тип цветка - sortable */}
+              <FilterableHeader
+                label="Тип"
+                sortField="raw_name"
+                currentSort={sort}
+                onSort={onSortChange}
+                width="14%"
+              />
+
+              {/* Сорт */}
+              <th className="px-3 py-3 font-medium" style={{ width: '10%' }}>
+                Сорт
               </th>
-            )}
 
-            {/* Тип цветка - sortable */}
-            <FilterableHeader
-              label="Тип"
-              sortField="raw_name"
-              currentSort={sort}
-              onSort={onSortChange}
-              width="14%"
-            />
+              {/* Страна - filter + sort */}
+              <FilterableHeader
+                label="Страна"
+                sortField="origin_country"
+                currentSort={sort}
+                onSort={onSortChange}
+                filterType="multiselect"
+                filterOptions={COUNTRY_FILTER_OPTIONS}
+                filterValue={filters?.origin_country}
+                onFilterChange={onFilterChange ? (v) => onFilterChange('origin_country', v) : undefined}
+                width="10%"
+              />
 
-            {/* Сорт */}
-            <th className="px-3 py-3 font-medium" style={{ width: '10%' }}>
-              Сорт
-            </th>
+              {/* Цвет - filter only (array, no sort) */}
+              <FilterableHeader
+                label="Цвет"
+                filterType="multiselect"
+                filterOptions={COLOR_FILTER_OPTIONS}
+                filterValue={filters?.colors}
+                onFilterChange={onFilterChange ? (v) => onFilterChange('colors', v) : undefined}
+                width="10%"
+              />
 
-            {/* Страна - filter + sort */}
-            <FilterableHeader
-              label="Страна"
-              sortField="origin_country"
-              currentSort={sort}
-              onSort={onSortChange}
-              filterType="multiselect"
-              filterOptions={COUNTRY_FILTER_OPTIONS}
-              filterValue={filters?.origin_country}
-              onFilterChange={onFilterChange ? (v) => onFilterChange('origin_country', v) : undefined}
-              width="10%"
-            />
+              {/* Размер - filter + sort */}
+              <FilterableHeader
+                label="Размер"
+                sortField="length_cm"
+                currentSort={sort}
+                onSort={onSortChange}
+                filterType="range"
+                filterValue={filters?.length}
+                onFilterChange={onFilterChange ? (v) => onFilterChange('length', v) : undefined}
+                filterSuffix="см"
+                width="10%"
+              />
 
-            {/* Цвет - filter only (array, no sort) */}
-            <FilterableHeader
-              label="Цвет"
-              filterType="multiselect"
-              filterOptions={COLOR_FILTER_OPTIONS}
-              filterValue={filters?.colors}
-              onFilterChange={onFilterChange ? (v) => onFilterChange('colors', v) : undefined}
-              width="10%"
-            />
+              {/* Упаковка - no filter/sort */}
+              <th className="px-3 py-3 font-medium" style={{ width: '12%' }}>
+                Упаковка
+              </th>
 
-            {/* Размер - filter + sort */}
-            <FilterableHeader
-              label="Размер"
-              sortField="length_cm"
-              currentSort={sort}
-              onSort={onSortChange}
-              filterType="range"
-              filterValue={filters?.length}
-              onFilterChange={onFilterChange ? (v) => onFilterChange('length', v) : undefined}
-              filterSuffix="см"
-              width="10%"
-            />
+              {/* Цена - filter + sort */}
+              <FilterableHeader
+                label="Цена"
+                sortField="price"
+                currentSort={sort}
+                onSort={onSortChange}
+                filterType="range"
+                filterValue={filters?.price}
+                onFilterChange={onFilterChange ? (v) => onFilterChange('price', v) : undefined}
+                filterSuffix="р"
+                width="10%"
+              />
 
-            {/* Упаковка - no filter/sort */}
-            <th className="px-3 py-3 font-medium" style={{ width: '12%' }}>
-              Упаковка
-            </th>
+              {/* Остаток - filter + sort */}
+              <FilterableHeader
+                label="Остаток"
+                sortField="stock"
+                currentSort={sort}
+                onSort={onSortChange}
+                filterType="range"
+                filterValue={filters?.stock}
+                onFilterChange={onFilterChange ? (v) => onFilterChange('stock', v) : undefined}
+                width="10%"
+              />
 
-            {/* Цена - filter + sort */}
-            <FilterableHeader
-              label="Цена"
-              sortField="price"
-              currentSort={sort}
-              onSort={onSortChange}
-              filterType="range"
-              filterValue={filters?.price}
-              onFilterChange={onFilterChange ? (v) => onFilterChange('price', v) : undefined}
-              filterSuffix="р"
-              width="10%"
-            />
+              <th className="px-3 py-3 font-medium" style={{ width: '10%' }}>
+                Действия
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((variant) => (
+              <FlatVariantRow
+                key={variant.variant_id}
+                variant={variant}
+                onViewDetails={setViewingVariant}
+                onUpdateItem={handleUpdateItem}
+                onUpdateVariant={handleUpdateVariant}
+                onDeleteVariant={handleDeleteVariant}
+                isSelected={selectedIds?.has(variant.variant_id)}
+                onToggleSelect={hasSelection ? () => handleToggleSelect(variant.variant_id) : undefined}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-            {/* Остаток - filter + sort */}
-            <FilterableHeader
-              label="Остаток"
-              sortField="stock"
-              currentSort={sort}
-              onSort={onSortChange}
-              filterType="range"
-              filterValue={filters?.stock}
-              onFilterChange={onFilterChange ? (v) => onFilterChange('stock', v) : undefined}
-              width="10%"
-            />
-
-            <th className="px-3 py-3 font-medium" style={{ width: '10%' }}>
-              Действия
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((variant) => (
-            <FlatVariantRow
-              key={variant.variant_id}
-              variant={variant}
-              onViewDetails={onViewDetails}
-              onUpdateItem={handleUpdateItem}
-              onUpdateVariant={handleUpdateVariant}
-              onDeleteVariant={handleDeleteVariant}
-              isSelected={selectedIds?.has(variant.variant_id)}
-              onToggleSelect={hasSelection ? () => handleToggleSelect(variant.variant_id) : undefined}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
+      {/* Details modal */}
+      {viewingVariant && (
+        <VariantDetailsModal
+          variant={viewingVariant}
+          onClose={() => setViewingVariant(null)}
+        />
+      )}
+    </>
   );
 }
