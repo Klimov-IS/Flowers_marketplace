@@ -47,6 +47,7 @@ export interface SupplierItem {
   variants_count: number;
   variants: OfferVariant[];
   attributes?: ItemAttributes;
+  possible_duplicate?: boolean;  // Items with same flower_type + variety
 }
 
 export interface SupplierItemsResponse {

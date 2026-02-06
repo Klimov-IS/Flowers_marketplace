@@ -162,6 +162,7 @@ class SupplierItemResponse(BaseModel):
     variants_count: int = 0
     variants: List[OfferVariantResponse] = []
     attributes: Optional[dict] = None
+    possible_duplicate: bool = False  # Items with same flower_type + variety
 
     class Config:
         from_attributes = True
@@ -318,6 +319,25 @@ async def get_supplier_items(
         .subquery('aggregates')
     )
 
+    # Create subquery to detect possible duplicates
+    # Items with same (flower_type, variety) for the same supplier
+    flower_type_col = SupplierItem.attributes['flower_type'].astext
+    variety_col = SupplierItem.attributes['variety'].astext
+
+    duplicates_subq = (
+        select(
+            flower_type_col.label('dup_flower_type'),
+            variety_col.label('dup_variety'),
+        )
+        .where(SupplierItem.supplier_id == supplier_id)
+        .where(SupplierItem.status != 'deleted')
+        .where(flower_type_col.isnot(None))
+        .where(variety_col.isnot(None))
+        .group_by(flower_type_col, variety_col)
+        .having(func.count() > 1)
+        .subquery('duplicates')
+    )
+
     # Build base query with aggregates join
     base_query = (
         select(SupplierItem)
@@ -436,6 +456,25 @@ async def get_supplier_items(
     # Get all item IDs for batch loading variants
     item_ids = [item.id for item in supplier_items]
 
+    # Fetch duplicate (flower_type, variety) combinations for this supplier
+    duplicate_combos_query = (
+        select(
+            SupplierItem.attributes['flower_type'].astext.label('ft'),
+            SupplierItem.attributes['variety'].astext.label('var'),
+        )
+        .where(SupplierItem.supplier_id == supplier_id)
+        .where(SupplierItem.status != 'deleted')
+        .where(SupplierItem.attributes['flower_type'].astext.isnot(None))
+        .where(SupplierItem.attributes['variety'].astext.isnot(None))
+        .group_by(
+            SupplierItem.attributes['flower_type'].astext,
+            SupplierItem.attributes['variety'].astext,
+        )
+        .having(func.count() > 1)
+    )
+    duplicate_result = await db.execute(duplicate_combos_query)
+    duplicate_combos = {(row.ft, row.var) for row in duplicate_result.all()}
+
     # Load all offer candidates for these items
     if item_ids:
         variants_query = select(OfferCandidate).where(
@@ -490,6 +529,13 @@ async def get_supplier_items(
         if item.last_import_batch_id and item.last_import_batch_id in batches_by_id:
             source_file = batches_by_id[item.last_import_batch_id].source_filename
 
+        # Check if item is a possible duplicate
+        flower_type = attributes.get("flower_type")
+        variety = attributes.get("variety")
+        is_possible_duplicate = bool(
+            flower_type and variety and (flower_type, variety) in duplicate_combos
+        )
+
         # Build variant responses
         variant_responses = [
             OfferVariantResponse(
@@ -521,6 +567,7 @@ async def get_supplier_items(
                 variants_count=len(variants),
                 variants=variant_responses,
                 attributes=item.attributes,
+                possible_duplicate=is_possible_duplicate,
             )
         )
 

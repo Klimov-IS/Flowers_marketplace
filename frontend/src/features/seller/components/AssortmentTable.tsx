@@ -7,6 +7,7 @@ import {
 import StockIndicator from './StockIndicator';
 import EditableCell from './EditableCell';
 import EditableSelect from './EditableSelect';
+import EditableColorSelect from './EditableColorSelect';
 import AIIndicator from './AIIndicator';
 import Badge from '../../../components/ui/Badge';
 import { getFlowerImage, getDefaultFlowerImage } from '../../../utils/flowerImages';
@@ -51,8 +52,8 @@ const COUNTRY_OPTIONS = [
   { value: 'Италия', label: 'Италия' },
 ];
 
-// Expanded row component showing editable variants
-function ExpandedRow({
+// Expanded variant rows - same column structure as main row
+function ExpandedVariantRows({
   variants,
   onUpdateVariant,
   hasCheckbox,
@@ -66,92 +67,97 @@ function ExpandedRow({
   hasCheckbox?: boolean;
 }) {
   return (
-    <tr className="bg-gray-50">
-      <td colSpan={hasCheckbox ? 10 : 9} className="px-4 py-3">
-        <div className="ml-8">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500">
-                <th className="pb-2 font-medium">Размер (см)</th>
-                <th className="pb-2 font-medium">Упаковка</th>
-                <th className="pb-2 font-medium">Кол-во</th>
-                <th className="pb-2 font-medium">Цена (₽)</th>
-                <th className="pb-2 font-medium">Остаток</th>
-                <th className="pb-2 font-medium">Статус</th>
-              </tr>
-            </thead>
-            <tbody>
-              {variants.map((variant) => (
-                <tr key={variant.id} className="border-t border-gray-200">
-                  <td className="py-2">
-                    <EditableCell
-                      value={variant.length_cm}
-                      type="number"
-                      placeholder="—"
-                      onSave={async (val) =>
-                        onUpdateVariant(variant.id, 'length_cm', val)
-                      }
-                    />
-                  </td>
-                  <td className="py-2">
-                    <EditableSelect
-                      value={variant.pack_type}
-                      options={PACK_TYPE_OPTIONS}
-                      onSave={async (val) =>
-                        onUpdateVariant(variant.id, 'pack_type', val)
-                      }
-                    />
-                  </td>
-                  <td className="py-2">
-                    <EditableCell
-                      value={variant.pack_qty}
-                      type="number"
-                      placeholder="—"
-                      onSave={async (val) =>
-                        onUpdateVariant(variant.id, 'pack_qty', val)
-                      }
-                    />
-                  </td>
-                  <td className="py-2">
-                    <EditableCell
-                      value={variant.price ? parseFloat(variant.price) : null}
-                      type="number"
-                      placeholder="—"
-                      onSave={async (val) =>
-                        onUpdateVariant(variant.id, 'price_min', val)
-                      }
-                    />
-                  </td>
-                  <td className="py-2">
-                    <EditableCell
-                      value={variant.stock}
-                      type="number"
-                      placeholder="0"
-                      onSave={async (val) =>
-                        onUpdateVariant(variant.id, 'stock_qty', val)
-                      }
-                    />
-                  </td>
-                  <td className="py-2">
-                    <Badge
-                      variant={
-                        variant.validation === 'ok'
-                          ? 'success'
-                          : variant.validation === 'warn'
-                          ? 'warning'
-                          : 'danger'
-                      }
-                    >
-                      {variant.validation === 'ok' ? 'OK' : variant.validation}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </td>
-    </tr>
+    <>
+      {variants.map((variant) => (
+        <tr key={variant.id} className="bg-gray-50 border-b border-gray-100">
+          {/* Checkbox placeholder */}
+          {hasCheckbox && <td className="w-10 px-2 py-2" />}
+
+          {/* Expand placeholder */}
+          <td className="w-10 px-2 py-2" />
+
+          {/* Тип - пусто */}
+          <td className="px-3 py-2" />
+
+          {/* Сорт - пусто */}
+          <td className="px-3 py-2" />
+
+          {/* Страна - пусто */}
+          <td className="px-3 py-2" />
+
+          {/* Цвет - пусто */}
+          <td className="px-3 py-2" />
+
+          {/* Размер - редактируемый */}
+          <td className="px-3 py-2">
+            <EditableCell
+              value={variant.length_cm}
+              type="number"
+              placeholder="—"
+              suffix=" см"
+              onSave={async (val) => onUpdateVariant(variant.id, 'length_cm', val)}
+            />
+          </td>
+
+          {/* Упаковка - редактируемый */}
+          <td className="px-3 py-2">
+            <div className="flex items-center gap-1">
+              <EditableSelect
+                value={variant.pack_type}
+                options={PACK_TYPE_OPTIONS}
+                onSave={async (val) => onUpdateVariant(variant.id, 'pack_type', val)}
+              />
+              {variant.pack_qty && (
+                <EditableCell
+                  value={variant.pack_qty}
+                  type="number"
+                  placeholder=""
+                  onSave={async (val) => onUpdateVariant(variant.id, 'pack_qty', val)}
+                  className="w-12 text-gray-500"
+                />
+              )}
+            </div>
+          </td>
+
+          {/* Цена - редактируемый */}
+          <td className="px-3 py-2">
+            <EditableCell
+              value={variant.price ? parseFloat(variant.price) : null}
+              type="number"
+              placeholder="—"
+              suffix=" ₽"
+              onSave={async (val) => onUpdateVariant(variant.id, 'price_min', val)}
+              className="font-medium"
+            />
+          </td>
+
+          {/* Остаток - редактируемый */}
+          <td className="px-3 py-2">
+            <EditableCell
+              value={variant.stock ?? 0}
+              type="number"
+              placeholder="0"
+              onSave={async (val) => onUpdateVariant(variant.id, 'stock_qty', val)}
+            />
+          </td>
+
+          {/* Действия - статус */}
+          <td className="px-3 py-2">
+            <Badge
+              variant={
+                variant.validation === 'ok'
+                  ? 'success'
+                  : variant.validation === 'warn'
+                  ? 'warning'
+                  : 'danger'
+              }
+            >
+              {variant.validation === 'ok' ? 'OK' : variant.validation}
+            </Badge>
+          </td>
+        </tr>
+      ))}
+    </>
   );
 }
 
@@ -260,9 +266,9 @@ function ItemRow({
           )}
         </td>
 
-        {/* Name - single line only */}
+        {/* Тип цветка */}
         <td className="px-3 py-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* Thumbnail */}
             <img
               src={getFlowerImage(item.attributes?.flower_type)}
@@ -274,39 +280,63 @@ function ItemRow({
               }}
             />
             <div className="flex flex-col gap-0.5 min-w-0">
-              <div className="flex items-center gap-1">
-                <EditableCell
-                  value={item.attributes?.clean_name || item.raw_name}
-                  type="text"
-                  onSave={async (val) => onUpdateItem(item.id, 'raw_name', val)}
-                  className="font-medium text-gray-900 truncate"
-                />
-                {item.attributes?._sources?.clean_name === 'ai' && (
-                  <AIIndicator
-                    source="ai"
-                    confidence={item.attributes?._confidences?.clean_name}
-                  />
-                )}
-              </div>
+              <span
+                className="font-medium text-gray-900 truncate cursor-help"
+                title={item.raw_name}
+              >
+                {item.attributes?.flower_type
+                  ? `${item.attributes.flower_type}${item.attributes.subtype ? ` ${item.attributes.subtype.toLowerCase()}` : ''}`
+                  : '—'}
+              </span>
               {/* Bundle warning */}
               {item.attributes?.is_bundle_list && (
-                <div className="flex items-center gap-1">
-                  <span
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 rounded cursor-help"
-                    title={`Найдено ${item.attributes.bundle_varieties?.length || 0} сортов в одной строке. Нажмите чтобы разбить.`}
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    {item.attributes.bundle_varieties?.length || '?'} сортов
-                  </span>
-                </div>
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 rounded cursor-help w-fit"
+                  title={`Найдено ${item.attributes.bundle_varieties?.length || 0} сортов в одной строке.`}
+                >
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {item.attributes.bundle_varieties?.length || '?'} сортов
+                </span>
+              )}
+              {/* Possible duplicate badge */}
+              {item.possible_duplicate && (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded cursor-help w-fit"
+                  title="Найдены другие позиции с таким же типом и сортом. Возможно, это дубликаты."
+                >
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                  </svg>
+                  Дубль?
+                </span>
               )}
             </div>
+          </div>
+        </td>
+
+        {/* Сорт */}
+        <td className="px-3 py-3">
+          <div className="flex items-center gap-1">
+            <EditableCell
+              value={item.attributes?.variety || ''}
+              type="text"
+              placeholder="—"
+              onSave={async (val) => onUpdateItem(item.id, 'variety', val)}
+              className="text-gray-900 truncate"
+            />
+            {item.attributes?._sources?.variety === 'ai' && (
+              <AIIndicator
+                source="ai"
+                confidence={item.attributes?._confidences?.variety}
+              />
+            )}
           </div>
         </td>
 
@@ -325,12 +355,13 @@ function ItemRow({
           </div>
         </td>
 
-        {/* Colors - text comma-separated */}
+        {/* Colors - editable */}
         <td className="px-3 py-3">
           <div className="flex items-center gap-1">
-            <span className="text-gray-600 text-sm truncate">
-              {item.colors && item.colors.length > 0 ? item.colors.join(', ') : '—'}
-            </span>
+            <EditableColorSelect
+              value={item.colors || []}
+              onSave={async (colors) => onUpdateItem(item.id, 'colors', colors)}
+            />
             <AIIndicator
               source={item.attributes?._sources?.colors}
               confidence={item.attributes?._confidences?.colors}
@@ -480,9 +511,9 @@ function ItemRow({
         </td>
       </tr>
 
-      {/* Expanded variants */}
+      {/* Expanded variant rows */}
       {isExpanded && hasMultipleVariants && (
-        <ExpandedRow
+        <ExpandedVariantRows
           variants={item.variants}
           onUpdateVariant={onUpdateVariant}
           hasCheckbox={!!onToggleSelect}
@@ -648,13 +679,22 @@ export default function AssortmentTable({
             )}
             <th className="w-10 px-2 py-3" /> {/* Expand */}
 
-            {/* Название - sortable only */}
+            {/* Тип цветка - sortable */}
             <FilterableHeader
-              label="Название"
-              sortField="raw_name"
+              label="Тип"
+              sortField="flower_type"
               currentSort={sort}
               onSort={onSortChange}
-              width="18%"
+              width="12%"
+            />
+
+            {/* Сорт - sortable */}
+            <FilterableHeader
+              label="Сорт"
+              sortField="variety"
+              currentSort={sort}
+              onSort={onSortChange}
+              width="12%"
             />
 
             {/* Страна - filter + sort */}
