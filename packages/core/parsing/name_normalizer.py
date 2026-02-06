@@ -134,6 +134,19 @@ FLOWER_TYPES_FALLBACK: Dict[str, str] = {
     "робеллини": "Робеллини",
     "тласпи": "Тласпи",
     "флокс": "Флокс",
+    # Дополнительные типы (06.02.2026 - batch 2)
+    "вакс": "Ваксфлауэр",  # alias
+    "кохия": "Кохия",
+    "подсолнух": "Подсолнух",
+    "подсолнечник": "Подсолнух",  # alias
+    "солидаго": "Солидаго",
+    "танацетум": "Танацетум",
+    "эрингиум": "Эрингиум",
+    "скиммия": "Скиммия",
+    "цимбидиум": "Цимбидиум",
+    "ранункулус": "Ранункулюс",  # alias (already have ранункулюс)
+    "питоспорум": "Питтоспорум",  # alias
+    "розенботтел": "Розенботтел",
 }
 
 # Fallback subtypes (synonym -> {name, type_slug})
@@ -182,8 +195,20 @@ FARM_PATTERNS = [
     r"\b(ROSAPRIMA)\b",
     r"\b(ESMERALDA)\b",
     r"\b(AGROCOEX)\b",
+    r"\b(PIANGOFLOR)\b",
+    r"\b(ISABELLA)\b",
     r"\b([A-Z]{2,}(?:\s+[A-Z]{2,})*)\b",  # Fallback: all-caps words at end
 ]
+
+# Known farms that appear in parentheses (case-insensitive)
+FARM_NAMES_IN_PARENS = {
+    "тесса": "TESSA",
+    "tessa": "TESSA",
+    "розаприма": "ROSAPRIMA",
+    "rosaprima": "ROSAPRIMA",
+    "анни роза": "ANNI ROSA",
+    "anni rosa": "ANNI ROSA",
+}
 
 # Color words (for extraction)
 COLORS: Dict[str, str] = {
@@ -441,6 +466,22 @@ def _extract_country(text: str) -> Tuple[Optional[str], str]:
             clean_text = text[: match.start()] + text[match.end() :]
             return COUNTRIES[content], clean_text.strip()
 
+    # Then try country abbreviations (Экв, Гол, Кол, Кен, Изр)
+    abbrev_pattern = r"\b(Экв|Гол|Кол|Кен|Изр)\b"
+    abbrev_match = re.search(abbrev_pattern, text, re.IGNORECASE)
+    if abbrev_match:
+        abbrev = abbrev_match.group(1).lower()
+        country_map = {
+            "экв": "Эквадор",
+            "гол": "Нидерланды",
+            "кол": "Колумбия",
+            "кен": "Кения",
+            "изр": "Израиль",
+        }
+        if abbrev in country_map:
+            clean_text = text[:abbrev_match.start()] + text[abbrev_match.end():]
+            return country_map[abbrev], clean_text.strip()
+
     # Then try plain text
     text_lower = text.lower()
     for key, value in COUNTRIES.items():
@@ -455,6 +496,27 @@ def _extract_country(text: str) -> Tuple[Optional[str], str]:
 
 def _extract_farm(text: str) -> Tuple[Optional[str], str]:
     """Extract farm name and return remaining text."""
+
+    # Pattern 1: Farm codes with + signs in parentheses (СТАР+КОРАЗОН+МАТИЗ+...)
+    # These are lists of farm codes separated by +
+    plus_pattern = r"\s*\(([А-ЯA-Z][А-ЯA-Zа-яa-z\s]*(?:\+[А-ЯA-Zа-яa-z\s]+){2,})\)\s*"
+    plus_match = re.search(plus_pattern, text)
+    if plus_match:
+        farm = plus_match.group(1).strip()
+        # Join with space to avoid concatenation issues like "50смЭкв"
+        clean_text = text[:plus_match.start()].rstrip() + " " + text[plus_match.end():].lstrip()
+        return farm, clean_text.strip()
+
+    # Pattern 2: Known farm names in parentheses (ТЕССА, РОЗАПРИМА, etc.)
+    for farm_key, farm_name in FARM_NAMES_IN_PARENS.items():
+        pattern = rf"\s*\({re.escape(farm_key)}\)\s*"
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            # Join with space to avoid concatenation issues
+            clean_text = text[:match.start()].rstrip() + " " + text[match.end():].lstrip()
+            return farm_name, clean_text.strip()
+
+    # Pattern 3: Standard farm patterns (FRAMA FLOWERS, NARANJO, etc.)
     for pattern in FARM_PATTERNS[:-1]:  # Skip fallback pattern first
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
@@ -561,11 +623,17 @@ def _clean_variety(text: str) -> str:
     if ")" in text and "(" not in text:
         text = re.sub(r"^[^(]*\)\s*", "", text)
 
-    # Remove trailing numbers that might be leftover pack qty
-    text = re.sub(r"\s+\d{1,3}\s*$", "", text)
+    # Remove trailing numbers that might be leftover pack qty (including decimals like 4.5, 5.5)
+    text = re.sub(r"\s+\d{1,3}(?:\.\d+)?\s*$", "", text)
 
     # Remove country abbreviations like "Экв", "Гол", "Кол" at end
     text = re.sub(r"\s+(Экв|Гол|Кол|Кен|Изр)\s*$", "", text, flags=re.IGNORECASE)
+
+    # Remove common noise words at end
+    text = re.sub(r"\s+(дв|од)\s*$", "", text, flags=re.IGNORECASE)  # дв=двойной, од=одинарный
+
+    # Remove "N пуч" (number of bunches) anywhere
+    text = re.sub(r"\s+\d{1,2}\s*пуч\b", "", text, flags=re.IGNORECASE)
 
     # Remove slashes that might remain
     text = re.sub(r"[/\\]+", " ", text)
@@ -720,6 +788,27 @@ def _extract_pack_qty(text: str) -> Tuple[Optional[int], str]:
         if 1 <= qty <= 50:
             pack_qty = qty
         text = text[:match5.start()].strip()
+        return pack_qty, text
+
+    # Pattern 6: "(1 б.)", "(1 банч)", "(1 пуч)" - count with abbreviation
+    pattern6 = r"\s*\((\d{1,2})\s*(?:б\.|банч|пуч)\)\s*$"
+    match6 = re.search(pattern6, text, re.IGNORECASE)
+    if match6:
+        qty = int(match6.group(1))
+        if 1 <= qty <= 50:
+            pack_qty = qty
+        text = text[:match6.start()].strip()
+        return pack_qty, text
+
+    # Pattern 7: "(N пуч)" - number of bunches anywhere
+    pattern7 = r"\s*\((\d{1,2})\s*пуч\)\s*"
+    match7 = re.search(pattern7, text, re.IGNORECASE)
+    if match7:
+        qty = int(match7.group(1))
+        if 1 <= qty <= 50:
+            pack_qty = qty
+        text = text[:match7.start()] + text[match7.end():]
+        text = text.strip()
         return pack_qty, text
 
     return pack_qty, text
