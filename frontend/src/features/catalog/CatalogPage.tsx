@@ -197,7 +197,7 @@ export default function CatalogPage() {
           // Адаптивная логика: поштучно vs упаковками
           const isPackSale = !!offer.pack_qty;
           const packQty = offer.pack_qty || 1;
-          const pricePerUnit = parseFloat(offer.price_min) || 0;
+          const pricePerUnit = Number(offer.price_min) || 0;
           const packPrice = isPackSale ? pricePerUnit * packQty : null;
           const unitLabel = isPackSale ? 'упак.' : 'шт';
 
