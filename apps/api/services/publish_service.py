@@ -173,15 +173,29 @@ class PublishService:
             if supplier_item and supplier_item.attributes:
                 display_title = supplier_item.attributes.get("clean_name")
                 # Fallback: build from attributes if clean_name not set
+                # Format: Тип + Субтип + Сорт + Страна + Цвет + Длина
                 if not display_title:
                     attrs = supplier_item.attributes
                     parts = []
+                    # Тип цветка
                     if attrs.get("flower_type"):
                         parts.append(attrs["flower_type"])
+                    # Субтип (кустовая, спрей)
                     if attrs.get("subtype"):
                         parts.append(attrs["subtype"].lower())
+                    # Сорт
                     if attrs.get("variety"):
                         parts.append(attrs["variety"])
+                    # Страна
+                    if attrs.get("origin_country"):
+                        parts.append(attrs["origin_country"])
+                    # Только первый цвет
+                    colors = attrs.get("colors", [])
+                    if colors and len(colors) > 0:
+                        parts.append(colors[0])
+                    # Длина из candidate
+                    if candidate.length_cm:
+                        parts.append(f"{candidate.length_cm} см")
                     display_title = " ".join(parts) if parts else None
 
             # Create new offer

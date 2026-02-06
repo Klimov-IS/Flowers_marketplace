@@ -20,11 +20,8 @@ import Button from '../../components/ui/Button';
 import FilterSidebar from './components/FilterSidebar';
 import { getFlowerImage, getDefaultFlowerImage } from '../../utils/flowerImages';
 import {
-  getCountryFlag,
-  getCountryName,
   formatPackInfo,
   formatTier,
-  formatColors,
 } from '../../utils/catalogFormatters';
 
 export default function CatalogPage() {
@@ -191,7 +188,6 @@ export default function CatalogPage() {
         {data?.offers.map((offer) => {
           const packInfo = formatPackInfo(offer.pack_type, offer.pack_qty);
           const tierInfo = formatTier(offer.tier_min_qty, offer.tier_max_qty);
-          const colorsText = formatColors(offer.colors);
 
           return (
             <Card key={offer.id} className="p-4 flex flex-col h-full">
@@ -208,49 +204,32 @@ export default function CatalogPage() {
                 />
               </div>
 
-              {/* Content Block */}
+              {/* Content Block - только название */}
               <div className="flex-grow">
-                {/* Title - первым */}
-                <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2 min-h-[2.5rem]">
+                {/* Title - полное название: Тип + Субтип + Сорт + Страна + Цвет + Длина */}
+                <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2 min-h-[3rem]">
                   {offer.display_title || offer.sku.title}
                 </h3>
-
-                {/* Country - под названием */}
-                {offer.origin_country && (
-                  <p className="text-xs text-gray-500 mb-1">
-                    <span className="mr-1">{getCountryFlag(offer.origin_country)}</span>
-                    {getCountryName(offer.origin_country)}
-                  </p>
-                )}
-
-                {/* Colors */}
-                {colorsText && (
-                  <p className="text-sm text-gray-600 mb-1 truncate">{colorsText}</p>
-                )}
-
-                {/* Length & Pack */}
-                <p className="text-xs text-gray-500 mb-2">
-                  {offer.length_cm && <span>{offer.length_cm} см</span>}
-                  {offer.length_cm && packInfo && <span className="mx-1">·</span>}
-                  {packInfo && <span>{packInfo}</span>}
-                  {!offer.length_cm && !packInfo && <span>—</span>}
-                </p>
+                {/* Убрано: country, colors, length - всё теперь в display_title */}
               </div>
 
               {/* Footer Block - pinned to bottom */}
               <div className="mt-auto pt-3 border-t border-gray-100">
-                {/* Price Block - compact with aligned metrics */}
-                <div className="flex justify-between items-start mb-2 min-h-[44px]">
+                {/* Price Block - цена + упаковка + tiers */}
+                <div className="flex justify-between items-start mb-2 min-h-[36px]">
                   <span className="text-2xl font-bold text-primary-600">
                     {offer.price_min} ₽
                   </span>
                   <div className="text-right">
-                    <p className="text-xs text-gray-500">
-                      {offer.stock_qty ? `Ост: ${offer.stock_qty}` : '—'}
-                    </p>
-                    {tierInfo && (
-                      <p className="text-[10px] text-green-600">{tierInfo}</p>
+                    {/* Упаковка рядом с ценой */}
+                    {packInfo && (
+                      <p className="text-xs text-gray-600">{packInfo}</p>
                     )}
+                    {/* Tiers (мин. заказ) */}
+                    {tierInfo && (
+                      <p className="text-xs text-green-600">{tierInfo}</p>
+                    )}
+                    {/* Убран: stock_qty (остаток) */}
                   </div>
                 </div>
 
