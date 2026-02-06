@@ -451,6 +451,11 @@ class ImportService:
             supplier_item.raw_name = raw_name
             supplier_item.name_norm = name_norm
 
+            # Restore to active if was deleted (re-import should reactivate)
+            if supplier_item.status == "deleted":
+                supplier_item.status = "active"
+                supplier_item.deleted_at = None
+
             # Merge attributes: preserve locked fields and manual sources
             existing_attrs = supplier_item.attributes or {}
             locked_fields = existing_attrs.get("_locked", [])
@@ -617,6 +622,11 @@ class ImportService:
             # Update existing - preserve locked fields and manual changes
             supplier_item.last_import_batch_id = import_batch_id
             supplier_item.raw_name = raw_name
+
+            # Restore to active if was deleted (re-import should reactivate)
+            if supplier_item.status == "deleted":
+                supplier_item.status = "active"
+                supplier_item.deleted_at = None
             supplier_item.name_norm = name_norm
 
             # Merge attributes: preserve locked fields and manual sources
