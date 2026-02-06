@@ -232,7 +232,7 @@ class Offer(Base, UUIDMixin, TimestampMixin):
 
     # Publishing
     is_active: Mapped[bool] = mapped_column(nullable=False, default=True, index=True)
-    published_at: Mapped[str] = mapped_column(nullable=False, server_default="now()")
+    published_at: Mapped[datetime] = mapped_column(nullable=False, server_default="now()")
 
     # Relationships
     supplier: Mapped["Supplier"] = relationship("Supplier", back_populates="offers")
