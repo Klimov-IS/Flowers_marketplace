@@ -10,13 +10,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.logging_config import get_logger
 from apps.api.models import (
     ImportBatch,
+    NormalizedSKU,
     OfferCandidate,
     ParseEvent,
     ParseRun,
     RawRow,
+    SKUMapping,
     SupplierItem,
 )
 from apps.api.services.ai_enrichment_service import run_ai_enrichment_for_batch
+from apps.api.services.publish_service import PublishService
 from packages.core.parsing import (
     detect_matrix_format,
     extract_length_cm,
@@ -143,7 +146,28 @@ class ImportService:
                 )
                 summary["ai_enrichment"] = {"status": "error", "error": str(e)}
 
-            # Stage 5: Finalize
+            # Stage 5: Auto-create SKU mappings for new supplier items
+            try:
+                mapping_result = await self._auto_create_sku_mappings(
+                    supplier_id=supplier_id,
+                    import_batch_id=import_batch.id,
+                )
+                summary["auto_mappings"] = mapping_result
+                logger.info(
+                    "auto_mappings_created",
+                    batch_id=str(import_batch.id),
+                    skus_created=mapping_result.get("skus_created", 0),
+                    mappings_created=mapping_result.get("mappings_created", 0),
+                )
+            except Exception as e:
+                logger.warning(
+                    "auto_mappings_error",
+                    batch_id=str(import_batch.id),
+                    error=str(e),
+                )
+                summary["auto_mappings"] = {"status": "error", "error": str(e)}
+
+            # Stage 6: Finalize parsing
             parse_run.finished_at = datetime.utcnow()
             parse_run.summary = summary
             import_batch.status = "parsed"
@@ -155,6 +179,25 @@ class ImportService:
                 batch_id=str(import_batch.id),
                 summary=summary,
             )
+
+            # Stage 7: Auto-publish offers
+            try:
+                publish_service = PublishService(self.db)
+                publish_result = await publish_service.publish_supplier_offers(supplier_id)
+                await self.db.commit()
+                logger.info(
+                    "auto_publish_completed",
+                    batch_id=str(import_batch.id),
+                    offers_created=publish_result.get("offers_created", 0),
+                    offers_deactivated=publish_result.get("offers_deactivated", 0),
+                )
+            except Exception as e:
+                logger.warning(
+                    "auto_publish_error",
+                    batch_id=str(import_batch.id),
+                    error=str(e),
+                )
+                # Don't fail the import if publish fails
 
             return import_batch
 
@@ -635,6 +678,100 @@ class ImportService:
             payload=payload or {},
         )
         self.db.add(event)
+
+    async def _auto_create_sku_mappings(
+        self,
+        supplier_id: UUID,
+        import_batch_id: UUID,
+    ) -> Dict:
+        """
+        Auto-create SKU mappings for supplier items from import batch.
+
+        For each supplier_item without a confirmed mapping:
+        1. Find or create NormalizedSKU based on flower_type + variety
+        2. Create SKUMapping with status='confirmed'
+
+        Args:
+            supplier_id: Supplier UUID
+            import_batch_id: Import batch UUID
+
+        Returns:
+            Dict with counts: skus_created, mappings_created, skipped
+        """
+        from decimal import Decimal
+
+        result = {
+            "skus_created": 0,
+            "mappings_created": 0,
+            "skipped": 0,
+        }
+
+        # Find supplier items from this batch without confirmed mappings
+        stmt = (
+            select(SupplierItem)
+            .outerjoin(
+                SKUMapping,
+                (SKUMapping.supplier_item_id == SupplierItem.id)
+                & (SKUMapping.status == "confirmed"),
+            )
+            .where(
+                SupplierItem.supplier_id == supplier_id,
+                SupplierItem.last_import_batch_id == import_batch_id,
+                SKUMapping.id.is_(None),  # No confirmed mapping
+            )
+        )
+        items_result = await self.db.execute(stmt)
+        supplier_items = items_result.scalars().all()
+
+        for item in supplier_items:
+            attrs = item.attributes or {}
+            flower_type = attrs.get("flower_type")
+            variety = attrs.get("variety")
+
+            if not flower_type:
+                # Can't create SKU without flower_type
+                result["skipped"] += 1
+                continue
+
+            # Find or create NormalizedSKU
+            sku_stmt = select(NormalizedSKU).where(
+                NormalizedSKU.product_type == flower_type,
+                NormalizedSKU.variety == variety,
+            )
+            sku_result = await self.db.execute(sku_stmt)
+            sku = sku_result.scalar_one_or_none()
+
+            if not sku:
+                # Create new NormalizedSKU
+                title_parts = [flower_type]
+                if variety:
+                    title_parts.append(variety)
+                title = " ".join(title_parts)
+
+                sku = NormalizedSKU(
+                    product_type=flower_type,
+                    variety=variety,
+                    color=None,
+                    title=title,
+                    meta={},
+                )
+                self.db.add(sku)
+                await self.db.flush()
+                result["skus_created"] += 1
+
+            # Create confirmed mapping
+            mapping = SKUMapping(
+                supplier_item_id=item.id,
+                normalized_sku_id=sku.id,
+                method="rule",
+                confidence=Decimal("0.900"),
+                status="confirmed",
+            )
+            self.db.add(mapping)
+            result["mappings_created"] += 1
+
+        await self.db.flush()
+        return result
 
     async def get_import_summary(self, import_batch_id: UUID) -> Optional[Dict]:
         """
