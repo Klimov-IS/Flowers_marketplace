@@ -82,3 +82,55 @@ export interface SortState {
   field: string | null;
   direction: 'asc' | 'desc' | null;
 }
+
+// ============================================================================
+// Flat table types (1 row = 1 variant = 1 price)
+// ============================================================================
+
+export interface FlatOfferVariant {
+  // OfferCandidate fields (unique per row)
+  variant_id: string;
+  length_cm: number | null;
+  pack_type: string | null;
+  pack_qty: number | null;
+  price: string;
+  stock: number | null;
+  validation: 'ok' | 'warn' | 'error';
+
+  // SupplierItem fields (duplicated for each variant)
+  item_id: string;
+  raw_name: string;
+  flower_type: string | null;
+  subtype: string | null;
+  variety: string | null;
+  origin_country: string | null;
+  colors: string[];
+  item_status: string;
+  source_file: string | null;
+  possible_duplicate: boolean;
+}
+
+export interface FlatItemsResponse {
+  items: FlatOfferVariant[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+export interface FlatItemsParams {
+  supplier_id: string;
+  q?: string;
+  page?: number;
+  per_page?: number;
+  status?: string[];
+  origin_country?: (string | null)[];
+  colors?: (string | null)[];
+  price_min?: number;
+  price_max?: number;
+  length_min?: number;
+  length_max?: number;
+  stock_min?: number;
+  stock_max?: number;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
+}

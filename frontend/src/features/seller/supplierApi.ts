@@ -5,6 +5,8 @@ import type {
   SupplierItemsParams,
   SupplierItemsResponse,
   OfferVariant,
+  FlatItemsParams,
+  FlatItemsResponse,
 } from '../../types/supplierItem';
 
 // Update request types
@@ -132,6 +134,81 @@ export const supplierApi = createApi({
         return `/admin/suppliers/${supplier_id}/items${queryString ? `?${queryString}` : ''}`;
       },
       providesTags: ['SupplierItems'],
+    }),
+
+    // Flat Items (1 row = 1 variant)
+    getFlatItems: builder.query<FlatItemsResponse, FlatItemsParams>({
+      query: ({
+        supplier_id,
+        q,
+        page,
+        per_page,
+        status,
+        origin_country,
+        colors,
+        price_min,
+        price_max,
+        length_min,
+        length_max,
+        stock_min,
+        stock_max,
+        sort_by,
+        sort_dir,
+      }) => {
+        const params = new URLSearchParams();
+        if (q) params.append('q', q);
+        if (page) params.append('page', String(page));
+        if (per_page) params.append('per_page', String(per_page));
+        if (status && status.length > 0) {
+          status.forEach(s => params.append('status', s));
+        }
+        // Country filter
+        if (origin_country && origin_country.length > 0) {
+          origin_country.forEach(c => {
+            if (c === null) {
+              params.append('origin_country', '__null__');
+            } else {
+              params.append('origin_country', c);
+            }
+          });
+        }
+        // Color filter
+        if (colors && colors.length > 0) {
+          colors.forEach(c => {
+            if (c === null) {
+              params.append('colors', '__null__');
+            } else {
+              params.append('colors', c);
+            }
+          });
+        }
+        // Range filters
+        if (price_min !== undefined) params.append('price_min', String(price_min));
+        if (price_max !== undefined) params.append('price_max', String(price_max));
+        if (length_min !== undefined) params.append('length_min', String(length_min));
+        if (length_max !== undefined) params.append('length_max', String(length_max));
+        if (stock_min !== undefined) params.append('stock_min', String(stock_min));
+        if (stock_max !== undefined) params.append('stock_max', String(stock_max));
+        // Sorting
+        if (sort_by) params.append('sort_by', sort_by);
+        if (sort_dir) params.append('sort_dir', sort_dir);
+
+        const queryString = params.toString();
+        return `/admin/suppliers/${supplier_id}/flat-items${queryString ? `?${queryString}` : ''}`;
+      },
+      providesTags: ['SupplierItems'],
+    }),
+
+    // Delete single offer candidate (variant)
+    deleteOfferCandidate: builder.mutation<
+      { id: string; message: string },
+      string
+    >({
+      query: (candidateId) => ({
+        url: `/admin/offer-candidates/${candidateId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['SupplierItems'],
     }),
 
     getSupplierOrders: builder.query<
@@ -338,6 +415,8 @@ export const supplierApi = createApi({
 
 export const {
   useGetSupplierItemsQuery,
+  useGetFlatItemsQuery,
+  useDeleteOfferCandidateMutation,
   useGetSupplierOrdersQuery,
   useConfirmOrderMutation,
   useRejectOrderMutation,

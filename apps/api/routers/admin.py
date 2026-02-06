@@ -177,6 +177,44 @@ class SupplierItemsListResponse(BaseModel):
     per_page: int
 
 
+# Flat table schemas (1 row = 1 variant)
+class FlatOfferVariantResponse(BaseModel):
+    """Плоская структура: 1 строка = 1 вариант = 1 цена."""
+
+    # OfferCandidate fields (уникальны для каждой строки)
+    variant_id: UUID
+    length_cm: Optional[int] = None
+    pack_type: Optional[str] = None
+    pack_qty: Optional[int] = None
+    price: Decimal
+    stock: Optional[int] = None
+    validation: str = "ok"
+
+    # SupplierItem fields (дублируются на каждый вариант)
+    item_id: UUID
+    raw_name: str
+    flower_type: Optional[str] = None
+    subtype: Optional[str] = None
+    variety: Optional[str] = None
+    origin_country: Optional[str] = None
+    colors: List[str] = []
+    item_status: str
+    source_file: Optional[str] = None
+    possible_duplicate: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class FlatItemsListResponse(BaseModel):
+    """Schema for paginated list of flat offer variants."""
+
+    items: List[FlatOfferVariantResponse]
+    total: int
+    page: int
+    per_page: int
+
+
 # Update schemas for editable table
 class SupplierItemUpdate(BaseModel):
     """Schema for updating a supplier item."""
@@ -561,6 +599,247 @@ async def get_supplier_items(
     )
 
     return SupplierItemsListResponse(
+        items=response_items,
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
+
+
+@router.get("/suppliers/{supplier_id}/flat-items", response_model=FlatItemsListResponse)
+async def get_flat_items(
+    supplier_id: UUID,
+    q: Optional[str] = Query(None, description="Search query for item name"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(50, ge=1, le=100, description="Items per page"),
+    status: Optional[List[str]] = Query(
+        default=["active"],
+        description="Filter by status (active, hidden, deleted). Default: active only"
+    ),
+    # Additional column filters
+    origin_country: Optional[List[str]] = Query(
+        None, description="Filter by origin country (use '__null__' for items without country)"
+    ),
+    colors: Optional[List[str]] = Query(
+        None, description="Filter by color (use '__null__' for items without color)"
+    ),
+    price_min: Optional[Decimal] = Query(None, description="Minimum price filter"),
+    price_max: Optional[Decimal] = Query(None, description="Maximum price filter"),
+    length_min: Optional[int] = Query(None, description="Minimum length filter (cm)"),
+    length_max: Optional[int] = Query(None, description="Maximum length filter (cm)"),
+    stock_min: Optional[int] = Query(None, description="Minimum stock filter"),
+    stock_max: Optional[int] = Query(None, description="Maximum stock filter"),
+    sort_by: Optional[str] = Query(
+        None,
+        description="Sort by field (raw_name, origin_country, price, length_cm, stock)"
+    ),
+    sort_dir: Optional[str] = Query(
+        "asc",
+        description="Sort direction (asc, desc)"
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> FlatItemsListResponse:
+    """
+    Get paginated list of flat offer variants (1 row = 1 variant = 1 price).
+
+    Joins offer_candidates with supplier_items for a flat table structure.
+    Each row represents a single variant with its associated item data.
+    """
+    from sqlalchemy import text
+
+    # Verify supplier exists
+    supplier_result = await db.execute(
+        select(Supplier).where(Supplier.id == supplier_id)
+    )
+    supplier = supplier_result.scalar_one_or_none()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    # Build dynamic WHERE clause
+    where_clauses = ["si.supplier_id = :supplier_id"]
+    params = {"supplier_id": supplier_id}
+
+    # Status filter
+    if status:
+        where_clauses.append("si.status = ANY(:status_list)")
+        params["status_list"] = status
+
+    # Search filter
+    if q:
+        where_clauses.append(
+            "(LOWER(si.raw_name) LIKE :search OR LOWER(si.name_norm) LIKE :search)"
+        )
+        params["search"] = f"%{q.lower()}%"
+
+    # Origin country filter
+    if origin_country:
+        include_null = "__null__" in origin_country
+        actual_countries = [c for c in origin_country if c != "__null__"]
+        if include_null and actual_countries:
+            where_clauses.append(
+                "(si.attributes->>'origin_country' = ANY(:origin_countries) OR si.attributes->>'origin_country' IS NULL)"
+            )
+            params["origin_countries"] = actual_countries
+        elif include_null:
+            where_clauses.append("si.attributes->>'origin_country' IS NULL")
+        elif actual_countries:
+            where_clauses.append("si.attributes->>'origin_country' = ANY(:origin_countries)")
+            params["origin_countries"] = actual_countries
+
+    # Colors filter (JSONB array contains any)
+    if colors:
+        actual_colors = [c for c in colors if c != "__null__"]
+        if actual_colors:
+            where_clauses.append("si.attributes->'colors' ?| :colors_arr")
+            params["colors_arr"] = actual_colors
+
+    # Price filter
+    if price_min is not None:
+        where_clauses.append("oc.price_min >= :price_min")
+        params["price_min"] = price_min
+    if price_max is not None:
+        where_clauses.append("oc.price_min <= :price_max")
+        params["price_max"] = price_max
+
+    # Length filter
+    if length_min is not None:
+        where_clauses.append("oc.length_cm >= :length_min")
+        params["length_min"] = length_min
+    if length_max is not None:
+        where_clauses.append("oc.length_cm <= :length_max")
+        params["length_max"] = length_max
+
+    # Stock filter
+    if stock_min is not None:
+        where_clauses.append("COALESCE(oc.stock_qty, 0) >= :stock_min")
+        params["stock_min"] = stock_min
+    if stock_max is not None:
+        where_clauses.append("COALESCE(oc.stock_qty, 0) <= :stock_max")
+        params["stock_max"] = stock_max
+
+    where_sql = " AND ".join(where_clauses)
+
+    # Sort clause
+    sort_map = {
+        "raw_name": "si.raw_name",
+        "origin_country": "si.attributes->>'origin_country'",
+        "price": "oc.price_min",
+        "length_cm": "oc.length_cm",
+        "stock": "oc.stock_qty",
+    }
+    order_col = sort_map.get(sort_by, "si.raw_name")
+    order_dir = "DESC NULLS LAST" if sort_dir == "desc" else "ASC NULLS LAST"
+    order_sql = f"{order_col} {order_dir}, oc.length_cm ASC NULLS LAST"
+
+    # Count query
+    count_sql = text(f"""
+        SELECT COUNT(*)
+        FROM offer_candidates oc
+        JOIN supplier_items si ON oc.supplier_item_id = si.id
+        WHERE {where_sql}
+    """)
+    count_result = await db.execute(count_sql, params)
+    total = count_result.scalar() or 0
+
+    # Data query with pagination
+    offset = (page - 1) * per_page
+    data_sql = text(f"""
+        SELECT
+            oc.id as variant_id,
+            oc.length_cm,
+            oc.pack_type,
+            oc.pack_qty,
+            oc.price_min as price,
+            oc.stock_qty as stock,
+            oc.validation,
+
+            si.id as item_id,
+            si.raw_name,
+            si.attributes->>'flower_type' as flower_type,
+            si.attributes->>'subtype' as subtype,
+            si.attributes->>'variety' as variety,
+            si.attributes->>'origin_country' as origin_country,
+            si.attributes->'colors' as colors_json,
+            si.status as item_status,
+            ib.source_filename as source_file
+
+        FROM offer_candidates oc
+        JOIN supplier_items si ON oc.supplier_item_id = si.id
+        LEFT JOIN import_batches ib ON si.last_import_batch_id = ib.id
+        WHERE {where_sql}
+        ORDER BY {order_sql}
+        LIMIT :limit OFFSET :offset
+    """)
+    params["limit"] = per_page
+    params["offset"] = offset
+
+    data_result = await db.execute(data_sql, params)
+    rows = data_result.all()
+
+    # Get duplicate combos for this supplier
+    duplicate_sql = text("""
+        SELECT
+            attributes->>'flower_type' as ft,
+            attributes->>'variety' as var
+        FROM supplier_items
+        WHERE supplier_id = :supplier_id
+            AND status != 'deleted'
+            AND attributes->>'flower_type' IS NOT NULL
+            AND attributes->>'variety' IS NOT NULL
+        GROUP BY attributes->>'flower_type', attributes->>'variety'
+        HAVING COUNT(*) > 1
+    """)
+    duplicate_result = await db.execute(duplicate_sql, {"supplier_id": supplier_id})
+    duplicate_combos = {(row.ft, row.var) for row in duplicate_result.all()}
+
+    # Build response items
+    import json
+    response_items = []
+    for row in rows:
+        # Parse colors from JSONB
+        colors_list = []
+        if row.colors_json:
+            try:
+                colors_list = json.loads(row.colors_json) if isinstance(row.colors_json, str) else row.colors_json
+            except (json.JSONDecodeError, TypeError):
+                colors_list = []
+
+        # Check if duplicate
+        is_duplicate = bool(
+            row.flower_type and row.variety and (row.flower_type, row.variety) in duplicate_combos
+        )
+
+        response_items.append(
+            FlatOfferVariantResponse(
+                variant_id=row.variant_id,
+                length_cm=row.length_cm,
+                pack_type=row.pack_type,
+                pack_qty=row.pack_qty,
+                price=row.price,
+                stock=row.stock,
+                validation=row.validation or "ok",
+                item_id=row.item_id,
+                raw_name=row.raw_name,
+                flower_type=row.flower_type,
+                subtype=row.subtype,
+                variety=row.variety,
+                origin_country=row.origin_country,
+                colors=colors_list,
+                item_status=row.item_status,
+                source_file=row.source_file,
+                possible_duplicate=is_duplicate,
+            )
+        )
+
+    logger.info(
+        "flat_items_fetched",
+        supplier_id=str(supplier_id),
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
+
+    return FlatItemsListResponse(
         items=response_items,
         total=total,
         page=page,
@@ -1103,6 +1382,52 @@ async def update_offer_candidate(
         price_max=candidate.price_max,
         stock=candidate.stock_qty,
         validation=candidate.validation,
+    )
+
+
+# Delete single offer candidate (variant)
+class VariantDeleteResponse(BaseModel):
+    """Response for variant deletion."""
+    id: UUID
+    message: str
+
+
+@router.delete("/offer-candidates/{candidate_id}", response_model=VariantDeleteResponse)
+async def delete_offer_candidate(
+    candidate_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> VariantDeleteResponse:
+    """
+    Delete a single offer candidate (variant).
+
+    This permanently removes one variant row from the flat table.
+    The parent SupplierItem remains untouched.
+    """
+    # Find the candidate
+    result = await db.execute(
+        select(OfferCandidate).where(OfferCandidate.id == candidate_id)
+    )
+    candidate = result.scalar_one_or_none()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Offer candidate not found")
+
+    # Store ID before deletion
+    deleted_id = candidate.id
+    supplier_item_id = candidate.supplier_item_id
+
+    # Delete the candidate
+    await db.delete(candidate)
+    await db.commit()
+
+    logger.info(
+        "offer_candidate_deleted",
+        candidate_id=str(deleted_id),
+        supplier_item_id=str(supplier_item_id),
+    )
+
+    return VariantDeleteResponse(
+        id=deleted_id,
+        message="Variant deleted successfully",
     )
 
 

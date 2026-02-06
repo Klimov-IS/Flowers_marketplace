@@ -1,23 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  useGetSupplierItemsQuery,
-  useDeleteSupplierItemMutation,
-  useHideSupplierItemMutation,
-  useRestoreSupplierItemMutation,
-  useBulkDeleteItemsMutation,
-  useBulkHideItemsMutation,
-  useBulkRestoreItemsMutation,
+  useGetFlatItemsQuery,
 } from '../supplierApi';
 import { useDebounce } from '../../../hooks/useDebounce';
 import AssortmentTable from './AssortmentTable';
 import SearchBar from './SearchBar';
-import ItemDetailsModal from './ItemDetailsModal';
-import BulkActionsPanel from './BulkActionsPanel';
 import { initialFilters, filtersToParams, STATUS_OPTIONS } from './FilterBar';
 import type { ColumnFilters } from './FilterBar';
 import type { FilterValue, MultiSelectFilterValue } from './ColumnFilter';
 import Button from '../../../components/ui/Button';
-import type { SupplierItem, SortState } from '../../../types/supplierItem';
+import type { SortState } from '../../../types/supplierItem';
 
 interface AssortmentTabProps {
   supplierId: string;
@@ -26,7 +18,6 @@ interface AssortmentTabProps {
 export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
-  const [selectedItem, setSelectedItem] = useState<SupplierItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<ColumnFilters>(initialFilters);
   const [sort, setSort] = useState<SortState>({ field: null, direction: null });
@@ -66,8 +57,8 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
   // Convert filters to API params
   const filterParams = filtersToParams(filters);
 
-  // Fetch items
-  const { data, isLoading, isFetching } = useGetSupplierItemsQuery({
+  // Fetch flat items (1 row = 1 variant)
+  const { data, isLoading, isFetching } = useGetFlatItemsQuery({
     supplier_id: supplierId,
     q: debouncedSearch || undefined,
     page,
@@ -77,79 +68,9 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
     sort_dir: sort.direction || undefined,
   });
 
-  // Item action mutations
-  const [deleteItem] = useDeleteSupplierItemMutation();
-  const [hideItem] = useHideSupplierItemMutation();
-  const [restoreItem] = useRestoreSupplierItemMutation();
-
-  // Bulk action mutations
-  const [bulkDelete, { isLoading: isBulkDeleting }] = useBulkDeleteItemsMutation();
-  const [bulkHide, { isLoading: isBulkHiding }] = useBulkHideItemsMutation();
-  const [bulkRestore, { isLoading: isBulkRestoring }] = useBulkRestoreItemsMutation();
-
   const items = data?.items || [];
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / perPage);
-
-  const handleViewDetails = (item: SupplierItem) => {
-    setSelectedItem(item);
-  };
-
-  const handleCloseModal = () => {
-    setSelectedItem(null);
-  };
-
-  const handleHideItem = async (itemId: string) => {
-    try {
-      await hideItem(itemId).unwrap();
-    } catch (error) {
-      console.error('Failed to hide item:', error);
-    }
-  };
-
-  const handleDeleteItem = async (itemId: string) => {
-    try {
-      await deleteItem(itemId).unwrap();
-    } catch (error) {
-      console.error('Failed to delete item:', error);
-    }
-  };
-
-  const handleRestoreItem = async (itemId: string) => {
-    try {
-      await restoreItem(itemId).unwrap();
-    } catch (error) {
-      console.error('Failed to restore item:', error);
-    }
-  };
-
-  // Bulk action handlers
-  const handleBulkDelete = async () => {
-    try {
-      await bulkDelete(Array.from(selectedIds)).unwrap();
-      setSelectedIds(new Set());
-    } catch (error) {
-      console.error('Failed to bulk delete items:', error);
-    }
-  };
-
-  const handleBulkHide = async () => {
-    try {
-      await bulkHide(Array.from(selectedIds)).unwrap();
-      setSelectedIds(new Set());
-    } catch (error) {
-      console.error('Failed to bulk hide items:', error);
-    }
-  };
-
-  const handleBulkRestore = async () => {
-    try {
-      await bulkRestore(Array.from(selectedIds)).unwrap();
-      setSelectedIds(new Set());
-    } catch (error) {
-      console.error('Failed to bulk restore items:', error);
-    }
-  };
 
   // Filter handlers
   const handleFilterChange = (key: keyof ColumnFilters, value: FilterValue | null) => {
@@ -290,32 +211,16 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
         <div className="text-sm text-gray-500">
           {total > 0 && (
             <span>
-              Найдено: <strong>{total}</strong> товаров
+              Найдено: <strong>{total}</strong> позиций
             </span>
           )}
         </div>
       </div>
 
-      {/* Bulk Actions Panel */}
-      <BulkActionsPanel
-        selectedCount={selectedIds.size}
-        onBulkDelete={handleBulkDelete}
-        onBulkHide={handleBulkHide}
-        onBulkRestore={handleBulkRestore}
-        onClearSelection={() => setSelectedIds(new Set())}
-        isDeleting={isBulkDeleting}
-        isHiding={isBulkHiding}
-        isRestoring={isBulkRestoring}
-      />
-
       {/* Table */}
       <AssortmentTable
         items={items}
         isLoading={isLoading}
-        onViewDetails={handleViewDetails}
-        onHideItem={handleHideItem}
-        onDeleteItem={handleDeleteItem}
-        onRestoreItem={handleRestoreItem}
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
         filters={filters}
@@ -348,13 +253,6 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
           </div>
         </div>
       )}
-
-      {/* Item Details Modal */}
-      <ItemDetailsModal
-        item={selectedItem}
-        isOpen={!!selectedItem}
-        onClose={handleCloseModal}
-      />
     </div>
   );
 }
