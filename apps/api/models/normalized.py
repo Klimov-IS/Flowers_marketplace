@@ -1,4 +1,5 @@
 """Normalized layer models: SKUs, dictionary, mappings, tasks."""
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -126,7 +127,7 @@ class SKUMapping(Base, UUIDMixin, TimestampMixin):
         index=True,
     )
     decided_by: Mapped[UUID | None] = mapped_column(nullable=True)
-    decided_at: Mapped[str | None] = mapped_column(nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
