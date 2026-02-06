@@ -232,23 +232,16 @@ export default function CatalogPage() {
               <div className="mt-auto pt-3 border-t border-gray-100">
                 {/* Price Block - адаптивное отображение */}
                 <div className="mb-2">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-2xl font-bold text-primary-600">
-                        {offer.price_min} ₽
-                      </span>
-                      <span className="text-sm text-gray-500"> / шт</span>
-                    </div>
-                    {isPackSale && (
-                      <div className="text-right">
-                        <p className="text-xs text-gray-600">упак. {packQty} шт</p>
-                      </div>
-                    )}
+                  <div>
+                    <span className="text-2xl font-bold text-primary-600">
+                      {offer.price_min} ₽
+                    </span>
+                    <span className="text-sm text-gray-500"> / шт</span>
                   </div>
-                  {/* Цена за упаковку */}
+                  {/* Цена за упаковку с количеством */}
                   {packPrice && (
                     <p className="text-sm text-gray-600">
-                      = {packPrice.toLocaleString('ru-RU')} ₽ / упак.
+                      = {packPrice.toLocaleString('ru-RU')} ₽ / упак. {packQty} шт
                     </p>
                   )}
                   {/* Tiers (мин. заказ) */}
