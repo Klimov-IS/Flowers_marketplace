@@ -59,8 +59,8 @@ function ChevronIcon({ open }: { open: boolean }) {
 }
 
 export default function FilterSidebar({ filters, onFilterChange, onReset }: FilterSidebarProps) {
-  const [typesOpen, setTypesOpen] = useState(true);
-  const [countriesOpen, setCountriesOpen] = useState(true);
+  const [typesOpen, setTypesOpen] = useState(false);
+  const [countriesOpen, setCountriesOpen] = useState(false);
 
   const handleProductTypeChange = (value: string) => {
     onFilterChange('product_type', filters.product_type === value ? undefined : value);

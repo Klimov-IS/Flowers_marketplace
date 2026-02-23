@@ -45,6 +45,7 @@ sudo systemctl enable flower-bot
 sudo nginx -t && sudo systemctl reload nginx
 
 echo "=== DEPLOY COMPLETE ==="
-echo "Frontend: http://158.160.217.236/flower/"
-echo "API:      http://158.160.217.236/flower/api/"
+echo "Frontend: https://вцвет.рф/flower/"
+echo "API:      https://вцвет.рф/flower/api/"
+echo "IP:       http://158.160.217.236/flower/"
 echo "Bot:      flower-bot.service ($(sudo systemctl is-active flower-bot))"

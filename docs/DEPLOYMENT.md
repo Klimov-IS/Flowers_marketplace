@@ -4,10 +4,12 @@
 
 | Параметр | Значение |
 |----------|----------|
+| **Домен** | вцвет.рф (`xn--b1aaj6cr.xn--p1ai`) |
 | **IP** | 158.160.217.236 |
 | **Хостинг** | Yandex Cloud |
 | **ОС** | Ubuntu 24.04 LTS |
 | **Hostname** | wb-reputation-prod |
+| **CDN/SSL** | Cloudflare (Full Strict) |
 
 ## SSH доступ
 
@@ -26,7 +28,7 @@ ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
 | Проект | Путь | Порт | URL |
 |--------|------|------|-----|
 | **WB-Reputation** | /var/www/wb-reputation | 3000 (PM2) | http://158.160.217.236/ |
-| **Flower Market** | /opt/flower-market | 8080 (systemd) | http://158.160.217.236/flower/ |
+| **Flower Market** | /opt/flower-market | 8080 (systemd) | https://вцвет.рф/flower/ |
 
 ### Важно
 - Проекты **НЕ влияют** друг на друга
@@ -57,7 +59,7 @@ ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
 | **API** | systemd | 8080 | `sudo systemctl {start|stop|restart} flower-api` |
 | **Telegram Bot** | systemd | 8081 | `sudo systemctl {start|stop|restart} flower-bot` |
 | **PostgreSQL** | Docker | 5433 | `docker compose -f docker-compose.db.yml {up|down}` |
-| **Nginx** | systemd | 80 | `sudo systemctl reload nginx` |
+| **Nginx** | systemd | 80, 443 | `sudo systemctl reload nginx` |
 
 ---
 
@@ -225,7 +227,7 @@ API_PORT=8080
 JWT_SECRET_KEY=<generated>
 
 # CORS
-CORS_ORIGINS=http://158.160.217.236
+CORS_ORIGINS=http://158.160.217.236,https://xn--b1aaj6cr.xn--p1ai
 
 # AI Service (DeepSeek)
 DEEPSEEK_API_KEY=<your-deepseek-api-key>
@@ -236,7 +238,7 @@ AI_MAX_ROWS=5000
 
 # Telegram Bot
 TELEGRAM_BOT_TOKEN=<from-botfather>
-TELEGRAM_WEBHOOK_URL=https://158.160.217.236/flower/bot/webhook
+TELEGRAM_WEBHOOK_URL=https://xn--b1aaj6cr.xn--p1ai/flower/bot/webhook
 TELEGRAM_WEBHOOK_SECRET=<random-32-char>
 TELEGRAM_INTERNAL_TOKEN=<random-32-char>
 BOT_MODE=webhook
@@ -245,28 +247,45 @@ API_BASE_URL=http://127.0.0.1:8080
 
 ### Nginx конфигурация
 
-Файл: `/etc/nginx/sites-available/wb-reputation`
+Файл: `/etc/nginx/sites-enabled/wb-reputation`
+Локальная копия: `infra/nginx-wb-reputation.conf`
 
+Два server-блока для Flower Market:
+
+1. **HTTPS вцвет.рф** (основной, через Cloudflare):
 ```nginx
-# Flower Market блок
-location /flower/api/ {
-    proxy_pass http://127.0.0.1:8080/;
-}
-
-location /flower/bot/webhook {
-    proxy_pass http://127.0.0.1:8081/webhook;
-}
-
-location /flower/assets/ {
-    alias /opt/flower-market/frontend/dist/assets/;
-    expires 1y;
-}
-
-location /flower/ {
-    alias /opt/flower-market/frontend/dist/;
-    try_files $uri $uri/ /flower/index.html;
+server {
+    listen 443 ssl http2;
+    server_name xn--b1aaj6cr.xn--p1ai;
+    ssl_certificate /etc/ssl/flower-market/origin.crt;
+    ssl_certificate_key /etc/ssl/flower-market/origin.key;
+    # ... Flower Market locations (/flower/*)
 }
 ```
+
+2. **HTTP IP** (обратная совместимость):
+```nginx
+server {
+    listen 80;
+    server_name 158.160.217.236;
+    # ... Flower Market locations (/flower/*)
+    # ... WB-Reputation locations (/)
+}
+```
+
+### SSL сертификат
+
+| Параметр | Значение |
+|----------|----------|
+| **Тип** | Cloudflare Origin Certificate |
+| **Путь cert** | `/etc/ssl/flower-market/origin.crt` |
+| **Путь key** | `/etc/ssl/flower-market/origin.key` |
+| **SAN** | `*.вцвет.рф`, `вцвет.рф` |
+| **Срок действия** | 2026-02-23 — 2041-02-19 |
+| **Cloudflare режим** | Full (strict) |
+
+> **Важно:** Origin Certificate работает ТОЛЬКО через Cloudflare proxy.
+> Прямой доступ по IP использует HTTP (порт 80).
 
 ---
 
@@ -346,13 +365,22 @@ curl http://127.0.0.1:8080/health
 
 ## URLs
 
+### Основные (через домен, HTTPS)
+
+| Ресурс | URL |
+|--------|-----|
+| **Frontend** | https://вцвет.рф/flower/ |
+| **API** | https://вцвет.рф/flower/api/ |
+| **API Docs (Swagger)** | https://вцвет.рф/flower/api/docs |
+| **API Docs (ReDoc)** | https://вцвет.рф/flower/api/redoc |
+| **Health Check** | https://вцвет.рф/flower/api/health |
+
+### Обратная совместимость (IP, HTTP)
+
 | Ресурс | URL |
 |--------|-----|
 | **Frontend** | http://158.160.217.236/flower/ |
 | **API** | http://158.160.217.236/flower/api/ |
-| **API Docs (Swagger)** | http://158.160.217.236/flower/api/docs |
-| **API Docs (ReDoc)** | http://158.160.217.236/flower/api/redoc |
-| **Health Check** | http://158.160.217.236/flower/api/health |
 
 ---
 
@@ -360,3 +388,4 @@ curl http://127.0.0.1:8080/health
 
 - **Репозиторий**: (добавить ссылку на GitHub/GitLab)
 - **Yandex Cloud Console**: https://console.yandex.cloud/
+- **Cloudflare Dashboard**: https://dash.cloudflare.com/ (домен вцвет.рф)

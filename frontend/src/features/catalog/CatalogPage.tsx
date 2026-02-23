@@ -170,6 +170,16 @@ export default function CatalogPage() {
 
   return (
     <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-r from-primary-600 to-purple-600 rounded-lg p-12 text-white mb-8">
+        <h1 className="text-4xl font-bold mb-4">
+          Цветочный маркет
+        </h1>
+        <p className="text-xl opacity-90">
+          Единая платформа для поставщиков и флористов
+        </p>
+      </div>
+
       {/* Main Layout: Sidebar + Content */}
       <div className="flex gap-6">
         {/* Sidebar Filters */}

@@ -9,7 +9,7 @@ from apps.api.config import settings
 
 # JWT settings
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days for MVP
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 

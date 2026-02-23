@@ -181,8 +181,9 @@ sudo docker exec -it flower_postgres psql -U flower_user -d flower_market
 ```
 
 ### URLs
-- **Frontend**: http://158.160.217.236/flower/
-- **API**: http://158.160.217.236/flower/api/
-- **Swagger**: http://158.160.217.236/flower/api/docs
+- **Frontend**: https://вцвет.рф/flower/
+- **API**: https://вцвет.рф/flower/api/
+- **Swagger**: https://вцвет.рф/flower/api/docs
+- **IP (legacy)**: http://158.160.217.236/flower/
 
 Full deployment docs: `/docs/DEPLOYMENT.md`

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAppSelector } from '../../hooks/useAppSelector';
 import { useAppDispatch } from '../../hooks/useAppDispatch';
 import { setUser } from '../auth/authSlice';
@@ -23,7 +24,11 @@ export default function SellerDashboard() {
   const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<TabId>('assortment');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab') as TabId | null;
+  const [activeTab, setActiveTab] = useState<TabId>(
+    tabFromUrl && ['assortment', 'orders', 'profile'].includes(tabFromUrl) ? tabFromUrl : 'assortment'
+  );
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [rejectingOrder, setRejectingOrder] = useState<string | null>(null);
 
@@ -70,15 +75,13 @@ export default function SellerDashboard() {
     }
   };
 
-  // Listen for tab switch from header dropdown
+  // Sync tab from URL search params (e.g. /seller?tab=orders)
   useEffect(() => {
-    const handler = (e: Event) => {
-      const tab = (e as CustomEvent).detail as TabId;
-      if (tab) setActiveTab(tab);
-    };
-    window.addEventListener('seller-tab', handler);
-    return () => window.removeEventListener('seller-tab', handler);
-  }, []);
+    const tab = searchParams.get('tab') as TabId | null;
+    if (tab && ['assortment', 'orders', 'profile'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // Fetch orders and metrics
   const { data: ordersData, isLoading: ordersLoading } = useGetSupplierOrdersQuery(
@@ -172,7 +175,10 @@ export default function SellerDashboard() {
       <TabsNav
         tabs={tabs}
         activeTab={activeTab}
-        onTabChange={(tabId) => setActiveTab(tabId as TabId)}
+        onTabChange={(tabId) => {
+          setActiveTab(tabId as TabId);
+          setSearchParams({ tab: tabId }, { replace: true });
+        }}
       />
 
       {/* Tab Content */}

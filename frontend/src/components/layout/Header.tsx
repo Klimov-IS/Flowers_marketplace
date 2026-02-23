@@ -83,11 +83,7 @@ export default function Header() {
                     {user.role === 'seller' && (
                       <>
                         <Link
-                          to="/seller"
-                          onClick={() => {
-                            // Set tab via URL hash
-                            window.dispatchEvent(new CustomEvent('seller-tab', { detail: 'assortment' }));
-                          }}
+                          to="/seller?tab=assortment"
                           className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                           <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -96,10 +92,7 @@ export default function Header() {
                           Ассортимент
                         </Link>
                         <Link
-                          to="/seller"
-                          onClick={() => {
-                            window.dispatchEvent(new CustomEvent('seller-tab', { detail: 'orders' }));
-                          }}
+                          to="/seller?tab=orders"
                           className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                           <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -108,10 +101,7 @@ export default function Header() {
                           Заказы
                         </Link>
                         <Link
-                          to="/seller"
-                          onClick={() => {
-                            window.dispatchEvent(new CustomEvent('seller-tab', { detail: 'profile' }));
-                          }}
+                          to="/seller?tab=profile"
                           className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                           <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
