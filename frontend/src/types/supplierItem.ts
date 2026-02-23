@@ -109,6 +109,7 @@ export interface FlatOfferVariant {
   source_file: string | null;
   possible_duplicate: boolean;
   has_pending_suggestions: boolean;
+  photo_url: string | null;
 }
 
 export interface FlatItemsResponse {
@@ -135,4 +136,5 @@ export interface FlatItemsParams {
   sort_by?: string;
   sort_dir?: 'asc' | 'desc';
   has_suggestions?: boolean;
+  item_id?: string;
 }

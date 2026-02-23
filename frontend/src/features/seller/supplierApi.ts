@@ -216,6 +216,7 @@ export const supplierApi = createApi({
         sort_by,
         sort_dir,
         has_suggestions,
+        item_id,
       }) => {
         const params = new URLSearchParams();
         if (q) params.append('q', q);
@@ -256,6 +257,8 @@ export const supplierApi = createApi({
         if (sort_dir) params.append('sort_dir', sort_dir);
         // AI suggestions filter
         if (has_suggestions !== undefined) params.append('has_suggestions', String(has_suggestions));
+        // Item ID filter (for product detail modal)
+        if (item_id) params.append('item_id', item_id);
 
         const queryString = params.toString();
         return `/admin/suppliers/${supplier_id}/flat-items${queryString ? `?${queryString}` : ''}`;
@@ -516,6 +519,23 @@ export const supplierApi = createApi({
       }),
       invalidatesTags: ['SupplierItems'],
     }),
+
+    // Photo upload
+    uploadItemPhoto: builder.mutation<
+      { photo_url: string },
+      { itemId: string; file: File }
+    >({
+      query: ({ itemId, file }) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return {
+          url: `/admin/supplier-items/${itemId}/photo`,
+          method: 'POST',
+          body: formData,
+        };
+      },
+      invalidatesTags: ['SupplierItems'],
+    }),
   }),
 });
 
@@ -542,6 +562,8 @@ export const {
   useBulkDeleteItemsMutation,
   useBulkHideItemsMutation,
   useBulkRestoreItemsMutation,
+  // Photo
+  useUploadItemPhotoMutation,
   // Import history
   useGetSupplierImportsQuery,
   useGetParseEventsQuery,

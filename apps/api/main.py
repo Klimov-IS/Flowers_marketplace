@@ -7,6 +7,7 @@ load_dotenv()
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from apps.api.config import settings
 from apps.api.logging_config import get_logger, setup_logging
@@ -127,3 +128,9 @@ app.include_router(supplier_orders.router, prefix="/admin", tags=["supplier-orde
 app.include_router(offers.router, tags=["offers"])  # No prefix - public endpoint
 app.include_router(catalog.router, prefix="/admin/catalog", tags=["catalog"])  # Flower catalog management
 app.include_router(telegram.router)  # Internal Telegram bot API
+
+# Static file serving for uploaded photos
+import os
+_uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+os.makedirs(os.path.join(_uploads_dir, "photos"), exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")

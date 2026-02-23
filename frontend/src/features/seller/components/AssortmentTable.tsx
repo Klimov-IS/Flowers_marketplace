@@ -4,8 +4,9 @@ import {
   useUpdateSupplierItemMutation,
   useUpdateOfferCandidateMutation,
   useDeleteOfferCandidateMutation,
+  useHideSupplierItemMutation,
+  useRestoreSupplierItemMutation,
 } from '../supplierApi';
-import StockIndicator from './StockIndicator';
 import EditableCell from './EditableCell';
 import EditableSelect from './EditableSelect';
 import EditableColorSelect from './EditableColorSelect';
@@ -14,123 +15,7 @@ import FilterableHeader from './FilterableHeader';
 import type { FilterValue } from './ColumnFilter';
 import type { ColumnFilters } from './FilterBar';
 import AISuggestionRow from './AISuggestionRow';
-
-// Simple modal for viewing variant details
-function VariantDetailsModal({
-  variant,
-  onClose,
-}: {
-  variant: FlatOfferVariant;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
-      <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h3 className="text-lg font-medium text-gray-900">Детали варианта</h3>
-          <button
-            onClick={onClose}
-            className="p-1 text-gray-400 hover:text-gray-600 rounded"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div className="p-4 space-y-3">
-          {/* IDs */}
-          <div className="bg-gray-50 p-3 rounded-lg space-y-2">
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Variant ID:</span>
-              <code className="text-xs bg-gray-200 px-2 py-0.5 rounded select-all">
-                {variant.variant_id}
-              </code>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Item ID:</span>
-              <code className="text-xs bg-gray-200 px-2 py-0.5 rounded select-all">
-                {variant.item_id}
-              </code>
-            </div>
-          </div>
-
-          {/* Variant fields */}
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <span className="text-gray-500">Тип:</span>
-              <p className="font-medium">{variant.flower_type || '—'}</p>
-            </div>
-            <div>
-              <span className="text-gray-500">Подтип:</span>
-              <p className="font-medium">{variant.subtype || '—'}</p>
-            </div>
-            <div>
-              <span className="text-gray-500">Сорт:</span>
-              <p className="font-medium">{variant.variety || '—'}</p>
-            </div>
-            <div>
-              <span className="text-gray-500">Страна:</span>
-              <p className="font-medium">{variant.origin_country || '—'}</p>
-            </div>
-            <div>
-              <span className="text-gray-500">Цвета:</span>
-              <p className="font-medium">{variant.colors?.length ? variant.colors.join(', ') : '—'}</p>
-            </div>
-            <div>
-              <span className="text-gray-500">Размер:</span>
-              <p className="font-medium">{variant.length_cm ? `${variant.length_cm} см` : '—'}</p>
-            </div>
-            <div>
-              <span className="text-gray-500">Упаковка:</span>
-              <p className="font-medium">
-                {variant.pack_type || '—'} {variant.pack_qty ? `(${variant.pack_qty})` : ''}
-              </p>
-            </div>
-            <div>
-              <span className="text-gray-500">Цена:</span>
-              <p className="font-medium">{variant.price} ₽</p>
-            </div>
-            <div>
-              <span className="text-gray-500">Остаток:</span>
-              <p className="font-medium">{variant.stock ?? '—'}</p>
-            </div>
-            <div>
-              <span className="text-gray-500">Статус:</span>
-              <p className="font-medium">{variant.item_status}</p>
-            </div>
-          </div>
-
-          {/* Raw name */}
-          <div className="text-sm">
-            <span className="text-gray-500">Исходное название:</span>
-            <p className="font-mono text-xs bg-gray-100 p-2 rounded mt-1 break-all">
-              {variant.raw_name}
-            </p>
-          </div>
-
-          {/* Source file */}
-          {variant.source_file && (
-            <div className="text-sm">
-              <span className="text-gray-500">Файл-источник:</span>
-              <p className="text-xs text-gray-600">{variant.source_file}</p>
-            </div>
-          )}
-        </div>
-        <div className="px-4 py-3 border-t bg-gray-50 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            Закрыть
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+import ProductDetailModal from './ProductDetailModal';
 
 interface AssortmentTableProps {
   items: FlatOfferVariant[];
@@ -180,6 +65,8 @@ function FlatVariantRow({
   onUpdateItem,
   onUpdateVariant,
   onDeleteVariant,
+  onHideItem,
+  onRestoreItem,
   isSelected,
   onToggleSelect,
   onAIClick,
@@ -189,6 +76,8 @@ function FlatVariantRow({
   onUpdateItem: (itemId: string, field: string, value: ItemUpdateValue) => Promise<void>;
   onUpdateVariant: (variantId: string, field: string, value: string | number | null) => Promise<void>;
   onDeleteVariant: (variantId: string) => void;
+  onHideItem: (itemId: string) => void;
+  onRestoreItem: (itemId: string) => void;
   isSelected?: boolean;
   onToggleSelect?: () => void;
   onAIClick?: () => void;
@@ -319,7 +208,13 @@ function FlatVariantRow({
 
       {/* Остаток - редактируемый */}
       <td className="px-3 py-3">
-        <StockIndicator stock={variant.stock ?? 0} />
+        <EditableCell
+          value={variant.stock}
+          type="number"
+          placeholder="—"
+          onSave={async (val) => onUpdateVariant(variant.variant_id, 'stock_qty', val)}
+          className="text-gray-900"
+        />
       </td>
 
       {/* Actions */}
@@ -359,6 +254,30 @@ function FlatVariantRow({
               />
             </svg>
           </button>
+
+          {/* Hide / Restore item */}
+          {variant.item_status === 'active' ? (
+            <button
+              onClick={() => onHideItem(variant.item_id)}
+              className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors"
+              title="Скрыть"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              onClick={() => onRestoreItem(variant.item_id)}
+              className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+              title="Восстановить"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+          )}
 
           {/* Delete variant */}
           <button
@@ -424,6 +343,8 @@ export default function AssortmentTable({
   const [updateSupplierItem] = useUpdateSupplierItemMutation();
   const [updateOfferCandidate] = useUpdateOfferCandidateMutation();
   const [deleteOfferCandidate] = useDeleteOfferCandidateMutation();
+  const [hideSupplierItem] = useHideSupplierItemMutation();
+  const [restoreSupplierItem] = useRestoreSupplierItemMutation();
 
   // Internal state for details modal
   const [viewingVariant, setViewingVariant] = useState<FlatOfferVariant | null>(null);
@@ -481,6 +402,22 @@ export default function AssortmentTable({
       await deleteOfferCandidate(variantId).unwrap();
     } catch (error) {
       console.error('Failed to delete variant:', error);
+    }
+  };
+
+  const handleHideItem = async (itemId: string) => {
+    try {
+      await hideSupplierItem(itemId).unwrap();
+    } catch (error) {
+      console.error('Failed to hide item:', error);
+    }
+  };
+
+  const handleRestoreItem = async (itemId: string) => {
+    try {
+      await restoreSupplierItem(itemId).unwrap();
+    } catch (error) {
+      console.error('Failed to restore item:', error);
     }
   };
 
@@ -648,6 +585,8 @@ export default function AssortmentTable({
                     onUpdateItem={handleUpdateItem}
                     onUpdateVariant={handleUpdateVariant}
                     onDeleteVariant={handleDeleteVariant}
+                    onHideItem={handleHideItem}
+                    onRestoreItem={handleRestoreItem}
                     isSelected={selectedIds?.has(variant.variant_id)}
                     onToggleSelect={hasSelection ? () => handleToggleSelect(variant.variant_id) : undefined}
                     onAIClick={
@@ -670,11 +609,12 @@ export default function AssortmentTable({
         </table>
       </div>
 
-      {/* Details modal */}
+      {/* Product details modal */}
       {viewingVariant && (
-        <VariantDetailsModal
-          variant={viewingVariant}
+        <ProductDetailModal
+          isOpen={!!viewingVariant}
           onClose={() => setViewingVariant(null)}
+          variant={viewingVariant}
         />
       )}
     </>

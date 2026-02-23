@@ -71,6 +71,7 @@ class SupplierItem(Base, UUIDMixin, TimestampMixin):
         default=dict,
         server_default="{}",
     )
+    photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(
         String,
         nullable=False,

@@ -257,6 +257,7 @@ class FlatOfferVariantResponse(BaseModel):
     source_file: Optional[str] = None
     possible_duplicate: bool = False
     has_pending_suggestions: bool = False
+    photo_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -705,6 +706,10 @@ async def get_flat_items(
         None,
         description="Filter by pending AI suggestions (true = has needs_review suggestions)"
     ),
+    item_id: Optional[UUID] = Query(
+        None,
+        description="Filter by specific supplier_item ID (for fetching all variants of one item)"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> FlatItemsListResponse:
     """
@@ -816,6 +821,11 @@ async def get_flat_items(
             )
         """)
 
+    # Item ID filter (for fetching all variants of a specific item)
+    if item_id is not None:
+        where_clauses.append("si.id = :item_id")
+        params["item_id"] = item_id
+
     where_sql = " AND ".join(where_clauses)
 
     # Sort clause
@@ -864,7 +874,8 @@ async def get_flat_items(
             EXISTS (
                 SELECT 1 FROM ai_suggestions ais
                 WHERE ais.target_id = si.id AND ais.applied_status = 'needs_review'
-            ) as has_pending_suggestions
+            ) as has_pending_suggestions,
+            si.photo_url
 
         FROM offer_candidates oc
         JOIN supplier_items si ON oc.supplier_item_id = si.id
@@ -932,6 +943,7 @@ async def get_flat_items(
                 source_file=row.source_file,
                 possible_duplicate=is_duplicate,
                 has_pending_suggestions=row.has_pending_suggestions,
+                photo_url=row.photo_url,
             )
         )
 
@@ -1020,6 +1032,66 @@ async def get_assortment_metrics(
         needs_review=row.needs_review if row else 0,
         errors=row.errors if row else 0,
     )
+
+
+# Photo upload endpoint
+@router.post("/supplier-items/{item_id}/photo")
+async def upload_item_photo(
+    item_id: UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a photo for a supplier item. Accepts JPEG/PNG/WebP images."""
+    from apps.api.models.items import SupplierItem
+
+    # Verify item exists
+    result = await db.execute(
+        select(SupplierItem).where(SupplierItem.id == item_id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Supplier item not found")
+
+    # Validate file type
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {file.content_type}. Allowed: JPEG, PNG, WebP"
+        )
+
+    # Validate file size (max 5MB)
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size: 5MB")
+
+    import os
+    import uuid as uuid_module
+
+    # Determine upload directory
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "uploads", "photos")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    # Generate unique filename
+    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg"
+    filename = f"{uuid_module.uuid4().hex}.{ext}"
+    filepath = os.path.join(upload_dir, filename)
+
+    # Write file
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    # Update item photo_url
+    photo_url = f"/uploads/photos/{filename}"
+    await db.execute(
+        text("UPDATE supplier_items SET photo_url = :photo_url WHERE id = :item_id"),
+        {"photo_url": photo_url, "item_id": item_id},
+    )
+    await db.commit()
+
+    logger.info("item_photo_uploaded", item_id=str(item_id), photo_url=photo_url)
+
+    return {"photo_url": photo_url}
 
 
 # Import endpoints
