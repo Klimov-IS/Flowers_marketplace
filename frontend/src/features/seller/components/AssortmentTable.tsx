@@ -6,11 +6,20 @@ import {
   useDeleteOfferCandidateMutation,
   useHideSupplierItemMutation,
   useRestoreSupplierItemMutation,
+  useDuplicateSupplierItemMutation,
 } from '../supplierApi';
 import EditableCell from './EditableCell';
 import EditableSelect from './EditableSelect';
 import EditableColorSelect from './EditableColorSelect';
 import { getFlowerImage, getDefaultFlowerImage } from '../../../utils/flowerImages';
+
+function resolvePhotoUrl(url: string): string {
+  const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+  if (basePath && url.startsWith('/uploads')) {
+    return basePath + url;
+  }
+  return url;
+}
 import FilterableHeader from './FilterableHeader';
 import type { FilterValue } from './ColumnFilter';
 import type { ColumnFilters } from './FilterBar';
@@ -67,6 +76,7 @@ function FlatVariantRow({
   onDeleteVariant,
   onHideItem,
   onRestoreItem,
+  onDuplicateItem,
   isSelected,
   onToggleSelect,
   onAIClick,
@@ -78,12 +88,13 @@ function FlatVariantRow({
   onDeleteVariant: (variantId: string) => void;
   onHideItem: (itemId: string) => void;
   onRestoreItem: (itemId: string) => void;
+  onDuplicateItem: (itemId: string) => void;
   isSelected?: boolean;
   onToggleSelect?: () => void;
   onAIClick?: () => void;
 }) {
   return (
-    <tr className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${variant.has_pending_suggestions ? 'bg-yellow-50' : ''}`}>
+    <tr className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${variant.item_status === 'hidden' ? 'opacity-50 bg-gray-50' : ''} ${variant.has_pending_suggestions ? 'bg-yellow-50' : ''}`}>
       {/* Checkbox */}
       {onToggleSelect && (
         <td className="w-10 px-2 py-3 text-center">
@@ -101,7 +112,7 @@ function FlatVariantRow({
         <div className="flex items-center gap-2">
           {/* Thumbnail */}
           <img
-            src={getFlowerImage(variant.flower_type)}
+            src={variant.photo_url ? resolvePhotoUrl(variant.photo_url) : getFlowerImage(variant.flower_type)}
             alt=""
             className="w-8 h-8 rounded object-cover flex-shrink-0 bg-gray-100"
             loading="lazy"
@@ -118,6 +129,15 @@ function FlatVariantRow({
                 ? `${variant.flower_type}${variant.subtype ? ` ${variant.subtype.toLowerCase()}` : ''}`
                 : '—'}
             </span>
+            {/* Hidden badge */}
+            {variant.item_status === 'hidden' && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium bg-gray-200 text-gray-600 rounded w-fit">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                </svg>
+                Скрыто
+              </span>
+            )}
             {/* Possible duplicate badge */}
             {variant.possible_duplicate && (
               <span
@@ -279,6 +299,17 @@ function FlatVariantRow({
             </button>
           )}
 
+          {/* Duplicate item */}
+          <button
+            onClick={() => onDuplicateItem(variant.item_id)}
+            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+            title="Дублировать"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </button>
+
           {/* Delete variant */}
           <button
             onClick={() => {
@@ -345,6 +376,7 @@ export default function AssortmentTable({
   const [deleteOfferCandidate] = useDeleteOfferCandidateMutation();
   const [hideSupplierItem] = useHideSupplierItemMutation();
   const [restoreSupplierItem] = useRestoreSupplierItemMutation();
+  const [duplicateSupplierItem] = useDuplicateSupplierItemMutation();
 
   // Internal state for details modal
   const [viewingVariant, setViewingVariant] = useState<FlatOfferVariant | null>(null);
@@ -418,6 +450,14 @@ export default function AssortmentTable({
       await restoreSupplierItem(itemId).unwrap();
     } catch (error) {
       console.error('Failed to restore item:', error);
+    }
+  };
+
+  const handleDuplicateItem = async (itemId: string) => {
+    try {
+      await duplicateSupplierItem(itemId).unwrap();
+    } catch (error) {
+      console.error('Failed to duplicate item:', error);
     }
   };
 
@@ -587,6 +627,7 @@ export default function AssortmentTable({
                     onDeleteVariant={handleDeleteVariant}
                     onHideItem={handleHideItem}
                     onRestoreItem={handleRestoreItem}
+                    onDuplicateItem={handleDuplicateItem}
                     isSelected={selectedIds?.has(variant.variant_id)}
                     onToggleSelect={hasSelection ? () => handleToggleSelect(variant.variant_id) : undefined}
                     onAIClick={

@@ -489,6 +489,17 @@ export const supplierApi = createApi({
       invalidatesTags: ['SupplierItems'],
     }),
 
+    duplicateSupplierItem: builder.mutation<
+      { original_id: string; new_item_id: string; new_variant_ids: string[]; message: string },
+      string
+    >({
+      query: (itemId) => ({
+        url: `/admin/supplier-items/${itemId}/duplicate`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['SupplierItems'],
+    }),
+
     // Bulk actions
     bulkDeleteItems: builder.mutation<
       { affected_count: number; status: string; message: string },
@@ -564,6 +575,7 @@ export const {
   useDeleteSupplierItemMutation,
   useHideSupplierItemMutation,
   useRestoreSupplierItemMutation,
+  useDuplicateSupplierItemMutation,
   // Bulk actions
   useBulkDeleteItemsMutation,
   useBulkHideItemsMutation,

@@ -42,7 +42,7 @@ export interface ColumnFilters {
 }
 
 export const initialFilters: ColumnFilters = {
-  status: { type: 'multiselect', selected: ['active'] }, // Default: show only active
+  status: { type: 'multiselect', selected: ['active', 'hidden'] }, // Default: show active + hidden
   origin_country: null,
   colors: null,
   price: null,

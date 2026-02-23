@@ -111,8 +111,9 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
     const { status, ...otherFilters } = filters;
     const statusValue = status as MultiSelectFilterValue | null;
     const isStatusNonDefault =
-      statusValue?.selected?.length !== 1 ||
-      statusValue?.selected?.[0] !== 'active';
+      statusValue?.selected?.length !== 2 ||
+      !statusValue?.selected?.includes('active') ||
+      !statusValue?.selected?.includes('hidden');
     const hasOtherFilters = Object.values(otherFilters).some((f) => f !== null);
     const hasSorting = sort.field !== null;
     const hasPillFilter = pillFilter !== 'all';

@@ -542,22 +542,22 @@ async def get_supplier_items(
     # Get all item IDs for batch loading variants
     item_ids = [item.id for item in supplier_items]
 
-    # Fetch duplicate (flower_type, variety) combinations for this supplier
-    # Use raw SQL to avoid SQLAlchemy parameter binding issues with GROUP BY
+    # Fetch duplicate combos: same type+variety+length from different supplier_items
     duplicate_sql = text("""
         SELECT
-            attributes->>'flower_type' as ft,
-            attributes->>'variety' as var
-        FROM supplier_items
-        WHERE supplier_id = :supplier_id
-            AND status != 'deleted'
-            AND attributes->>'flower_type' IS NOT NULL
-            AND attributes->>'variety' IS NOT NULL
-        GROUP BY attributes->>'flower_type', attributes->>'variety'
-        HAVING COUNT(*) > 1
+            si2.attributes->>'flower_type' as ft,
+            si2.attributes->>'variety' as var,
+            oc2.length_cm as len
+        FROM supplier_items si2
+        JOIN offer_candidates oc2 ON oc2.supplier_item_id = si2.id
+        WHERE si2.supplier_id = :supplier_id
+            AND si2.status != 'deleted'
+            AND si2.attributes->>'flower_type' IS NOT NULL
+        GROUP BY si2.attributes->>'flower_type', si2.attributes->>'variety', oc2.length_cm
+        HAVING COUNT(DISTINCT si2.id) > 1
     """)
     duplicate_result = await db.execute(duplicate_sql, {"supplier_id": supplier_id})
-    duplicate_combos = {(row.ft, row.var) for row in duplicate_result.all()}
+    duplicate_combos = {(row.ft, row.var, row.len) for row in duplicate_result.all()}
 
     # Load all offer candidates for these items
     if item_ids:
@@ -613,12 +613,15 @@ async def get_supplier_items(
         if item.last_import_batch_id and item.last_import_batch_id in batches_by_id:
             source_file = batches_by_id[item.last_import_batch_id].source_filename
 
-        # Check if item is a possible duplicate
+        # Check if item is a possible duplicate (same type+variety+length from different items)
         flower_type = attributes.get("flower_type")
         variety = attributes.get("variety")
-        is_possible_duplicate = bool(
-            flower_type and variety and (flower_type, variety) in duplicate_combos
-        )
+        is_possible_duplicate = False
+        if flower_type:
+            for v in variants:
+                if (flower_type, variety, v.length_cm) in duplicate_combos:
+                    is_possible_duplicate = True
+                    break
 
         # Build variant responses
         variant_responses = [
@@ -890,21 +893,22 @@ async def get_flat_items(
     data_result = await db.execute(data_sql, params)
     rows = data_result.all()
 
-    # Get duplicate combos for this supplier
+    # Get duplicate combos for this supplier (same type+variety+length = true duplicate)
     duplicate_sql = text("""
         SELECT
-            attributes->>'flower_type' as ft,
-            attributes->>'variety' as var
-        FROM supplier_items
-        WHERE supplier_id = :supplier_id
-            AND status != 'deleted'
-            AND attributes->>'flower_type' IS NOT NULL
-            AND attributes->>'variety' IS NOT NULL
-        GROUP BY attributes->>'flower_type', attributes->>'variety'
-        HAVING COUNT(*) > 1
+            si.attributes->>'flower_type' as ft,
+            si.attributes->>'variety' as var,
+            oc.length_cm as len
+        FROM supplier_items si
+        JOIN offer_candidates oc ON oc.supplier_item_id = si.id
+        WHERE si.supplier_id = :supplier_id
+            AND si.status != 'deleted'
+            AND si.attributes->>'flower_type' IS NOT NULL
+        GROUP BY si.attributes->>'flower_type', si.attributes->>'variety', oc.length_cm
+        HAVING COUNT(DISTINCT si.id) > 1
     """)
     duplicate_result = await db.execute(duplicate_sql, {"supplier_id": supplier_id})
-    duplicate_combos = {(row.ft, row.var) for row in duplicate_result.all()}
+    duplicate_combos = {(row.ft, row.var, row.len) for row in duplicate_result.all()}
 
     # Build response items
     import json
@@ -918,9 +922,9 @@ async def get_flat_items(
             except (json.JSONDecodeError, TypeError):
                 colors_list = []
 
-        # Check if duplicate
+        # Check if duplicate (same type+variety+length from different supplier_items)
         is_duplicate = bool(
-            row.flower_type and row.variety and (row.flower_type, row.variety) in duplicate_combos
+            row.flower_type and (row.flower_type, row.variety, row.length_cm) in duplicate_combos
         )
 
         response_items.append(
@@ -2176,6 +2180,106 @@ async def restore_supplier_item(
         id=item_id,
         status="active",
         message="Item restored successfully",
+    )
+
+
+class DuplicateItemResponse(BaseModel):
+    """Response from duplicating a supplier item."""
+
+    original_id: UUID
+    new_item_id: UUID
+    new_variant_ids: list[UUID]
+    message: str
+
+
+@router.post("/supplier-items/{item_id}/duplicate", response_model=DuplicateItemResponse)
+async def duplicate_supplier_item(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> DuplicateItemResponse:
+    """
+    Duplicate a supplier item and all its offer candidates.
+
+    Creates a new supplier_item with the same attributes and copies
+    all offer_candidates linked to it.
+    """
+    import copy
+    from uuid import uuid4
+
+    # Load original item
+    result = await db.execute(
+        select(SupplierItem).where(SupplierItem.id == item_id)
+    )
+    original = result.scalar_one_or_none()
+    if not original:
+        raise HTTPException(status_code=404, detail="Supplier item not found")
+
+    # Load its offer candidates
+    variants_result = await db.execute(
+        select(OfferCandidate).where(OfferCandidate.supplier_item_id == item_id)
+    )
+    original_variants = variants_result.scalars().all()
+
+    # Create new supplier item
+    new_item_id = uuid4()
+    new_stable_key = f"{uuid4().hex[:16]}"  # Unique stable key for the copy
+
+    new_item = SupplierItem(
+        id=new_item_id,
+        supplier_id=original.supplier_id,
+        stable_key=new_stable_key,
+        last_import_batch_id=original.last_import_batch_id,
+        raw_name=original.raw_name,
+        raw_group=original.raw_group,
+        name_norm=original.name_norm,
+        attributes=copy.deepcopy(original.attributes) if original.attributes else {},
+        photo_url=original.photo_url,
+        status="active",
+    )
+    db.add(new_item)
+
+    # Copy all offer candidates
+    new_variant_ids = []
+    for oc in original_variants:
+        new_oc_id = uuid4()
+        new_variant_ids.append(new_oc_id)
+
+        new_oc = OfferCandidate(
+            id=new_oc_id,
+            supplier_item_id=new_item_id,
+            import_batch_id=oc.import_batch_id,
+            raw_row_id=oc.raw_row_id,
+            length_cm=oc.length_cm,
+            pack_type=oc.pack_type,
+            pack_qty=oc.pack_qty,
+            price_type=oc.price_type,
+            price_min=oc.price_min,
+            price_max=oc.price_max,
+            currency=oc.currency,
+            tier_min_qty=oc.tier_min_qty,
+            tier_max_qty=oc.tier_max_qty,
+            availability=oc.availability,
+            stock_qty=oc.stock_qty,
+            validation=oc.validation,
+            validation_notes=oc.validation_notes,
+        )
+        db.add(new_oc)
+
+    await db.commit()
+
+    logger.info(
+        "supplier_item_duplicated",
+        original_id=str(item_id),
+        new_item_id=str(new_item_id),
+        variants_copied=len(new_variant_ids),
+        supplier_id=str(original.supplier_id),
+    )
+
+    return DuplicateItemResponse(
+        original_id=item_id,
+        new_item_id=new_item_id,
+        new_variant_ids=new_variant_ids,
+        message=f"Item duplicated with {len(new_variant_ids)} variant(s)",
     )
 
 

@@ -151,12 +151,109 @@ class AIService:
                 rationale=item.get("rationale"),
             ))
 
+        # Post-process: fix color-as-variety misclassification
+        row_suggestions = self._fix_color_as_variety(row_suggestions, colors or DEFAULT_COLORS)
+
         return AIExtractionResponse(
             row_suggestions=row_suggestions,
             model_used=self.client.model,
             tokens_input=tokens_in,
             tokens_output=tokens_out,
         )
+
+    @staticmethod
+    def _fix_color_as_variety(
+        suggestions: list[RowSuggestion],
+        known_colors: list[str],
+    ) -> list[RowSuggestion]:
+        """Post-process: move color words from variety to colors field.
+
+        Handles cases like "Тюльпан Кремовые" where the AI puts color
+        descriptions into the variety field instead of colors.
+        """
+        import re
+
+        # Build a set of color stems for fuzzy matching
+        # "кремовый" → "кремов", "красный" → "красн", etc.
+        color_stems = set()
+        color_map: dict[str, str] = {}  # stem → canonical color
+        for c in known_colors:
+            color_stems.add(c.lower())
+            color_map[c.lower()] = c
+            # Also add adjective forms (кремовые, красные, белые...)
+            stem = re.sub(r'(ый|ой|ий|ая|яя|ое|ее)$', '', c.lower())
+            if len(stem) >= 3:
+                color_stems.add(stem)
+                color_map[stem] = c
+
+        # Color-indicator words
+        color_indicators = {
+            'двухцветн', 'двуцветн', 'трехцветн', 'трёхцветн',
+            'многоцветн', 'пёстр', 'пестр',
+        }
+
+        def is_color_word(word: str) -> str | None:
+            """Check if a word is a color. Returns canonical color or None."""
+            w = word.lower().strip()
+            # Direct match
+            if w in color_map:
+                return color_map[w]
+            # Stem match
+            stem = re.sub(r'(ый|ой|ий|ая|яя|ое|ее|ые|ие)$', '', w)
+            if stem in color_map:
+                return color_map[stem]
+            # Color indicator (двухцветные → биколор)
+            for indicator in color_indicators:
+                if w.startswith(indicator):
+                    return 'биколор'
+            return None
+
+        for suggestion in suggestions:
+            variety_ext = suggestion.extracted.get('variety')
+            if not variety_ext or not variety_ext.value:
+                continue
+
+            variety_val = str(variety_ext.value).strip()
+            # Check if variety value looks like a color
+            # Handle compound forms like "Двухцветные: Бело-розовые"
+            first_word = re.split(r'[\s:,]', variety_val)[0]
+            canonical = is_color_word(first_word)
+
+            if canonical:
+                # Move to colors
+                colors_ext = suggestion.extracted.get('colors')
+                current_colors = []
+                if colors_ext and isinstance(colors_ext.value, list):
+                    current_colors = colors_ext.value
+
+                if canonical not in current_colors:
+                    current_colors.append(canonical)
+
+                suggestion.extracted['colors'] = FieldExtraction(
+                    value=current_colors,
+                    confidence=max(variety_ext.confidence, 0.90),
+                )
+                # Clear variety
+                suggestion.extracted['variety'] = FieldExtraction(
+                    value=None,
+                    confidence=0.95,
+                )
+                # Update clean_name if present (remove the color part)
+                clean_name_ext = suggestion.extracted.get('clean_name')
+                if clean_name_ext and clean_name_ext.value:
+                    ft_ext = suggestion.extracted.get('flower_type')
+                    if ft_ext and ft_ext.value:
+                        # Reset clean_name to just the flower type (+ subtype if present)
+                        st_ext = suggestion.extracted.get('subtype')
+                        new_name = ft_ext.value
+                        if st_ext and st_ext.value:
+                            new_name += f" {st_ext.value}"
+                        suggestion.extracted['clean_name'] = FieldExtraction(
+                            value=new_name,
+                            confidence=clean_name_ext.confidence,
+                        )
+
+        return suggestions
 
     async def extract_attributes_batch(
         self,
