@@ -162,7 +162,17 @@ class DeepSeekClient:
         if not choices:
             raise DeepSeekError("No choices in response")
 
-        content = choices[0].get("message", {}).get("content", "")
+        choice = choices[0]
+        content = choice.get("message", {}).get("content", "")
+
+        # Check for truncation (finish_reason == "length" means max_tokens hit)
+        finish_reason = choice.get("finish_reason", "")
+        if finish_reason == "length":
+            raise DeepSeekError(
+                f"Response truncated (max_tokens hit). "
+                f"Tokens used: {tokens_output}. "
+                f"Increase max_tokens or reduce batch size."
+            )
 
         # Parse JSON
         try:

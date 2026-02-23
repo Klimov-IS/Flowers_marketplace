@@ -121,11 +121,15 @@ class AIService:
         user_prompt = build_user_extraction_prompt(rows)
 
         # Call API
+        # max_tokens scales with batch size: ~300 tokens per item + overhead
+        estimated_tokens = len(rows) * 300 + 512
+        max_tokens = max(4096, min(estimated_tokens, 16384))
+
         response_data, tokens_in, tokens_out = await self.client.extract_json(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             temperature=0.1,
-            max_tokens=4096,
+            max_tokens=max_tokens,
         )
 
         # Parse response
@@ -156,7 +160,7 @@ class AIService:
     async def extract_attributes_batch(
         self,
         rows: list[dict],
-        batch_size: int = 50,
+        batch_size: int = 20,
         **kwargs,
     ) -> AIExtractionResponse:
         """
