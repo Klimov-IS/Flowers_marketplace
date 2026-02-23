@@ -364,27 +364,18 @@ class AIEnrichmentService:
     ) -> list[SupplierItem]:
         """Filter items that need AI enrichment.
 
-        Sends ALL items that don't have a clean_name yet (i.e., all new items),
-        plus any items missing key attributes. This ensures AI generates
-        clean_name for every position in every price list.
+        Only sends items that don't have a clean_name yet (new items).
+        Items already enriched are skipped — missing country/variety
+        is normal (not all names contain this info) and re-sending
+        them to AI just wastes time without adding value.
         """
         needing_enrichment = []
 
         for item in items:
             attributes = item.attributes or {}
 
-            # Always enrich if clean_name is missing (every new item)
-            has_clean_name = bool(attributes.get("clean_name"))
-            if not has_clean_name:
-                needing_enrichment.append(item)
-                continue
-
-            # Also enrich if key attributes are missing
-            has_flower_type = bool(attributes.get("flower_type"))
-            has_country = bool(attributes.get("origin_country"))
-            has_variety = bool(attributes.get("variety"))
-
-            if not (has_flower_type and has_country and has_variety):
+            # Only enrich if clean_name is missing (new item, never enriched)
+            if not attributes.get("clean_name"):
                 needing_enrichment.append(item)
 
         return needing_enrichment
