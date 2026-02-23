@@ -3,19 +3,35 @@
 // Product types matching database values (Russian)
 const PRODUCT_TYPES = [
   { value: 'Роза', label: 'Роза' },
+  { value: 'Тюльпан', label: 'Тюльпан' },
+  { value: 'Хризантема', label: 'Хризантема' },
   { value: 'Гвоздика', label: 'Гвоздика' },
-  { value: 'Гипсофила', label: 'Гипсофила' },
-  { value: 'Рускус', label: 'Рускус' },
   { value: 'Альстромерия', label: 'Альстромерия' },
+  { value: 'Гипсофила', label: 'Гипсофила' },
+  { value: 'Эустома', label: 'Эустома' },
+  { value: 'Гортензия', label: 'Гортензия' },
+  { value: 'Пион', label: 'Пион' },
+  { value: 'Лилия', label: 'Лилия' },
+  { value: 'Ирис', label: 'Ирис' },
+  { value: 'Фрезия', label: 'Фрезия' },
+  { value: 'Ранункулюс', label: 'Ранункулюс' },
+  { value: 'Орхидея', label: 'Орхидея' },
   { value: 'Эвкалипт', label: 'Эвкалипт' },
-  { value: 'Протея', label: 'Протея' },
-  { value: 'Писташ', label: 'Писташ' },
+  { value: 'Рускус', label: 'Рускус' },
+  { value: 'Статица', label: 'Статица' },
+  { value: 'Гиперикум', label: 'Гиперикум' },
 ];
 
 // Countries matching actual database values (Russian names)
 const COUNTRIES = [
   { value: 'Эквадор', label: 'Эквадор', flag: '🇪🇨' },
+  { value: 'Колумбия', label: 'Колумбия', flag: '🇨🇴' },
+  { value: 'Нидерланды', label: 'Нидерланды', flag: '🇳🇱' },
+  { value: 'Кения', label: 'Кения', flag: '🇰🇪' },
   { value: 'Израиль', label: 'Израиль', flag: '🇮🇱' },
+  { value: 'Россия', label: 'Россия', flag: '🇷🇺' },
+  { value: 'Эфиопия', label: 'Эфиопия', flag: '🇪🇹' },
+  { value: 'Италия', label: 'Италия', flag: '🇮🇹' },
 ];
 
 interface FilterSidebarProps {
@@ -23,10 +39,6 @@ interface FilterSidebarProps {
     product_type?: string;
     origin_country?: string[];
     colors?: string[];
-    length_min?: number;
-    length_max?: number;
-    price_min?: number;
-    price_max?: number;
     in_stock?: boolean;
   };
   onFilterChange: (key: string, value: unknown) => void;
@@ -108,56 +120,8 @@ export default function FilterSidebar({ filters, onFilterChange, onReset }: Filt
       {/* Color filter hidden - no data in database yet */}
       {/* TODO: Enable when colors data is populated in supplier_items */}
 
-      {/* Length */}
-      <div className="mb-5 pb-4 border-b border-gray-100">
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          Длина, см
-        </h3>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            placeholder="от"
-            value={filters.length_min || ''}
-            onChange={(e) => onFilterChange('length_min', e.target.value ? Number(e.target.value) : undefined)}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-primary-500 focus:border-primary-500"
-          />
-          <span className="text-gray-400">—</span>
-          <input
-            type="number"
-            placeholder="до"
-            value={filters.length_max || ''}
-            onChange={(e) => onFilterChange('length_max', e.target.value ? Number(e.target.value) : undefined)}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-primary-500 focus:border-primary-500"
-          />
-        </div>
-      </div>
-
-      {/* Price */}
-      <div className="mb-5 pb-4 border-b border-gray-100">
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          Цена, ₽
-        </h3>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            placeholder="от"
-            value={filters.price_min || ''}
-            onChange={(e) => onFilterChange('price_min', e.target.value ? Number(e.target.value) : undefined)}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-primary-500 focus:border-primary-500"
-          />
-          <span className="text-gray-400">—</span>
-          <input
-            type="number"
-            placeholder="до"
-            value={filters.price_max || ''}
-            onChange={(e) => onFilterChange('price_max', e.target.value ? Number(e.target.value) : undefined)}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-primary-500 focus:border-primary-500"
-          />
-        </div>
-      </div>
-
+      {/* Length and Price filters removed per user request */}
       {/* In Stock filter hidden - stock_qty is NULL for all offers in database */}
-      {/* TODO: Enable when stock_qty data is populated during price list import */}
     </aside>
   );
 }

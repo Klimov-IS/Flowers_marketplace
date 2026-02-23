@@ -5,11 +5,10 @@ import { useAppDispatch } from '../../hooks/useAppDispatch';
 import {
   setSearchQuery,
   setProductType,
-  setLengthRange,
-  setPriceRange,
   setOriginCountry,
   setColors,
   setInStock,
+  setPage,
   resetFilters,
 } from './filtersSlice';
 import { addToCart } from '../buyer/cartSlice';
@@ -20,6 +19,70 @@ import Button from '../../components/ui/Button';
 import FilterSidebar from './components/FilterSidebar';
 import { getFlowerImage, getDefaultFlowerImage } from '../../utils/flowerImages';
 import { formatTier } from '../../utils/catalogFormatters';
+import type { OffersResponse, ProductFilters } from '../../types/product';
+import type { AppDispatch } from '../../app/store';
+
+function CatalogPagination({
+  data,
+  filters,
+  dispatch,
+}: {
+  data: OffersResponse | undefined;
+  filters: ProductFilters;
+  dispatch: AppDispatch;
+}) {
+  if (!data || data.total <= (filters.limit || 24)) return null;
+
+  const perPage = filters.limit || 24;
+  const totalPages = Math.ceil(data.total / perPage);
+  const currentPage = Math.floor((filters.offset || 0) / perPage);
+
+  const pages: (number | 'dots')[] = [];
+  const visible = Array.from({ length: totalPages }, (_, i) => i)
+    .filter((p) => p === 0 || p === totalPages - 1 || Math.abs(p - currentPage) <= 2);
+  for (let i = 0; i < visible.length; i++) {
+    if (i > 0 && visible[i] - visible[i - 1] > 1) {
+      pages.push('dots');
+    }
+    pages.push(visible[i]);
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-2 mt-8">
+      <button
+        onClick={() => dispatch(setPage(currentPage - 1))}
+        disabled={currentPage === 0}
+        className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Назад
+      </button>
+      {pages.map((item, idx) =>
+        item === 'dots' ? (
+          <span key={`dots-${idx}`} className="px-2 text-gray-400">...</span>
+        ) : (
+          <button
+            key={item}
+            onClick={() => dispatch(setPage(item))}
+            className={`w-9 h-9 text-sm rounded-lg ${
+              item === currentPage
+                ? 'bg-primary-600 text-white'
+                : 'border border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            {item + 1}
+          </button>
+        )
+      )}
+      <button
+        onClick={() => dispatch(setPage(currentPage + 1))}
+        disabled={currentPage >= totalPages - 1}
+        className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Вперёд
+      </button>
+    </div>
+  );
+}
 
 export default function CatalogPage() {
   const dispatch = useAppDispatch();
@@ -92,24 +155,12 @@ export default function CatalogPage() {
         case 'colors':
           dispatch(setColors(value as string[] | undefined));
           break;
-        case 'length_min':
-          dispatch(setLengthRange({ min: value as number | undefined, max: filters.length_max }));
-          break;
-        case 'length_max':
-          dispatch(setLengthRange({ min: filters.length_min, max: value as number | undefined }));
-          break;
-        case 'price_min':
-          dispatch(setPriceRange({ min: value as number | undefined, max: filters.price_max }));
-          break;
-        case 'price_max':
-          dispatch(setPriceRange({ min: filters.price_min, max: value as number | undefined }));
-          break;
         case 'in_stock':
           dispatch(setInStock(value as boolean | undefined));
           break;
       }
     },
-    [dispatch, filters.length_min, filters.length_max, filters.price_min, filters.price_max]
+    [dispatch]
   );
 
   const handleResetFilters = useCallback(() => {
@@ -137,10 +188,6 @@ export default function CatalogPage() {
             product_type: filters.product_type,
             origin_country: filters.origin_country,
             colors: filters.colors,
-            length_min: filters.length_min,
-            length_max: filters.length_max,
-            price_min: filters.price_min,
-            price_max: filters.price_max,
             in_stock: filters.in_stock,
           }}
           onFilterChange={handleFilterChange}
@@ -298,6 +345,9 @@ export default function CatalogPage() {
           );
         })}
           </div>
+
+          {/* Pagination */}
+          <CatalogPagination data={data} filters={filters} dispatch={dispatch} />
         </div>
       </div>
     </div>

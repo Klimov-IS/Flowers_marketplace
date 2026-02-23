@@ -328,11 +328,12 @@ export const supplierApi = createApi({
 
     uploadPriceList: builder.mutation<
       {
-        batch_id: string;
+        id: string;
+        supplier_id: string;
+        source_type: string;
+        source_filename: string | null;
         status: string;
-        total_rows: number;
-        success_rows: number;
-        error_rows: number;
+        imported_at: string;
       },
       { supplier_id: string; file: File; description?: string }
     >({

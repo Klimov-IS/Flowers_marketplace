@@ -8,10 +8,12 @@ import {
   useRestoreSupplierItemMutation,
   useDuplicateSupplierItemMutation,
 } from '../supplierApi';
+import { useToast } from '../../../components/ui/Toast';
 import EditableCell from './EditableCell';
 import EditableSelect from './EditableSelect';
 import EditableColorSelect from './EditableColorSelect';
 import { getFlowerImage, getDefaultFlowerImage } from '../../../utils/flowerImages';
+import FilterableHeader from './FilterableHeader';
 
 function resolvePhotoUrl(url: string): string {
   const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
@@ -20,7 +22,6 @@ function resolvePhotoUrl(url: string): string {
   }
   return url;
 }
-import FilterableHeader from './FilterableHeader';
 import type { FilterValue } from './ColumnFilter';
 import type { ColumnFilters } from './FilterBar';
 import AISuggestionRow from './AISuggestionRow';
@@ -253,25 +254,14 @@ function FlatVariantRow({
             </button>
           )}
 
-          {/* View Details */}
+          {/* View Details - card/info icon */}
           <button
             onClick={() => onViewDetails?.(variant)}
             className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
-            title="Детали"
+            title="Карточка товара"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
           </button>
 
@@ -377,6 +367,7 @@ export default function AssortmentTable({
   const [hideSupplierItem] = useHideSupplierItemMutation();
   const [restoreSupplierItem] = useRestoreSupplierItemMutation();
   const [duplicateSupplierItem] = useDuplicateSupplierItemMutation();
+  const { showToast } = useToast();
 
   // Internal state for details modal
   const [viewingVariant, setViewingVariant] = useState<FlatOfferVariant | null>(null);
@@ -432,32 +423,40 @@ export default function AssortmentTable({
   const handleDeleteVariant = async (variantId: string) => {
     try {
       await deleteOfferCandidate(variantId).unwrap();
+      showToast('Вариант удалён', 'success');
     } catch (error) {
       console.error('Failed to delete variant:', error);
+      showToast('Ошибка при удалении', 'error');
     }
   };
 
   const handleHideItem = async (itemId: string) => {
     try {
       await hideSupplierItem(itemId).unwrap();
+      showToast('Позиция скрыта из витрины', 'success');
     } catch (error) {
       console.error('Failed to hide item:', error);
+      showToast('Ошибка при скрытии', 'error');
     }
   };
 
   const handleRestoreItem = async (itemId: string) => {
     try {
       await restoreSupplierItem(itemId).unwrap();
+      showToast('Позиция восстановлена', 'success');
     } catch (error) {
       console.error('Failed to restore item:', error);
+      showToast('Ошибка при восстановлении', 'error');
     }
   };
 
   const handleDuplicateItem = async (itemId: string) => {
     try {
       await duplicateSupplierItem(itemId).unwrap();
+      showToast('Позиция дублирована', 'success');
     } catch (error) {
       console.error('Failed to duplicate item:', error);
+      showToast('Ошибка при дублировании', 'error');
     }
   };
 

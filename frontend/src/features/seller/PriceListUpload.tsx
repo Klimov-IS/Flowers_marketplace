@@ -62,13 +62,13 @@ export default function PriceListUpload({ showHistory = true, onUploadSuccess }:
     if (!file || !user) return;
 
     try {
-      const result = await uploadPriceList({
+      await uploadPriceList({
         supplier_id: user.id,
         file,
         description,
       }).unwrap();
 
-      showToast(`${result.success_rows} позиций загружено`, 'success');
+      showToast('Прайс-лист загружен и обрабатывается', 'success');
 
       // Reset form
       setFile(null);
