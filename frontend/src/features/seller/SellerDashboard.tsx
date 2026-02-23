@@ -1,18 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppSelector } from '../../hooks/useAppSelector';
 import {
   useGetSupplierOrdersQuery,
   useGetOrderMetricsQuery,
   useConfirmOrderMutation,
   useRejectOrderMutation,
-  useGetAssortmentMetricsQuery,
 } from './supplierApi';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import TabsNav from './components/TabsNav';
 import AssortmentTab from './components/AssortmentTab';
-import AssortmentMetrics from './components/AssortmentMetrics';
 import RejectOrderModal from './RejectOrderModal';
 
 type TabId = 'assortment' | 'orders' | 'profile';
@@ -23,6 +21,16 @@ export default function SellerDashboard() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [rejectingOrder, setRejectingOrder] = useState<string | null>(null);
 
+  // Listen for tab switch from header dropdown
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const tab = (e as CustomEvent).detail as TabId;
+      if (tab) setActiveTab(tab);
+    };
+    window.addEventListener('seller-tab', handler);
+    return () => window.removeEventListener('seller-tab', handler);
+  }, []);
+
   // Fetch orders and metrics
   const { data: ordersData, isLoading: ordersLoading } = useGetSupplierOrdersQuery(
     { supplier_id: user?.id || '', status: statusFilter, limit: 50 },
@@ -30,11 +38,6 @@ export default function SellerDashboard() {
   );
 
   const { data: orderMetrics } = useGetOrderMetricsQuery(user?.id || '', {
-    skip: !user?.id || user.role !== 'seller',
-  });
-
-  // Fetch assortment metrics for contextual display
-  const { data: assortmentMetrics } = useGetAssortmentMetricsQuery(user?.id || '', {
     skip: !user?.id || user.role !== 'seller',
   });
 
@@ -115,40 +118,6 @@ export default function SellerDashboard() {
   return (
     <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-3xl font-bold mb-6">Кабинет продавца</h1>
-
-      {/* Contextual Metrics */}
-      {activeTab === 'orders' && orderMetrics && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="p-6 text-center">
-            <div className="text-4xl font-bold text-primary-600 mb-2">
-              {orderMetrics.total_orders}
-            </div>
-            <div className="text-gray-600">Всего заказов</div>
-          </Card>
-          <Card className="p-6 text-center">
-            <div className="text-4xl font-bold text-orange-600 mb-2">
-              {orderMetrics.pending}
-            </div>
-            <div className="text-gray-600">Ожидают обработки</div>
-          </Card>
-          <Card className="p-6 text-center">
-            <div className="text-4xl font-bold text-green-600 mb-2">
-              {orderMetrics.confirmed}
-            </div>
-            <div className="text-gray-600">Подтверждено</div>
-          </Card>
-          <Card className="p-6 text-center">
-            <div className="text-4xl font-bold text-primary-600 mb-2">
-              {parseFloat(orderMetrics.total_revenue).toLocaleString()} ₽
-            </div>
-            <div className="text-gray-600">Общая выручка</div>
-          </Card>
-        </div>
-      )}
-
-      {activeTab === 'assortment' && (
-        <AssortmentMetrics metrics={assortmentMetrics} />
-      )}
 
       {/* Tabs */}
       <TabsNav
