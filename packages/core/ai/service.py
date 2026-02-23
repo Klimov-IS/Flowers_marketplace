@@ -1,4 +1,5 @@
 """AI Service for normalization assistance."""
+import asyncio
 import hashlib
 import json
 import os
@@ -174,17 +175,28 @@ class AIService:
         Returns:
             Combined AIExtractionResponse
         """
+        # Split into batches
+        batches = [rows[i:i + batch_size] for i in range(0, len(rows), batch_size)]
+
+        if len(batches) == 1:
+            # Single batch — no need for parallelism
+            return await self.extract_attributes(batches[0], **kwargs)
+
+        # Run all batches in parallel for speed
+        tasks = [self.extract_attributes(batch, **kwargs) for batch in batches]
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+
         all_suggestions = []
         total_tokens_in = 0
         total_tokens_out = 0
 
-        for i in range(0, len(rows), batch_size):
-            batch = rows[i:i + batch_size]
-            response = await self.extract_attributes(batch, **kwargs)
-
-            all_suggestions.extend(response.row_suggestions)
-            total_tokens_in += response.tokens_input or 0
-            total_tokens_out += response.tokens_output or 0
+        for resp in responses:
+            if isinstance(resp, Exception):
+                # Log but continue — partial enrichment is better than none
+                continue
+            all_suggestions.extend(resp.row_suggestions)
+            total_tokens_in += resp.tokens_input or 0
+            total_tokens_out += resp.tokens_output or 0
 
         return AIExtractionResponse(
             row_suggestions=all_suggestions,
