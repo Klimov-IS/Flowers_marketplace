@@ -341,8 +341,14 @@ export const supplierApi = createApi({
         formData.append('file', file);
         if (description) formData.append('description', description);
 
+        // Choose endpoint based on file extension
+        const name = file.name.toLowerCase();
+        let format = 'csv';
+        if (name.endsWith('.pdf')) format = 'pdf';
+        else if (name.endsWith('.xlsx') || name.endsWith('.xls')) format = 'xlsx';
+
         return {
-          url: `/admin/suppliers/${supplier_id}/imports/csv`,
+          url: `/admin/suppliers/${supplier_id}/imports/${format}`,
           method: 'POST',
           body: formData,
         };

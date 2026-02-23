@@ -38,7 +38,7 @@ export default function PriceListUpload({ showHistory = true, onUploadSuccess }:
       if (droppedFile && isValidFile(droppedFile)) {
         setFile(droppedFile);
       } else {
-        showToast('Пожалуйста, загрузите файл в формате CSV, XLSX или TXT', 'warning');
+        showToast('Пожалуйста, загрузите файл в формате CSV, XLSX, PDF или TXT', 'warning');
       }
     },
     [showToast]
@@ -49,12 +49,12 @@ export default function PriceListUpload({ showHistory = true, onUploadSuccess }:
     if (selectedFile && isValidFile(selectedFile)) {
       setFile(selectedFile);
     } else {
-      showToast('Пожалуйста, загрузите файл в формате CSV, XLSX или TXT', 'warning');
+      showToast('Пожалуйста, загрузите файл в формате CSV, XLSX, PDF или TXT', 'warning');
     }
   };
 
   const isValidFile = (file: File) => {
-    const validExtensions = ['.csv', '.xlsx', '.xls', '.txt'];
+    const validExtensions = ['.csv', '.xlsx', '.xls', '.txt', '.pdf'];
     return validExtensions.some((ext) => file.name.toLowerCase().endsWith(ext));
   };
 
@@ -94,7 +94,7 @@ export default function PriceListUpload({ showHistory = true, onUploadSuccess }:
       <Card className="p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Загрузка прайс-листа</h3>
         <p className="text-gray-600 mb-4">
-          Загрузите файл с прайс-листом (CSV, XLSX, TXT). Система автоматически обработает и
+          Загрузите файл с прайс-листом (CSV, XLSX, PDF, TXT). Система автоматически обработает и
           нормализует товары.
         </p>
 
@@ -133,11 +133,11 @@ export default function PriceListUpload({ showHistory = true, onUploadSuccess }:
               <p className="text-base font-medium text-gray-900 mb-1">
                 Перетащите файл сюда или выберите файл
               </p>
-              <p className="text-sm text-gray-500 mb-3">Поддерживаются форматы: CSV, XLSX, TXT</p>
+              <p className="text-sm text-gray-500 mb-3">Поддерживаются форматы: CSV, XLSX, PDF, TXT</p>
               <label className="inline-block">
                 <input
                   type="file"
-                  accept=".csv,.xlsx,.xls,.txt"
+                  accept=".csv,.xlsx,.xls,.txt,.pdf"
                   onChange={handleFileChange}
                   className="hidden"
                 />
