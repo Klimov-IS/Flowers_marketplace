@@ -6,6 +6,7 @@ export interface User {
   email: string | null;
   phone?: string;
   role: UserRole;
+  city_name?: string;
 }
 
 // AuthState is now defined in authSlice.ts

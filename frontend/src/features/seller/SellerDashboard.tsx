@@ -15,7 +15,7 @@ import AssortmentTab from './components/AssortmentTab';
 import AssortmentMetrics from './components/AssortmentMetrics';
 import RejectOrderModal from './RejectOrderModal';
 
-type TabId = 'assortment' | 'orders';
+type TabId = 'assortment' | 'orders' | 'profile';
 
 export default function SellerDashboard() {
   const user = useAppSelector((state) => state.auth.user);
@@ -89,7 +89,7 @@ export default function SellerDashboard() {
     { value: 'rejected', label: 'Отклонены' },
   ];
 
-  // Tabs configuration — only 2 tabs
+  // Tabs configuration
   const tabs = [
     { id: 'assortment', label: 'Ассортимент' },
     {
@@ -98,6 +98,7 @@ export default function SellerDashboard() {
       badge: orderMetrics?.pending,
       badgeVariant: 'warning' as const,
     },
+    { id: 'profile', label: 'Профиль' },
   ];
 
   if (!user || user.role !== 'seller') {
@@ -274,6 +275,30 @@ export default function SellerDashboard() {
             </div>
           )}
         </div>
+      )}
+
+      {activeTab === 'profile' && (
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Данные компании</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-1">Название</label>
+              <p className="text-gray-900 font-medium">{user.name}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-1">Email</label>
+              <p className="text-gray-900">{user.email || '—'}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-1">Телефон</label>
+              <p className="text-gray-900">{user.phone || '—'}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-1">Город</label>
+              <p className="text-gray-900">{user.city_name || '—'}</p>
+            </div>
+          </div>
+        </Card>
       )}
 
       {/* Reject Order Modal */}

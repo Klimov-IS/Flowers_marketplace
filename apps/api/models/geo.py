@@ -8,6 +8,7 @@ from apps.api.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from apps.api.models.buyer import Buyer
+    from apps.api.models.parties import Supplier
 
 
 class City(Base, UUIDMixin, TimestampMixin):
@@ -20,3 +21,4 @@ class City(Base, UUIDMixin, TimestampMixin):
 
     # Relationships
     buyers: Mapped[list["Buyer"]] = relationship("Buyer", back_populates="city")
+    suppliers: Mapped[list["Supplier"]] = relationship("Supplier", back_populates="city")

@@ -14,7 +14,6 @@ export default function Header() {
 
   const navLinks = [
     { path: '/', label: 'Витрина' },
-    { path: '/buyer', label: 'Кабинет покупателя' },
     { path: '/seller', label: 'Кабинет продавца' },
   ];
 
@@ -72,12 +71,23 @@ export default function Header() {
 
             {/* User */}
             {user ? (
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-700">{user.name}</span>
-                <span className="px-2 py-1 text-xs bg-primary-100 text-primary-700 rounded">
-                  {user.role}
-                </span>
-              </div>
+              <Link
+                to={user.role === 'seller' ? '/seller' : '/buyer'}
+                className="flex items-center space-x-2 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                {/* User avatar circle */}
+                <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center">
+                  <span className="text-sm font-semibold text-primary-700">
+                    {user.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="hidden sm:block">
+                  <span className="text-sm font-medium text-gray-700">{user.name}</span>
+                  <span className="block text-xs text-gray-500">
+                    {user.role === 'seller' ? 'Продавец' : 'Покупатель'}
+                  </span>
+                </div>
+              </Link>
             ) : (
               <Link
                 to="/login"

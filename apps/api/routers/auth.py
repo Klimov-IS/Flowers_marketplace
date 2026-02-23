@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from apps.api.auth.dependencies import CurrentUser, get_current_user
 from apps.api.auth.jwt import (
@@ -326,7 +327,9 @@ async def get_current_user_info(
 ):
     """Get current authenticated user info."""
     if current_user.role == "buyer":
-        result = await db.execute(select(Buyer).where(Buyer.id == current_user.id))
+        result = await db.execute(
+            select(Buyer).options(selectinload(Buyer.city)).where(Buyer.id == current_user.id)
+        )
         user = result.scalar_one_or_none()
         if user:
             return UserResponse(
@@ -336,9 +339,12 @@ async def get_current_user_info(
                 phone=user.phone,
                 role="buyer",
                 status=user.status,
+                city_name=user.city.name if user.city else None,
             )
     elif current_user.role == "supplier":
-        result = await db.execute(select(Supplier).where(Supplier.id == current_user.id))
+        result = await db.execute(
+            select(Supplier).options(selectinload(Supplier.city)).where(Supplier.id == current_user.id)
+        )
         user = result.scalar_one_or_none()
         if user:
             return UserResponse(
@@ -348,6 +354,7 @@ async def get_current_user_info(
                 phone=user.contacts.get("phone") if user.contacts else None,
                 role="supplier",
                 status=user.status,
+                city_name=user.city.name if user.city else None,
             )
 
     raise HTTPException(

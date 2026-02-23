@@ -59,6 +59,7 @@ class UserResponse(BaseModel):
     phone: str | None
     role: Literal["buyer", "supplier"]
     status: str
+    city_name: str | None = None
 
 
 class MessageResponse(BaseModel):

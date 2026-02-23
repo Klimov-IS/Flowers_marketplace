@@ -61,7 +61,7 @@ export default function FilterSidebar({ filters, onFilterChange, onReset }: Filt
   // Note: handleColorToggle removed - colors filter hidden until data is available
 
   return (
-    <aside className="w-64 flex-shrink-0 bg-white rounded-lg border border-gray-200 p-5 h-fit sticky top-24">
+    <aside className="w-64 flex-shrink-0 bg-white rounded-lg border border-gray-200 p-5 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">
       {/* Header */}
       <div className="flex justify-between items-center mb-5 pb-3 border-b border-gray-200">
         <h2 className="font-semibold text-gray-900">Фильтры</h2>
