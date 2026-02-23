@@ -15,6 +15,9 @@
 - **Backend**: FastAPI (async) + SQLAlchemy (async) + Alembic
 - **Database**: PostgreSQL 16
 - **Frontend**: React + TypeScript + Redux Toolkit
+- **Telegram Bot**: python-telegram-bot 21.x + httpx
+- **AI**: DeepSeek API (OpenAI-совместимый, модель deepseek-chat)
+- **PDF**: pdfplumber (таблицы) + PyMuPDF/fitz (текст)
 - **Logging**: structlog (JSON)
 - **Testing**: pytest
 
@@ -30,14 +33,31 @@
 │   ├── database.py        # SQLAlchemy engine + session
 │   ├── models/            # ORM модели (таблицы)
 │   ├── routers/           # HTTP endpoints (REST API)
+│   │   └── telegram.py    # Internal API для Telegram-бота
 │   ├── services/          # Бизнес-логика (оркестрация)
 │   ├── auth/              # JWT аутентификация
 │   ├── data/              # Seed данные (словарь)
 │   └── scripts/           # CLI скрипты
 │
+├── apps/bot/              # Telegram-бот (тонкий клиент к API)
+│   ├── main.py            # Entry point (webhook/polling)
+│   ├── config.py          # Bot settings (BOT_TOKEN, API_URL)
+│   ├── api_client.py      # httpx async клиент к FastAPI
+│   ├── keyboards.py       # Inline/Reply клавиатуры
+│   └── handlers/          # Обработчики команд
+│       ├── start.py       # /start, выбор роли, onboarding
+│       ├── price.py       # Приём файлов, /price
+│       └── common.py      # /help, /status, /unlink, заглушки
+│
 ├── packages/core/         # Чистые функции (БЕЗ доступа к DB)
-│   ├── parsing/           # CSV парсинг, извлечение атрибутов
+│   ├── parsing/           # CSV/XLSX/PDF парсинг, извлечение атрибутов
 │   ├── normalization/     # Детектирование, confidence scoring
+│   ├── ai/                # AI-модули (DeepSeek integration)
+│   │   ├── client.py      # DeepSeek API клиент
+│   │   ├── prompts.py     # Системные промпты
+│   │   ├── column_mapping.py  # AI-fallback маппинг колонок
+│   │   ├── text_extraction.py # AI-извлечение из текста PDF
+│   │   └── service.py     # AI enrichment сервис
 │   └── utils/             # Утилиты (stable_key)
 │
 ├── frontend/              # React приложение
@@ -58,15 +78,15 @@
 ### 3.1 Диаграмма зависимостей
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     HTTP Client                              │
-│               (Frontend, curl, Postman)                      │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
+┌──────────────────────────┐   ┌──────────────────────────┐
+│      HTTP Client         │   │     Telegram Bot          │
+│  (Frontend, curl, etc.)  │   │   (apps/bot/, PTB lib)    │
+└────────────┬─────────────┘   └────────────┬──────────────┘
+             │                               │ httpx (X-Bot-Token)
+             ▼                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  Routers (apps/api/routers/)                │
-│      admin.py, offers.py, orders.py, normalization.py       │
+│   admin.py, offers.py, orders.py, telegram.py (internal)    │
 │                 (HTTP endpoints, validation)                 │
 └─────────────────────────┬───────────────────────────────────┘
                           │
@@ -97,8 +117,9 @@
 |------|-------------------|----------------------|
 | Routers | Services, Models, Auth | packages/core напрямую |
 | Services | packages/core, Models, DB Session | Routers |
-| packages/core | Python stdlib | DB, Services, Models |
+| packages/core | Python stdlib, внешние API (DeepSeek) | DB, Services, Models |
 | Models | SQLAlchemy | Всего остального |
+| apps/bot | httpx (→ API), python-telegram-bot | DB, Models напрямую |
 
 ---
 
@@ -119,12 +140,13 @@
 | `orders.py` | `/orders` | Заказы покупателей |
 | `buyers.py` | `/admin/buyers` | Управление покупателями |
 | `supplier_orders.py` | `/admin` | Заказы для поставщиков |
+| `telegram.py` | `/internal/telegram` | Internal API для Telegram-бота |
 
 ### 4.2 Services (apps/api/services/)
 
 | Сервис | Ответственность |
 |--------|----------------|
-| `ImportService` | CSV → raw_rows → supplier_items → offer_candidates |
+| `ImportService` | CSV/XLSX/PDF → raw_rows → supplier_items → offer_candidates (+ AI fallbacks) |
 | `NormalizationService` | Propose SKU mappings с confidence scoring |
 | `PublishService` | offer_candidates + confirmed mappings → offers |
 | `DictionaryService` | CRUD для словаря |
@@ -143,6 +165,36 @@
 - `detection.py` — определение product_type, variety, subtype
 - `confidence.py` — расчёт confidence score
 - `tokens.py` — токенизация, стоп-слова
+
+**AI** (`ai/`):
+- `client.py` — DeepSeek API клиент (OpenAI-совместимый)
+- `prompts.py` — системные промпты для разных задач
+- `column_mapping.py` — AI-fallback для определения колонок
+- `text_extraction.py` — AI-извлечение данных из текста PDF
+- `service.py` — AI enrichment сервис (атрибуты, clean_name)
+
+### 4.4 Telegram Bot (apps/bot/)
+
+Telegram-бот — **тонкий клиент** к FastAPI API. Не имеет прямого доступа к БД.
+
+| Файл | Назначение |
+|------|------------|
+| `main.py` | Entry point: webhook (production) / polling (dev) |
+| `config.py` | Pydantic Settings: BOT_TOKEN, API_URL, WEBHOOK_URL |
+| `api_client.py` | httpx async клиент к Internal Telegram API |
+| `keyboards.py` | Inline/Reply клавиатуры |
+| `handlers/start.py` | `/start`, выбор роли, привязка по телефону, регистрация |
+| `handlers/price.py` | Приём файлов (CSV/XLSX/PDF), `/price` — статус |
+| `handlers/common.py` | `/help`, `/status`, `/unlink`, заглушки |
+
+**Архитектура:**
+```
+Telegram → nginx (/flower/bot/webhook) → Bot (порт 8081)
+                                              ↓ httpx (X-Bot-Token)
+                                         FastAPI API (порт 8000/8080)
+                                              ↓
+                                         PostgreSQL
+```
 
 **Утилиты** (`utils/`):
 - `stable_key.py` — генерация стабильных ключей для дедупликации

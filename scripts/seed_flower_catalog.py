@@ -24,8 +24,10 @@ from apps.api.models.catalog import (
     FlowerCategory,
     FlowerSubtype,
     FlowerType,
+    FlowerVariety,
     SubtypeSynonym,
     TypeSynonym,
+    VarietySynonym,
 )
 
 # Database URL from environment or default
@@ -108,6 +110,9 @@ SUBTYPES = [
     # Eustoma subtypes
     ("eustoma", "Махровая", "double", ["махровая", "махровой", "double"]),
     ("eustoma", "Немахровая", "single", ["немахровая", "немахровой", "single"]),
+
+    # Gerbera subtypes
+    ("gerbera", "Мини", "mini", ["мини", "mini", "минигербера"]),
 ]
 
 
@@ -243,6 +248,127 @@ async def seed_catalog(db: AsyncSession) -> dict:
     return stats
 
 
+async def seed_varieties(db: AsyncSession) -> dict:
+    """Seed flower varieties from data files.
+
+    Returns:
+        dict with counts of created entities
+    """
+    stats = {
+        "varieties": 0,
+        "variety_synonyms": 0,
+        "skipped": 0,
+    }
+
+    # Import variety data files
+    try:
+        from apps.api.data.varieties_roses import ROSE_VARIETIES
+    except ImportError:
+        print("  WARNING: varieties_roses.py not found, skipping rose varieties")
+        ROSE_VARIETIES = []
+
+    try:
+        from apps.api.data.varieties_other import OTHER_VARIETIES
+    except ImportError:
+        print("  WARNING: varieties_other.py not found, skipping other varieties")
+        OTHER_VARIETIES = []
+
+    all_varieties = ROSE_VARIETIES + OTHER_VARIETIES
+    if not all_varieties:
+        print("  No variety data found")
+        return stats
+
+    print(f"  Loading {len(all_varieties)} varieties...")
+
+    # Build type_slug -> type_id mapping
+    result = await db.execute(select(FlowerType))
+    type_map = {t.slug: t.id for t in result.scalars()}
+
+    # Build (type_slug, subtype_slug) -> subtype_id mapping
+    result = await db.execute(
+        select(FlowerSubtype, FlowerType.slug.label("type_slug"))
+        .join(FlowerType)
+    )
+    subtype_map = {}
+    for row in result:
+        subtype = row[0]
+        type_slug = row[1]
+        subtype_map[(type_slug, subtype.slug)] = subtype.id
+
+    for entry in all_varieties:
+        type_slug = entry["type_slug"]
+        type_id = type_map.get(type_slug)
+        if not type_id:
+            stats["skipped"] += 1
+            continue
+
+        variety_slug = entry["slug"]
+
+        # Check if variety already exists (by type + slug)
+        result = await db.execute(
+            select(FlowerVariety).where(
+                FlowerVariety.type_id == type_id,
+                FlowerVariety.slug == variety_slug,
+            )
+        )
+        if result.scalar_one_or_none():
+            stats["skipped"] += 1
+            continue
+
+        # Resolve subtype_id if provided
+        subtype_id = None
+        if entry.get("subtype_slug"):
+            subtype_id = subtype_map.get((type_slug, entry["subtype_slug"]))
+
+        variety = FlowerVariety(
+            id=uuid4(),
+            type_id=type_id,
+            subtype_id=subtype_id,
+            name=entry["name"],
+            slug=variety_slug,
+            official_colors=entry.get("official_colors"),
+            is_verified=False,  # Mass seed = not manually verified
+            is_active=True,
+        )
+        db.add(variety)
+        stats["varieties"] += 1
+
+        # Create synonyms
+        seen_synonyms = set()
+        for syn in entry.get("synonyms", []):
+            syn_lower = syn.lower().strip()
+            if not syn_lower or syn_lower in seen_synonyms:
+                continue
+            seen_synonyms.add(syn_lower)
+
+            # Check if synonym already exists for this variety
+            existing = await db.execute(
+                select(VarietySynonym).where(
+                    VarietySynonym.variety_id == variety.id,
+                    VarietySynonym.synonym == syn_lower,
+                )
+            )
+            if existing.scalar_one_or_none():
+                continue
+
+            synonym = VarietySynonym(
+                id=uuid4(),
+                variety_id=variety.id,
+                synonym=syn_lower,
+                priority=100,
+            )
+            db.add(synonym)
+            stats["variety_synonyms"] += 1
+
+        # Flush periodically to avoid huge transactions
+        if stats["varieties"] % 100 == 0:
+            await db.flush()
+            print(f"    ... {stats['varieties']} varieties created so far")
+
+    await db.commit()
+    return stats
+
+
 async def main():
     """Main entry point."""
     print("=" * 60)
@@ -253,20 +379,32 @@ async def main():
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session() as db:
-        print("\nSeeding flower catalog...")
+        # Phase 1-3: Types, subtypes, categories
+        print("\nPhase 1-3: Seeding flower types and subtypes...")
         try:
             stats = await seed_catalog(db)
-            print("\n" + "=" * 60)
-            print("Seed completed successfully!")
             print(f"  Categories created: {stats['categories']}")
             print(f"  Types created: {stats['types']}")
             print(f"  Type synonyms created: {stats['type_synonyms']}")
             print(f"  Subtypes created: {stats['subtypes']}")
             print(f"  Subtype synonyms created: {stats['subtype_synonyms']}")
         except Exception as e:
-            print(f"\nError during seeding: {e}")
+            print(f"\nError during type/subtype seeding: {e}")
             raise
 
+        # Phase 4: Varieties
+        print("\nPhase 4: Seeding flower varieties...")
+        try:
+            v_stats = await seed_varieties(db)
+            print(f"  Varieties created: {v_stats['varieties']}")
+            print(f"  Variety synonyms created: {v_stats['variety_synonyms']}")
+            print(f"  Skipped (already exist): {v_stats['skipped']}")
+        except Exception as e:
+            print(f"\nError during variety seeding: {e}")
+            raise
+
+    print("\n" + "=" * 60)
+    print("Seed completed successfully!")
     await engine.dispose()
 
 

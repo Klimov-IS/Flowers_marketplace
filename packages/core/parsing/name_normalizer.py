@@ -108,6 +108,7 @@ FLOWER_TYPES_FALLBACK: Dict[str, str] = {
     "амариллис": "Амариллис",
     "бруния": "Бруния",
     "ваксфлауэр": "Ваксфлауэр",
+    "хамелациум": "Ваксфлауэр",
     "клематис": "Клематис",
     "матиола": "Матиола",
     "маттиола": "Матиола",  # alias
@@ -147,6 +148,10 @@ FLOWER_TYPES_FALLBACK: Dict[str, str] = {
     "ранункулус": "Ранункулюс",  # alias (already have ранункулюс)
     "питоспорум": "Питтоспорум",  # alias
     "розенботтел": "Розенботтел",
+    # Сухоцветы и стабилизированные
+    "амарант": "Амарант",
+    "хлопок": "Хлопок",
+    "лаванда": "Лаванда",
 }
 
 # Fallback subtypes (synonym -> {name, type_slug})
@@ -163,6 +168,186 @@ SUBTYPES_FALLBACK: Dict[str, Dict[str, str]] = {
     "махровой": {"name": "Махровая", "type_slug": "eustoma"},
     "немахровая": {"name": "Немахровая", "type_slug": "eustoma"},
 }
+
+# Slug-to-canonical mapping for building variety→type fallback
+_TYPE_SLUG_TO_CANONICAL: Dict[str, str] = {
+    "rosa": "Роза",
+    "chrysanthemum": "Хризантема",
+    "carnation": "Гвоздика",
+    "tulip": "Тюльпан",
+    "eustoma": "Эустома",
+    "alstroemeria": "Альстромерия",
+    "gerbera": "Гербера",
+    "hydrangea": "Гортензия",
+    "peony": "Пион",
+    "calla": "Калла",
+    "ranunculus": "Ранункулюс",
+    "freesia": "Фрезия",
+    "iris": "Ирис",
+    "eucalyptus": "Эвкалипт",
+    "ruscus": "Рускус",
+    "aspidistra": "Аспидистра",
+    "pistacia": "Писташ",
+    "salal": "Салал",
+    "santini": "Сантини",
+    "gypsophila": "Гипсофила",
+    "lily": "Лилия",
+    "orchid": "Орхидея",
+    "statice": "Статица",
+    "narcissus": "Нарцисс",
+    "anemone": "Анемон",
+    "hypericum": "Гиперикум",
+}
+
+
+# Supplemental Cyrillic variety names commonly seen in Russian price lists.
+# Covers gaps where seed data has Latin names but suppliers write in Russian.
+_CYRILLIC_VARIETY_SUPPLEMENT: Dict[str, str] = {
+    # Розы — стандартные
+    "аваланш": "Роза", "аваланж": "Роза", "аква": "Роза",
+    "анастасия": "Роза", "аннабель": "Роза", "бабалу": "Роза",
+    "бариста": "Роза", "би свит": "Роза", "блэк мэджик": "Роза",
+    "булевард": "Роза", "ви пинк": "Роза", "гран при": "Роза",
+    "готча": "Роза", "джумилия": "Роза",
+    "кантри блюз": "Роза", "карнелиан": "Роза",
+    "кахала": "Роза", "кенди экспрешен": "Роза", "кендилайт": "Роза",
+    "кэндлайт": "Роза", "коттон экспрешн": "Роза",
+    "лучано": "Роза", "мандарин экспрешн": "Роза",
+    "моментум": "Роза", "мондиал": "Роза",
+    "мультиколор": "Роза", "нина": "Роза",
+    "оранж краш": "Роза", "пинк мондиал": "Роза",
+    "плэй бланка": "Роза", "фридом": "Роза",
+    "фрутетто": "Роза", "хот спот": "Роза",
+    "шокин блу": "Роза", "шоколад": "Роза",
+    "эксплорер": "Роза", "эсперанс": "Роза",
+    "ред наоми": "Роза", "софи лорен": "Роза",
+    "мирослава": "Роза", "рокси": "Роза",
+    "амор амор": "Роза", "баттеркап": "Роза",
+    "кимберли": "Роза", "мандала": "Роза", "шиммер": "Роза",
+    "ивана": "Роза", "лола": "Роза",
+    "александра": "Роза", "баракуда": "Роза", "кларенс": "Роза",
+    "пич аваланш": "Роза", "пенни лейн": "Роза",
+    "ред монстер": "Роза", "пинк монстер": "Роза",
+    "ред пинк монстер": "Роза",
+    # Розы — кустовые/спрей (Голландия)
+    "грин глоу": "Роза", "джесси": "Роза", "джульетта": "Роза",
+    "доминиция": "Роза", "капучино": "Роза",
+    "роял порцелина": "Роза", "саммер денс": "Роза",
+    "файерворкс": "Роза", "фатал аттра": "Роза",
+    # Розы — спрей (бабблс и др.)
+    "голден трандсеттер": "Роза", "жозефина": "Роза",
+    "лавли лидия": "Роза", "лидия": "Роза",
+    "супер сенсейшн": "Роза", "сплэш сенсейшн": "Роза",
+    "трейси": "Роза", "хейли": "Роза",
+    "черри хеопс": "Роза", "яна": "Роза",
+    "айвори дидикейншен": "Роза", "броиз бабблс": "Роза",
+    "джелато": "Роза", "кинг бабблс": "Роза",
+    "крем деменши": "Роза", "марвел бабблс": "Роза",
+    "пинк дименшн": "Роза", "пленти": "Роза",
+    "скарлет дименшн": "Роза", "спешиал дименшн": "Роза",
+    "твайлайт бабблс": "Роза", "фемке": "Роза",
+    "черри бабблс": "Роза", "леди бомбастик": "Роза",
+    "мадам бомбастик": "Роза", "мисс бомбастик": "Роза",
+    "мисти бабблс": "Роза", "парфюм бабблс": "Роза",
+    "софи": "Роза",
+    # Хризантемы
+    "балтика": "Хризантема", "зембла": "Хризантема",
+    "бейб": "Хризантема", "калимба": "Хризантема",
+    "кеннеди": "Хризантема", "командер пинк": "Хризантема",
+    "ньютон": "Хризантема", "пастел пинк": "Хризантема",
+    "туту": "Хризантема", "чик": "Хризантема",
+    "магнум": "Хризантема", "бакарди": "Хризантема",
+    # Сантини
+    "алтай": "Сантини", "дориа черри": "Сантини",
+    "пурпетта": "Сантини", "росси": "Сантини",
+    "сан-ап": "Сантини", "эллисон салмон": "Сантини",
+    # Тюльпаны
+    "колумбус": "Тюльпан", "супер пэррот": "Тюльпан",
+    "флэш поинт": "Тюльпан", "стронг голд": "Тюльпан",
+    # Эустомы
+    "алисса": "Эустома", "корелли": "Эустома", "розита": "Эустома",
+    # Лилии
+    "амистад": "Лилия", "анжела": "Лилия",
+    "сантандер": "Лилия", "таблденс": "Лилия",
+    # Каллы
+    "кантор": "Калла", "коломбэ": "Калла",
+    "пикассо": "Калла", "россо": "Калла", "суматра": "Калла",
+    # Гортензии
+    "май виенна": "Гортензия",
+    # Ранункулюс
+    "ханой": "Ранункулюс",
+}
+
+
+def _build_variety_to_type_map() -> Dict[str, str]:
+    """Build a fallback map: variety synonym (lowercase) → flower type canonical name.
+
+    Uses seed data from varieties_roses.py and varieties_other.py,
+    plus a supplemental Cyrillic dictionary.
+    Loaded lazily on first call.
+    """
+    mapping: Dict[str, str] = {}
+
+    # 1. Load from seed files
+    try:
+        from apps.api.data.varieties_roses import ROSE_VARIETIES
+    except ImportError:
+        ROSE_VARIETIES = []
+    try:
+        from apps.api.data.varieties_other import OTHER_VARIETIES
+    except ImportError:
+        OTHER_VARIETIES = []
+
+    for entry in ROSE_VARIETIES + OTHER_VARIETIES:
+        type_slug = entry.get("type_slug", "")
+        canonical_type = _TYPE_SLUG_TO_CANONICAL.get(type_slug)
+        if not canonical_type:
+            continue
+        # Map variety name itself
+        name_lower = entry.get("name", "").lower().strip()
+        if name_lower and name_lower not in mapping:
+            mapping[name_lower] = canonical_type
+        # Map all synonyms
+        for syn in entry.get("synonyms", []):
+            syn_lower = syn.lower().strip()
+            if syn_lower and syn_lower not in mapping:
+                mapping[syn_lower] = canonical_type
+
+    # 2. Merge supplemental Cyrillic names (don't overwrite seed data)
+    for name, flower_type in _CYRILLIC_VARIETY_SUPPLEMENT.items():
+        if name not in mapping:
+            mapping[name] = flower_type
+
+    return mapping
+
+
+# Lazy-loaded variety→type fallback
+_VARIETY_TO_TYPE_CACHE: Optional[Dict[str, str]] = None
+
+
+def _get_variety_to_type_map() -> Dict[str, str]:
+    """Get or build the variety→type fallback map."""
+    global _VARIETY_TO_TYPE_CACHE
+    if _VARIETY_TO_TYPE_CACHE is None:
+        _VARIETY_TO_TYPE_CACHE = _build_variety_to_type_map()
+    return _VARIETY_TO_TYPE_CACHE
+
+
+# Lazy-loaded farm synonym→canonical lookup
+_FARM_LOOKUP_CACHE: Optional[Dict[str, str]] = None
+
+
+def _get_farm_lookup() -> Dict[str, str]:
+    """Get or build the farm synonym→canonical_name lookup."""
+    global _FARM_LOOKUP_CACHE
+    if _FARM_LOOKUP_CACHE is None:
+        try:
+            from apps.api.data.farms import build_farm_lookup
+            _FARM_LOOKUP_CACHE = build_farm_lookup()
+        except ImportError:
+            _FARM_LOOKUP_CACHE = {}
+    return _FARM_LOOKUP_CACHE
+
 
 # Known countries (lowercase for matching)
 COUNTRIES: Dict[str, str] = {
@@ -184,6 +369,12 @@ COUNTRIES: Dict[str, str] = {
     "ethiopia": "Эфиопия",
     "италия": "Италия",
     "italy": "Италия",
+    "китай": "Китай",
+    "china": "Китай",
+    "турция": "Турция",
+    "turkey": "Турция",
+    "индия": "Индия",
+    "india": "Индия",
 }
 
 # Known farm codes (uppercase patterns at end of name)
@@ -211,7 +402,47 @@ FARM_NAMES_IN_PARENS = {
 }
 
 # Color words (for extraction)
+# Compound colors MUST come before base colors so "светло-розовая" matches
+# before "розовая". The _extract_colors() function iterates by key length desc.
 COLORS: Dict[str, str] = {
+    # --- Compound colors (prefix + base) ---
+    "светло-розовый": "розовый",
+    "светло-розовая": "розовый",
+    "нежно-розовый": "розовый",
+    "нежно-розовая": "розовый",
+    "ярко-розовый": "розовый",
+    "ярко-розовая": "розовый",
+    "тёмно-розовый": "розовый",
+    "тёмно-розовая": "розовый",
+    "темно-розовый": "розовый",
+    "темно-розовая": "розовый",
+    "светло-желтый": "жёлтый",
+    "светло-желтая": "жёлтый",
+    "ярко-желтый": "жёлтый",
+    "ярко-желтая": "жёлтый",
+    "тёмно-красный": "красный",
+    "тёмно-красная": "красный",
+    "темно-красный": "красный",
+    "темно-красная": "красный",
+    "ярко-красный": "красный",
+    "ярко-красная": "красный",
+    "светло-сиреневый": "сиреневый",
+    "светло-сиреневая": "сиреневый",
+    "нежно-сиреневый": "сиреневый",
+    "нежно-сиреневая": "сиреневый",
+    "светло-зеленый": "зелёный",
+    "светло-зеленая": "зелёный",
+    "тёмно-бордовый": "бордовый",
+    "тёмно-бордовая": "бордовый",
+    "темно-бордовый": "бордовый",
+    "темно-бордовая": "бордовый",
+    "ярко-оранжевый": "оранжевый",
+    "ярко-оранжевая": "оранжевый",
+    "нежно-кремовый": "кремовый",
+    "нежно-кремовая": "кремовый",
+    "нежно-персиковый": "персиковый",
+    "нежно-персиковая": "персиковый",
+    # --- Base colors ---
     "белый": "белый",
     "белая": "белый",
     "белые": "белый",
@@ -221,9 +452,11 @@ COLORS: Dict[str, str] = {
     "розовый": "розовый",
     "розовая": "розовый",
     "розовые": "розовый",
-    "желтый": "желтый",
-    "желтая": "желтый",
-    "желтые": "желтый",
+    "желтый": "жёлтый",
+    "желтая": "жёлтый",
+    "желтые": "жёлтый",
+    "жёлтый": "жёлтый",
+    "жёлтая": "жёлтый",
     "оранжевый": "оранжевый",
     "оранжевая": "оранжевый",
     "оранжевые": "оранжевый",
@@ -235,10 +468,13 @@ COLORS: Dict[str, str] = {
     "фиолетовые": "фиолетовый",
     "лиловый": "лиловый",
     "сиреневый": "сиреневый",
+    "сиреневая": "сиреневый",
     "бордовый": "бордовый",
     "бордовая": "бордовый",
-    "зеленый": "зеленый",
-    "зеленая": "зеленый",
+    "зеленый": "зелёный",
+    "зеленая": "зелёный",
+    "зелёный": "зелёный",
+    "зелёная": "зелёный",
     "кремовый": "кремовый",
     "кремовая": "кремовый",
     "персиковый": "персиковый",
@@ -435,20 +671,30 @@ class NormalizedName:
 
 def _extract_length(text: str) -> Tuple[Optional[int], str]:
     """Extract length and return remaining text."""
-    # Pattern matches "120см", "60 см", "120см(1)" where parenthesis follows
+    # Pattern 1: explicit "120см", "60 см", "120см(1)"
     pattern = r"(?<!\d)(\d{2,3})\s*(?:см|cm)(?:\b|\(|$)"
     match = re.search(pattern, text, re.IGNORECASE)
 
     if match:
         length = int(match.group(1))
-        if 30 <= length <= 150:
+        if 30 <= length <= 200:
             # Remove the length part from text (keep any trailing parenthesis)
-            # Find where "см" or "cm" ends
             end_pos = match.end()
             # Don't consume trailing parenthesis
             if end_pos > 0 and text[end_pos - 1:end_pos] == "(":
                 end_pos -= 1
             clean_text = text[: match.start()] + text[end_pos:]
+            return length, clean_text.strip()
+
+    # Pattern 2: number without "см" followed by pack qty in parens: "130(1)", "120 (5)"
+    # Common in supplier prices: "Корилус 130(1)", "Магнолия 120см(1)"
+    pattern2 = r"\b(\d{2,3})\s*\(\d+\)"
+    match2 = re.search(pattern2, text)
+    if match2:
+        length = int(match2.group(1))
+        if 30 <= length <= 200:
+            # Remove just the number, keep the parenthesized part for pack_qty extraction
+            clean_text = text[:match2.start()] + text[match2.start() + len(match2.group(1)):]
             return length, clean_text.strip()
 
     return None, text
@@ -467,7 +713,7 @@ def _extract_country(text: str) -> Tuple[Optional[str], str]:
             return COUNTRIES[content], clean_text.strip()
 
     # Then try country abbreviations (Экв, Гол, Кол, Кен, Изр)
-    abbrev_pattern = r"\b(Экв|Гол|Кол|Кен|Изр)\b"
+    abbrev_pattern = r"\b(Экв|Гол|Кол|Кен|Изр|Кит)\b"
     abbrev_match = re.search(abbrev_pattern, text, re.IGNORECASE)
     if abbrev_match:
         abbrev = abbrev_match.group(1).lower()
@@ -477,6 +723,7 @@ def _extract_country(text: str) -> Tuple[Optional[str], str]:
             "кол": "Колумбия",
             "кен": "Кения",
             "изр": "Израиль",
+            "кит": "Китай",
         }
         if abbrev in country_map:
             clean_text = text[:abbrev_match.start()] + text[abbrev_match.end():]
@@ -507,31 +754,56 @@ def _extract_farm(text: str) -> Tuple[Optional[str], str]:
         clean_text = text[:plus_match.start()].rstrip() + " " + text[plus_match.end():].lstrip()
         return farm, clean_text.strip()
 
-    # Pattern 2: Known farm names in parentheses (ТЕССА, РОЗАПРИМА, etc.)
+    # Pattern 2: Known farm names in parentheses (hardcoded + dictionary)
+    farm_lookup = _get_farm_lookup()
+
+    # 2a: Hardcoded list (legacy, fast check)
     for farm_key, farm_name in FARM_NAMES_IN_PARENS.items():
         pattern = rf"\s*\({re.escape(farm_key)}\)\s*"
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            # Join with space to avoid concatenation issues
             clean_text = text[:match.start()].rstrip() + " " + text[match.end():].lstrip()
             return farm_name, clean_text.strip()
+
+    # 2b: Dictionary-based lookup in parentheses
+    for paren_match in re.finditer(r"\(([^)]+)\)", text):
+        content = paren_match.group(1).strip().lower()
+        canonical = farm_lookup.get(content)
+        if canonical:
+            clean_text = text[:paren_match.start()].rstrip() + " " + text[paren_match.end():].lstrip()
+            return canonical, clean_text.strip()
 
     # Pattern 3: Standard farm patterns (FRAMA FLOWERS, NARANJO, etc.)
     for pattern in FARM_PATTERNS[:-1]:  # Skip fallback pattern first
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             farm = match.group(1).strip()
+            # Normalize via dictionary if possible
+            farm_canonical = farm_lookup.get(farm.lower())
             clean_text = text[: match.start()] + text[match.end() :]
-            return farm, clean_text.strip()
+            return farm_canonical or farm, clean_text.strip()
 
     # Fallback: look for all-caps words at end of string
-    fallback_match = re.search(r"\b([A-Z]{3,}(?:\s+[A-Z]{3,})*)\s*$", text)
-    if fallback_match:
-        farm = fallback_match.group(1).strip()
-        # Make sure it's not just the flower type or variety
-        if len(farm) > 4:  # Minimum farm name length
-            clean_text = text[: fallback_match.start()].strip()
-            return farm, clean_text
+    # Try long words first (3+ chars each), then shorter (2+ chars)
+    for min_len in (3, 2):
+        pat = rf"\b([A-Z]{{{min_len},}}(?:\s+[A-Z]{{{min_len},}})*)\s*$"
+        fallback_match = re.search(pat, text)
+        if fallback_match:
+            farm = fallback_match.group(1).strip()
+            # Check if preceded by a short ALL-CAPS word (e.g. "LA" before "UNION")
+            prefix_text = text[: fallback_match.start()].rstrip()
+            prefix_match = re.search(r"\b([A-Z]{2,3})\s*$", prefix_text)
+            if prefix_match:
+                extended_farm = prefix_match.group(1) + " " + farm
+                extended_canonical = farm_lookup.get(extended_farm.lower())
+                if extended_canonical:
+                    clean_text = text[: prefix_match.start()].strip()
+                    return extended_canonical, clean_text
+            farm_canonical = farm_lookup.get(farm.lower())
+            # Accept if known in dictionary (any length) or long enough
+            if farm_canonical or len(farm) > 4:
+                clean_text = text[: fallback_match.start()].strip()
+                return farm_canonical or farm, clean_text
 
     return None, text
 
@@ -590,13 +862,18 @@ def _extract_subtype(
 
 
 def _extract_colors(text: str) -> Tuple[List[str], str]:
-    """Extract colors and return remaining text."""
+    """Extract colors and return remaining text.
+
+    Iterates COLORS keys by length descending so compound colors
+    like "светло-розовая" match before base "розовая".
+    """
     found_colors = []
     clean_text = text
-    text_lower = text.lower()
 
-    for color_key, color_norm in COLORS.items():
-        if color_key in text_lower and color_norm not in found_colors:
+    # Sort by key length desc — compound colors first
+    for color_key in sorted(COLORS, key=len, reverse=True):
+        color_norm = COLORS[color_key]
+        if color_key in clean_text.lower() and color_norm not in found_colors:
             found_colors.append(color_norm)
             # Remove color word
             pattern = re.compile(re.escape(color_key), re.IGNORECASE)
@@ -607,33 +884,130 @@ def _extract_colors(text: str) -> Tuple[List[str], str]:
     return found_colors, clean_text
 
 
-def _clean_variety(text: str) -> str:
+def _sanitize_text(text: str, flower_type: Optional[str] = None) -> str:
+    """
+    Multi-stage sanitization pipeline for raw product names.
+
+    Applied early in the normalization flow to remove garbage before extraction.
+    """
+    if not text:
+        return ""
+
+    # Stage 1: Remove Unicode garbage (®, ™, ©, smart quotes, zero-width chars)
+    text = re.sub(r"[®™©«»„""\u200b\u00a0\ufeff]", "", text)
+
+    # Stage 2: Remove supplier markers at start (* # ! NEW НОВИНКА ХИТ SALE АКЦИЯ)
+    text = re.sub(r"^[\s*#!•·▪►]+", "", text)
+    text = re.sub(
+        r"\b(?:NEW|НОВИНК[АИ]|ХИТ|SALE|АКЦИЯ|РАСПРОДАЖА|СКИДКА|HOT|BEST)[!.\s]*\b",
+        "", text, flags=re.IGNORECASE,
+    )
+
+    # Stage 3: Remove leading numbering ("1. Explorer", "1) Explorer", "01 - Explorer")
+    text = re.sub(r"^\s*\d{1,3}\s*[.):\-]\s*", "", text)
+
+    # Stage 4: Remove parentheses with non-variety content
+    # Keep country names, remove everything else that looks like noise
+    noise_in_parens = (
+        r"руб|шт|упак|цена|наличи|акци|new|нов|sale|скидк|хит|"
+        r"остаток|количество|кол-во|заказ|предзаказ|под\s*заказ|"
+        r"\d{3,}"  # 3+ digits (likely price)
+    )
+    text = re.sub(
+        rf"\([^)]*(?:{noise_in_parens})[^)]*\)",
+        "", text, flags=re.IGNORECASE,
+    )
+
+    # Stage 4.5: Remove parentheses with single-word synonyms/alt names
+    # "ФИСТАШКА (пистация)" → "ФИСТАШКА", "Розенботтел (rosehip)" → "Розенботтел"
+    # Keep: country names, farm names, pack qty like (25), variety-relevant content
+    def _is_synonym_parens(content: str) -> bool:
+        content = content.strip()
+        # Skip numbers (pack qty)
+        if re.match(r"^\d+", content):
+            return False
+        # Skip country names
+        if content.lower() in COUNTRIES:
+            return False
+        # Single word, 3-20 letters, mostly Cyrillic or Latin = likely synonym
+        if re.match(r"^[а-яёА-ЯЁa-zA-Z\-]{3,20}$", content):
+            return True
+        return False
+
+    text = re.sub(
+        r"\(([^)]{3,20})\)",
+        lambda m: "" if _is_synonym_parens(m.group(1)) else m.group(0),
+        text,
+    )
+
+    # Stage 5: Remove duplicate flower type from text
+    # e.g., if flower_type="Роза" and text starts with "Роза " — remove the duplicate
+    if flower_type:
+        ft_lower = flower_type.lower()
+        pattern = re.compile(r"\b" + re.escape(ft_lower) + r"\b", re.IGNORECASE)
+        matches = list(pattern.finditer(text))
+        if len(matches) > 1:
+            # Remove all but the first occurrence
+            for m in reversed(matches[1:]):
+                text = text[:m.start()] + text[m.end():]
+        elif len(matches) == 1:
+            # If the flower_type is already extracted, we may still have it in text
+            # This is handled elsewhere, so just clean trailing duplicate
+            pass
+
+    # Stage 6: Remove excessive punctuation
+    text = re.sub(r"\.{2,}", "", text)      # "..."
+    text = re.sub(r"!{2,}", "", text)       # "!!!"
+    text = re.sub(r"-{3,}", "-", text)      # "---" -> "-"
+    text = re.sub(r"_{2,}", " ", text)      # "__" -> " "
+
+    # Stage 7: Normalize whitespace
+    text = re.sub(r"\s+", " ", text).strip()
+
+    return text
+
+
+def _clean_variety(text: str, flower_type: Optional[str] = None) -> str:
     """Clean up variety name after extraction."""
     if not text:
         return ""
+
+    # Run sanitizer first (catches residual garbage)
+    text = _sanitize_text(text, flower_type)
+
+    # Remove leading digits that aren't part of variety name
+    # "1 Explorer" -> "Explorer", "25 шт Freedom" -> "Freedom"
+    text = re.sub(r"^\d{1,3}\s+(?=[A-ZА-ЯЁ])", "", text)
 
     # Remove common suffixes/noise
     text = re.sub(r"\s*[-–—]\s*", " ", text)  # Replace dashes with spaces
 
     # Fix unbalanced parentheses
-    # If there's an opening paren without closing, remove from paren to end
     if "(" in text and ")" not in text:
         text = re.sub(r"\s*\([^)]*$", "", text)
-    # If there's a closing paren without opening, remove from start to paren
     if ")" in text and "(" not in text:
         text = re.sub(r"^[^(]*\)\s*", "", text)
 
-    # Remove trailing numbers that might be leftover pack qty (including decimals like 4.5, 5.5)
+    # Remove trailing numbers that might be leftover pack qty (including decimals)
     text = re.sub(r"\s+\d{1,3}(?:\.\d+)?\s*$", "", text)
 
     # Remove country abbreviations like "Экв", "Гол", "Кол" at end
     text = re.sub(r"\s+(Экв|Гол|Кол|Кен|Изр)\s*$", "", text, flags=re.IGNORECASE)
 
     # Remove common noise words at end
-    text = re.sub(r"\s+(дв|од)\s*$", "", text, flags=re.IGNORECASE)  # дв=двойной, од=одинарный
+    text = re.sub(r"\s+(дв|од)\s*$", "", text, flags=re.IGNORECASE)
 
     # Remove "N пуч" (number of bunches) anywhere
     text = re.sub(r"\s+\d{1,2}\s*пуч\b", "", text, flags=re.IGNORECASE)
+
+    # Remove duplicate flower type from variety
+    if flower_type:
+        ft_lower = flower_type.lower()
+        text_lower = text.lower()
+        if text_lower.startswith(ft_lower + " "):
+            text = text[len(ft_lower):].strip()
+        elif text_lower.startswith(ft_lower):
+            text = text[len(ft_lower):].strip()
 
     # Remove slashes that might remain
     text = re.sub(r"[/\\]+", " ", text)
@@ -667,6 +1041,7 @@ GARBAGE_PATTERNS = [
     r"наличи[ей]",  # "наличие"
     r"остаток",  # "остаток"
     r"количество",  # "количество"
+    r"\b\d+[.,]?\d*\s*(?:кг|г)\b",  # "0,5 кг", "1 кг", "500 г"
 ]
 
 # Minimum items to consider as bundle list
@@ -692,8 +1067,13 @@ def _detect_bundle_list(text: str) -> Tuple[bool, List[str], List[str]]:
         if re.search(pattern, text_lower):
             warnings.append(f"garbage_text_detected: {pattern}")
 
+    # Clean garbage from text BEFORE splitting by comma
+    cleaned_text = _clean_garbage_from_text(text)
+    # Also remove trailing dots and punctuation left after cleanup
+    cleaned_text = re.sub(r"[.;:!]+\s*$", "", cleaned_text).strip()
+
     # Split by comma and analyze
-    parts = [p.strip() for p in text.split(",") if p.strip()]
+    parts = [p.strip() for p in cleaned_text.split(",") if p.strip()]
 
     # Check if this looks like a variety list
     if len(parts) >= BUNDLE_MIN_ITEMS:
@@ -705,6 +1085,11 @@ def _detect_bundle_list(text: str) -> Tuple[bool, List[str], List[str]]:
         valid_variety_count = 0
         for part in parts:
             part_clean = part.strip()
+            # Strip trailing/leading dots/punctuation/slashes from each variety
+            part_clean = re.sub(r"^[.;:!/\\]+|[.;:!/\\]+$", "", part_clean).strip()
+            # Skip if only punctuation/whitespace left
+            if not part_clean or not re.search(r"[а-яёА-ЯЁa-zA-Z]", part_clean):
+                continue
             # Skip if has numbers (likely price/length)
             if re.search(r"\d", part_clean):
                 continue
@@ -714,6 +1099,20 @@ def _detect_bundle_list(text: str) -> Tuple[bool, List[str], List[str]]:
             # Skip if too short (likely garbage)
             if len(part_clean) < 2:
                 continue
+            # Skip if it matches a garbage pattern
+            part_lower = part_clean.lower()
+            is_garbage = False
+            for gp in GARBAGE_PATTERNS:
+                if re.search(gp, part_lower):
+                    is_garbage = True
+                    break
+            if is_garbage:
+                continue
+            # Remove type prefix from first variety (e.g., "Роза спрей: Голден" → "Голден")
+            if not varieties:  # First variety
+                colon_match = re.match(r"^.+?:\s*(.+)$", part_clean)
+                if colon_match:
+                    part_clean = colon_match.group(1).strip()
             # Looks like a variety name
             valid_variety_count += 1
             varieties.append(part_clean)
@@ -824,6 +1223,39 @@ def _clean_garbage_from_text(text: str) -> str:
     return text.strip()
 
 
+def _apply_section_context(
+    result: "NormalizedName",
+    section_context: str,
+    type_lookup: Optional[Dict[str, str]] = None,
+) -> None:
+    """Apply section header context as fallback for missing fields.
+
+    Section context is a header like "Роза Эквадор" or "Хризантема" that
+    applies to all rows in that section.  We parse it once and use the
+    extracted type/country as fallback if the row itself didn't provide them.
+    """
+    if not section_context:
+        return
+
+    lookup = type_lookup or FlowerTypeLookup.get_types_sync()
+
+    # Try to extract flower type from section context
+    if result.flower_type is None:
+        for word in section_context.split():
+            word_lower = word.lower().rstrip(",.;:")
+            if word_lower in lookup:
+                result.flower_type = lookup[word_lower]
+                break
+
+    # Try to extract country from section context
+    if result.origin_country is None:
+        ctx_lower = section_context.lower()
+        for country_key, country_name in COUNTRIES.items():
+            if country_key in ctx_lower:
+                result.origin_country = country_name
+                break
+
+
 # =============================================================================
 # Main Normalization Functions
 # =============================================================================
@@ -832,6 +1264,7 @@ def normalize_name(
     raw_name: str,
     type_lookup: Optional[Dict[str, str]] = None,
     subtype_lookup: Optional[Dict[str, Dict[str, str]]] = None,
+    section_context: Optional[str] = None,
 ) -> NormalizedName:
     """
     Normalize a flower product name into structured components.
@@ -840,6 +1273,9 @@ def normalize_name(
         raw_name: Raw product name like "Роза кустовая Бабалу 50 см (Эквадор)"
         type_lookup: Optional custom type lookup dict
         subtype_lookup: Optional custom subtype lookup dict
+        section_context: Optional section header text (e.g. "Роза Эквадор")
+            used as fallback for flower_type and origin_country when
+            the row itself doesn't contain them.
 
     Returns:
         NormalizedName with extracted components
@@ -855,6 +1291,9 @@ def normalize_name(
     result.is_bundle_list = is_bundle
     result.bundle_varieties = bundle_varieties
     result.warnings = bundle_warnings
+
+    # 0.1 Early sanitization (removes unicode garbage, markers, numbering)
+    text = _sanitize_text(text)
 
     # 0.3 Extract pack_qty BEFORE garbage cleanup (to preserve slashes in patterns like 50/10)
     _, text = _extract_pack_qty(text)
@@ -884,12 +1323,36 @@ def normalize_name(
     result.flower_subtype, text = _extract_subtype(text, subtype_lookup)
 
     # 6.5 Additional cleanup for any remaining pack patterns (second pass)
-    # These might have been missed or be in different positions
     _, text = _extract_pack_qty(text)  # Second pass with cleaned text
     text = text.strip()
 
-    # 7. Remaining text is the variety
-    result.variety = _clean_variety(text) if text else None
+    # 7. Remaining text is the variety (pass flower_type for dedup)
+    result.variety = _clean_variety(text, result.flower_type) if text else None
+
+    # 7.1 Fix: if variety is a pure number and no length detected, it's likely length
+    if (result.variety and result.length_cm is None
+            and re.match(r"^\d{1,3}$", result.variety)):
+        num = int(result.variety)
+        if 30 <= num <= 200:
+            # Direct cm: "Корилус 130" → 130 cm
+            result.length_cm = num
+            result.variety = None
+        elif 3 <= num <= 20 and result.flower_type:
+            # Decimeter notation: "Роза 7" → 70 cm
+            result.length_cm = num * 10
+            result.variety = None
+
+    # 7.5 Fallback: if type not detected but variety is known, infer type from library
+    if result.flower_type is None and result.variety and not result.is_bundle_list:
+        variety_map = _get_variety_to_type_map()
+        variety_lower = result.variety.lower().strip()
+        inferred_type = variety_map.get(variety_lower)
+        if inferred_type:
+            result.flower_type = inferred_type
+
+    # 7.6 Fallback: use section_context to fill missing type/country
+    if section_context:
+        _apply_section_context(result, section_context, type_lookup)
 
     # 8. Build clean name (type + subtype + variety)
     parts = []
@@ -914,6 +1377,7 @@ def normalize_name(
 async def normalize_name_async(
     raw_name: str,
     db,
+    section_context: Optional[str] = None,
 ) -> NormalizedName:
     """
     Normalize a flower product name using database lookups.
@@ -923,13 +1387,14 @@ async def normalize_name_async(
     Args:
         raw_name: Raw product name
         db: AsyncSession instance
+        section_context: Optional section header for fallback
 
     Returns:
         NormalizedName with extracted components
     """
     type_lookup = await FlowerTypeLookup.get_types_async(db)
     subtype_lookup = await FlowerTypeLookup.get_subtypes_async(db)
-    return normalize_name(raw_name, type_lookup, subtype_lookup)
+    return normalize_name(raw_name, type_lookup, subtype_lookup, section_context)
 
 
 def normalize_names_batch(

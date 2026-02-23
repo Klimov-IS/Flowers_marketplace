@@ -23,6 +23,7 @@ from apps.api.models.normalized import (
 )
 from apps.api.models.order import Order, OrderItem
 from apps.api.models.parties import Supplier
+from apps.api.models.telegram import TelegramLink
 from apps.api.models.ai import AIRun, AISuggestion
 
 __all__ = [
@@ -46,6 +47,7 @@ __all__ = [
     "SupplierDeliveryRule",
     "AIRun",
     "AISuggestion",
+    "TelegramLink",
     # Catalog models
     "FlowerCategory",
     "FlowerType",

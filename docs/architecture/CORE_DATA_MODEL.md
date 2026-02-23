@@ -95,6 +95,22 @@
 - status
 - contacts (json)
 
+#### `telegram_link` (Привязка Telegram → платформа)
+Связь между Telegram-пользователем и сущностью платформы (supplier/buyer).
+- id (UUID)
+- telegram_user_id (BigInteger, unique) — ID пользователя в Telegram
+- telegram_chat_id (BigInteger) — ID чата
+- role (String(20)) — 'supplier' или 'buyer'
+- entity_id (UUID) — FK на supplier.id или buyer.id
+- username (String(100), nullable) — @username в Telegram
+- first_name (String(100), nullable)
+- is_active (Boolean, default true)
+- created_at, updated_at
+
+**Индексы:** `(role, entity_id)`, `(telegram_chat_id)`
+
+**Связь:** один Telegram-пользователь может быть привязан только к одной сущности (unique по telegram_user_id).
+
 *(Auth/users можно держать отдельным сервисом — здесь только доменные сущности.)*
 
 ---

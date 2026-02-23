@@ -137,32 +137,52 @@ A task is done only when:
 ---
 
 ## 12) Deployment (production)
-When user asks for deploy/commit/push:
 
-1. **Commit** changes with conventional commit message format:
-   ```
-   feat|fix|docs|refactor(scope): short description
-   ```
+### Быстрый деплой (одна команда)
+```bash
+# 1. Commit + Push
+git add <files> && git commit -m "feat(scope): description" && git push origin main
 
-2. **Push** to `origin/main`:
-   ```bash
-   git push origin main
-   ```
+# 2. Deploy (одна команда!)
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236 "cd /opt/flower-market && ./deploy.sh"
+```
 
-3. **Deploy** via SSH (автоматический скрипт):
-   ```bash
-   ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236 \
-     "cd /opt/flower-market && ./deploy.sh"
-   ```
+### Детали подключения
+| Параметр | Значение |
+|----------|----------|
+| **SSH User** | `ubuntu` (НЕ root!) |
+| **SSH Key** | `~/.ssh/yandex-cloud-wb-reputation` |
+| **Server IP** | `158.160.217.236` |
+| **App Path** | `/opt/flower-market/` |
+| **Service** | `flower-api` (systemd) |
+| **DB Container** | `flower_postgres` (Docker) |
 
-The deploy script automatically:
-- Pulls latest code from git
-- Installs Python dependencies
-- Runs `alembic upgrade head` (migrations)
-- Builds frontend with `npm run build`
-- Restarts API service
-- Reloads nginx
+### Что делает deploy.sh:
+1. `git pull origin main` — получает последний код
+2. `pip install -r requirements.txt` — зависимости Python
+3. `alembic upgrade head` — миграции БД
+4. `npm run build` — сборка frontend
+5. `systemctl restart flower-api` — перезапуск API
+6. `nginx -t && systemctl reload nginx` — перезагрузка nginx
 
-**Production URL:** http://158.160.217.236/flower/
+### Полезные команды на сервере
+```bash
+# Логи API (live)
+sudo journalctl -u flower-api -f
+
+# Статус API
+sudo systemctl status flower-api
+
+# Перезапуск API (без деплоя)
+sudo systemctl restart flower-api
+
+# Подключение к БД
+sudo docker exec -it flower_postgres psql -U flower_user -d flower_market
+```
+
+### URLs
+- **Frontend**: http://158.160.217.236/flower/
+- **API**: http://158.160.217.236/flower/api/
+- **Swagger**: http://158.160.217.236/flower/api/docs
 
 Full deployment docs: `/docs/DEPLOYMENT.md`

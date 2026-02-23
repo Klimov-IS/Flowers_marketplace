@@ -823,6 +823,57 @@ AI-извлечённые атрибуты сохраняются в `supplier_i
 }
 ```
 
+### 13.8 AI Column Mapping (определение колонок)
+
+Когда keyword-based `normalize_headers()` не может определить колонку `price` (обязательное поле), система вызывает AI для определения маппинга.
+
+**Модуль:** `packages/core/ai/column_mapping.py`
+
+**Вход:**
+- `headers` — список строковых заголовков из файла
+- `sample_rows` — первые 3–5 строк данных
+
+**AI-ответ:**
+```json
+{
+  "column_mapping": [
+    {"source_index": 0, "target_field": "raw_name", "confidence": 0.95},
+    {"source_index": 1, "target_field": "price", "confidence": 0.90},
+    {"source_index": 2, "target_field": "pack_qty", "confidence": 0.85}
+  ]
+}
+```
+
+**Фильтрация:**
+- Принимаются только маппинги с `confidence >= 0.60`
+- `source_index` валидируется (в пределах `[0, len(headers))`)
+- `raw_name` → `name` для совместимости с `normalize_headers()`
+
+**Когда срабатывает:** автоматически в `ImportService`, если keyword-matching вернул маппинг без `price`.
+
+### 13.9 AI Text Extraction (извлечение из PDF)
+
+Когда pdfplumber не находит таблиц в PDF (коммерческие предложения, текстовые прайсы), система извлекает текст и отправляет его в AI.
+
+**Модуль:** `packages/core/ai/text_extraction.py`
+
+**Вход:** сырой текст из всех страниц PDF (извлечён через PyMuPDF/fitz)
+
+**AI-ответ:**
+```json
+{
+  "document_type": "commercial_offer",
+  "items": [
+    {"name": "Тюльпаны (жёлтые, фиолетовые, розовые)", "price": 75, "unit": "шт", "pack_qty": 50}
+  ],
+  "notes": "КП на тюльпаны"
+}
+```
+
+**Результат:** AI-ответ конвертируется в стандартный формат строк `[{"row_number": N, "cells": [name, unit, price], "headers": [...]}]` и передаётся в обычный `_process_rows()`.
+
+**Пример:** КП "Тюльпаны (жёлтые, фиолетовые, розовые)" → AI извлекает 1 позицию → bundle expansion разбивает на 7 сортов → 7 `supplier_items`.
+
 ---
 
 ## 14) Связанные документы

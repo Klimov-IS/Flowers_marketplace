@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 100  # Requests per window
     rate_limit_window: int = 60  # Window in seconds
 
+    # Telegram Bot
+    telegram_internal_token: str = ""  # Token for bot → API auth
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS origins from comma-separated string."""

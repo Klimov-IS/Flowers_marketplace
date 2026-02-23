@@ -13,6 +13,9 @@ SYSTEM_PROMPT_EXTRACTION = """Ты AI-ассистент для нормализ
 ### Субтипы по типам:
 {subtypes_by_type}
 
+### Известные сорта (variety):
+{known_varieties}
+
 ### Страны происхождения:
 {countries}
 
@@ -62,14 +65,23 @@ SYSTEM_PROMPT_EXTRACTION = """Ты AI-ассистент для нормализ
 
 8. **clean_name** - ЧИСТОЕ НАЗВАНИЕ для витрины маркетплейса
    - Формат: "{{Тип}} {{субтип}} {{Сорт}}"
-   - Субтип пишем в нижнем регистре, сорт как есть (обычно с заглавной)
-   - НЕ включать: длину, страну, цвет, ферму, цену
+   - ТИП СТРОГО НА РУССКОМ: "Роза", "Хризантема", "Гвоздика" (не Rose, не Chrysanthemum!)
+   - Субтип пишем в нижнем регистре на русском: "кустовая", "спрей", "одноголовая", "пионовидная"
+   - Сорт — бренд как есть (обычно латиницей с заглавной: Explorer, Freedom, Mondial)
+   - СТРОГО НЕ включать: длину, страну, цвет, ферму, цену, количество, упаковку
+   - СТРОГО НЕ включать: цифры (кроме тех что являются частью сорта, например "Miss Piggy 5+")
+   - СТРОГО НЕ включать: скобки, ®, ™, *, #, NEW, SALE, АКЦИЯ, НОВИНКА
    - Если субтипа нет: "{{Тип}} {{Сорт}}"
    - Если сорта нет: "{{Тип}} {{субтип}}" или просто "{{Тип}}"
+   - Если сорт в кириллице и есть в списке известных — используй точное написание из списка
    - Примеры:
      - "Роза Explorer" (тип + сорт)
      - "Роза кустовая Lydia" (тип + субтип + сорт)
      - "Хризантема кустовая Балтика" (тип + субтип + сорт)
+     - "Хризантема одноголовая Zembla" (тип + субтип + сорт)
+     - "Гвоздика спрей Murano" (тип + субтип + сорт)
+     - "Тюльпан Strong Gold" (тип + сорт)
+     - "Эустома махровая Rosita White" (тип + субтип + сорт)
      - "Гвоздика спрей" (тип + субтип, сорт не определён)
    - Confidence 0.90+ если тип определён
 
@@ -232,6 +244,47 @@ JSON:
 }}
 """
 
+SYSTEM_PROMPT_TEXT_PRICE_EXTRACTION = """Ты AI-ассистент для извлечения данных из прайс-листов цветов.
+
+## Твоя задача
+Из сырого текста документа (PDF/КП/прайс-лист) извлечь список товаров с ценами.
+
+## Правила
+
+1. Найди ВСЕ позиции с ценами в тексте
+2. Для каждой позиции извлеки:
+   - **name** — полное название товара (как в документе)
+   - **price** — цена (число). Если несколько цен — бери основную/розничную
+   - **pack_qty** — количество в упаковке (если указано), иначе null
+   - **unit** — единица измерения (шт, уп, пучок...), если указана, иначе null
+3. Игнорируй заголовки, итоги, примечания, контактные данные
+4. Если цена указана диапазоном (от 50 до 70) — бери минимальную
+5. Если нет ни одной позиции с ценой — верни пустой массив
+
+## Формат ответа
+
+JSON:
+{{
+  "items": [
+    {{"name": "Роза Бабалу 50 см", "price": 150, "pack_qty": null, "unit": "шт"}},
+    {{"name": "Гвоздика кустовая белая", "price": 46, "pack_qty": 10, "unit": "уп"}}
+  ],
+  "document_type": "price_list",
+  "notes": "Краткое описание что за документ"
+}}
+
+document_type может быть: "price_list", "commercial_offer", "catalog", "invoice", "unknown"
+"""
+
+USER_PROMPT_TEXT_PRICE_EXTRACTION = """Извлеки все товары с ценами из следующего текста документа:
+
+---
+{raw_text}
+---
+
+Верни JSON с массивом items."""
+
+
 USER_PROMPT_EXTRACTION = """Извлеки атрибуты из следующих названий цветов:
 
 {rows_json}
@@ -253,6 +306,7 @@ def build_extraction_prompt(
     countries: list[str],
     colors: list[str],
     subtypes_by_type: dict[str, list[str]] | None = None,
+    known_varieties: dict[str, list[str]] | None = None,
 ) -> str:
     """Build system prompt with known values from database.
 
@@ -262,6 +316,8 @@ def build_extraction_prompt(
         colors: List of color names
         subtypes_by_type: Dict mapping type name to list of subtypes
                          e.g. {"Роза": ["кустовая", "спрей", "пионовидная"]}
+        known_varieties: Dict mapping type name to list of variety names
+                        e.g. {"Роза": ["Explorer", "Freedom", "Mondial"]}
     """
     # Format subtypes by type
     if subtypes_by_type:
@@ -273,9 +329,23 @@ def build_extraction_prompt(
     else:
         subtypes_formatted = "Нет данных о субтипах"
 
+    # Format known varieties by type (top varieties for each type)
+    if known_varieties:
+        varieties_lines = []
+        for type_name, varieties in sorted(known_varieties.items()):
+            if varieties:
+                # Limit to 40 per type to keep prompt reasonable
+                display = varieties[:40]
+                suffix = f" (+{len(varieties) - 40} ещё)" if len(varieties) > 40 else ""
+                varieties_lines.append(f"- {type_name}: {', '.join(display)}{suffix}")
+        varieties_formatted = "\n".join(varieties_lines) if varieties_lines else "Нет данных о сортах"
+    else:
+        varieties_formatted = "Нет данных о сортах"
+
     return SYSTEM_PROMPT_EXTRACTION.format(
-        flower_types=", ".join(flower_types[:50]),  # Increased limit for better coverage
+        flower_types=", ".join(flower_types[:50]),
         subtypes_by_type=subtypes_formatted,
+        known_varieties=varieties_formatted,
         countries=", ".join(countries[:15]),
         colors=", ".join(colors[:20]),
     )
@@ -286,6 +356,14 @@ def build_user_extraction_prompt(rows: list[dict]) -> str:
     import json
     rows_json = json.dumps(rows, ensure_ascii=False, indent=2)
     return USER_PROMPT_EXTRACTION.format(rows_json=rows_json)
+
+
+def build_text_price_extraction_prompt(raw_text: str, max_chars: int = 15000) -> str:
+    """Build user prompt for extracting prices from raw text."""
+    # Truncate very long texts to fit token limits
+    if len(raw_text) > max_chars:
+        raw_text = raw_text[:max_chars] + "\n\n[... текст обрезан ...]"
+    return USER_PROMPT_TEXT_PRICE_EXTRACTION.format(raw_text=raw_text)
 
 
 def build_column_mapping_prompt(headers: list[str], sample_rows: list[list[str]]) -> str:

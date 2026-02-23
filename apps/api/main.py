@@ -1,6 +1,10 @@
 """FastAPI application entry point."""
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -19,6 +23,7 @@ from apps.api.routers import (
     publish,
     skus,
     supplier_orders,
+    telegram,
 )
 
 # Setup logging
@@ -121,3 +126,4 @@ app.include_router(orders.router, tags=["orders"])  # Retail order endpoints (no
 app.include_router(supplier_orders.router, prefix="/admin", tags=["supplier-orders"])  # Supplier order management
 app.include_router(offers.router, tags=["offers"])  # No prefix - public endpoint
 app.include_router(catalog.router, prefix="/admin/catalog", tags=["catalog"])  # Flower catalog management
+app.include_router(telegram.router)  # Internal Telegram bot API

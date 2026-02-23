@@ -25,10 +25,15 @@ from packages.core.parsing import (
     extract_length_cm,
     extract_matrix_columns,
     extract_origin_country,
+    extract_pdf_text,
     parse_csv_content,
+    parse_pdf_content,
+    parse_xlsx_content,
     parse_price,
     normalize_name as normalize_name_rich,
 )
+from packages.core.ai.column_mapping import ai_detect_column_mapping
+from packages.core.ai.text_extraction import ai_extract_price_from_text
 from packages.core.parsing.attributes import extract_pack_qty
 from packages.core.parsing.headers import normalize_headers
 from packages.core.utils.stable_key import generate_stable_key, normalize_name
@@ -44,6 +49,263 @@ class ImportService:
     def __init__(self, db: AsyncSession):
         """Initialize import service."""
         self.db = db
+
+    async def import_file(
+        self,
+        supplier_id: UUID,
+        filename: str,
+        content: bytes,
+    ) -> ImportBatch:
+        """Import a price list file (CSV, PDF, or XLSX).
+
+        Dispatches to the appropriate parser based on file extension.
+        """
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+        if ext == "csv":
+            return await self.import_csv(supplier_id, filename, content)
+        elif ext == "pdf":
+            return await self._import_pdf(supplier_id, filename, content)
+        elif ext in ("xlsx", "xls"):
+            return await self._import_xlsx(supplier_id, filename, content)
+        else:
+            raise ValueError(f"Unsupported file format: .{ext}")
+
+    async def _import_pdf(
+        self,
+        supplier_id: UUID,
+        filename: str,
+        content: bytes,
+    ) -> ImportBatch:
+        """Import PDF price list for supplier.
+
+        Uses the same 7-stage pipeline as import_csv() but parses via
+        PyMuPDF's find_tables() instead of CSV reader.
+        """
+        logger.info("import_started", supplier_id=str(supplier_id), filename=filename, format="pdf")
+
+        import_batch = ImportBatch(
+            supplier_id=supplier_id,
+            source_type="pdf",
+            source_filename=filename,
+            status="received",
+            meta={"file_size": len(content)},
+        )
+        self.db.add(import_batch)
+        await self.db.flush()
+
+        try:
+            # Try table extraction first
+            rows = None
+            ai_text_fallback = False
+            try:
+                rows = parse_pdf_content(content)
+                logger.info("pdf_parsed", batch_id=str(import_batch.id), rows_count=len(rows))
+            except ValueError as table_err:
+                # Table extraction failed — try AI text extraction fallback
+                logger.info(
+                    "pdf_table_extraction_failed",
+                    batch_id=str(import_batch.id),
+                    error=str(table_err),
+                )
+                raw_text = extract_pdf_text(content)
+                if raw_text.strip():
+                    logger.info(
+                        "pdf_ai_text_fallback_started",
+                        batch_id=str(import_batch.id),
+                        text_length=len(raw_text),
+                    )
+                    rows = await ai_extract_price_from_text(raw_text)
+                    if rows:
+                        ai_text_fallback = True
+                        logger.info(
+                            "pdf_ai_text_fallback_success",
+                            batch_id=str(import_batch.id),
+                            rows_count=len(rows),
+                        )
+                    else:
+                        raise ValueError(
+                            "PDF contains no extractable table data"
+                        ) from table_err
+                else:
+                    raise ValueError(
+                        "PDF contains no extractable text or table data"
+                    ) from table_err
+
+            raw_rows = []
+            for row_data in rows:
+                raw_row = RawRow(
+                    import_batch_id=import_batch.id,
+                    row_kind="data",
+                    row_ref=f"row_{row_data['row_number']}",
+                    raw_cells={"cells": row_data["cells"], "headers": row_data["headers"]},
+                    raw_text=" | ".join(row_data["cells"]),
+                )
+                self.db.add(raw_row)
+                raw_rows.append(raw_row)
+
+            await self.db.flush()
+
+            parse_run = ParseRun(
+                import_batch_id=import_batch.id,
+                parser_version=PARSER_VERSION + ("-ai-text" if ai_text_fallback else ""),
+            )
+            self.db.add(parse_run)
+            await self.db.flush()
+
+            summary = await self._process_rows(
+                supplier_id=supplier_id,
+                import_batch_id=import_batch.id,
+                parse_run_id=parse_run.id,
+                rows=rows,
+                raw_rows=raw_rows,
+            )
+
+            if ai_text_fallback:
+                summary["extraction_method"] = "ai_text_fallback"
+
+            try:
+                ai_result = await run_ai_enrichment_for_batch(
+                    db=self.db,
+                    supplier_id=supplier_id,
+                    import_batch_id=import_batch.id,
+                )
+                summary["ai_enrichment"] = ai_result
+            except Exception as e:
+                logger.warning("ai_enrichment_error", batch_id=str(import_batch.id), error=str(e))
+                summary["ai_enrichment"] = {"status": "error", "error": str(e)}
+
+            try:
+                mapping_result = await self._auto_create_sku_mappings(
+                    supplier_id=supplier_id,
+                    import_batch_id=import_batch.id,
+                )
+                summary["auto_mappings"] = mapping_result
+            except Exception as e:
+                logger.warning("auto_mappings_error", batch_id=str(import_batch.id), error=str(e))
+                summary["auto_mappings"] = {"status": "error", "error": str(e)}
+
+            parse_run.finished_at = datetime.utcnow()
+            parse_run.summary = summary
+            import_batch.status = "parsed"
+            await self.db.commit()
+
+            logger.info("import_completed", batch_id=str(import_batch.id), summary=summary)
+
+            try:
+                publish_service = PublishService(self.db)
+                publish_result = await publish_service.publish_supplier_offers(supplier_id)
+                await self.db.commit()
+            except Exception as e:
+                logger.warning("auto_publish_error", batch_id=str(import_batch.id), error=str(e))
+
+            return import_batch
+
+        except Exception as e:
+            import_batch.status = "failed"
+            import_batch.meta["error"] = str(e)
+            await self.db.commit()
+            logger.error("import_failed", batch_id=str(import_batch.id), error=str(e))
+            raise ValueError(f"Import failed: {str(e)}")
+
+    async def _import_xlsx(
+        self,
+        supplier_id: UUID,
+        filename: str,
+        content: bytes,
+    ) -> ImportBatch:
+        """Import XLSX price list for supplier.
+
+        Uses the same pipeline as _import_pdf() but parses via openpyxl.
+        """
+        logger.info("import_started", supplier_id=str(supplier_id), filename=filename, format="xlsx")
+
+        import_batch = ImportBatch(
+            supplier_id=supplier_id,
+            source_type="xlsx",
+            source_filename=filename,
+            status="received",
+            meta={"file_size": len(content)},
+        )
+        self.db.add(import_batch)
+        await self.db.flush()
+
+        try:
+            rows = parse_xlsx_content(content)
+            logger.info("xlsx_parsed", batch_id=str(import_batch.id), rows_count=len(rows))
+
+            raw_rows = []
+            for row_data in rows:
+                raw_row = RawRow(
+                    import_batch_id=import_batch.id,
+                    row_kind="data",
+                    row_ref=f"row_{row_data['row_number']}",
+                    raw_cells={"cells": row_data["cells"], "headers": row_data["headers"]},
+                    raw_text=" | ".join(row_data["cells"]),
+                )
+                self.db.add(raw_row)
+                raw_rows.append(raw_row)
+
+            await self.db.flush()
+
+            parse_run = ParseRun(
+                import_batch_id=import_batch.id,
+                parser_version=PARSER_VERSION,
+            )
+            self.db.add(parse_run)
+            await self.db.flush()
+
+            summary = await self._process_rows(
+                supplier_id=supplier_id,
+                import_batch_id=import_batch.id,
+                parse_run_id=parse_run.id,
+                rows=rows,
+                raw_rows=raw_rows,
+            )
+
+            try:
+                ai_result = await run_ai_enrichment_for_batch(
+                    db=self.db,
+                    supplier_id=supplier_id,
+                    import_batch_id=import_batch.id,
+                )
+                summary["ai_enrichment"] = ai_result
+            except Exception as e:
+                logger.warning("ai_enrichment_error", batch_id=str(import_batch.id), error=str(e))
+                summary["ai_enrichment"] = {"status": "error", "error": str(e)}
+
+            try:
+                mapping_result = await self._auto_create_sku_mappings(
+                    supplier_id=supplier_id,
+                    import_batch_id=import_batch.id,
+                )
+                summary["auto_mappings"] = mapping_result
+            except Exception as e:
+                logger.warning("auto_mappings_error", batch_id=str(import_batch.id), error=str(e))
+                summary["auto_mappings"] = {"status": "error", "error": str(e)}
+
+            parse_run.finished_at = datetime.utcnow()
+            parse_run.summary = summary
+            import_batch.status = "parsed"
+            await self.db.commit()
+
+            logger.info("import_completed", batch_id=str(import_batch.id), summary=summary)
+
+            try:
+                publish_service = PublishService(self.db)
+                publish_result = await publish_service.publish_supplier_offers(supplier_id)
+                await self.db.commit()
+            except Exception as e:
+                logger.warning("auto_publish_error", batch_id=str(import_batch.id), error=str(e))
+
+            return import_batch
+
+        except Exception as e:
+            import_batch.status = "failed"
+            import_batch.meta["error"] = str(e)
+            await self.db.commit()
+            logger.error("import_failed", batch_id=str(import_batch.id), error=str(e))
+            raise ValueError(f"Import failed: {str(e)}")
 
     async def import_csv(
         self,
@@ -256,7 +518,76 @@ class ImportService:
                     columns=matrix_columns,
                 )
 
-        for row_data, raw_row in zip(rows, raw_rows):
+        # Resolve header map once for the entire file (keyword + AI fallback)
+        resolved_header_map: Dict[str, int] | None = None
+        if rows and not is_matrix:
+            first_headers = rows[0].get("headers", [])
+            resolved_header_map = normalize_headers(first_headers)
+
+            # AI fallback: if name found but price missing, ask DeepSeek
+            if "name" in resolved_header_map and "price" not in resolved_header_map:
+                logger.info(
+                    "ai_column_mapping_triggered",
+                    headers=first_headers,
+                    current_map=resolved_header_map,
+                )
+                # Collect sample data rows (up to 5, skipping empty)
+                sample_rows = []
+                for rd in rows[:10]:
+                    cells = rd.get("cells", [])
+                    if any(c.strip() for c in cells):
+                        sample_rows.append(cells)
+                    if len(sample_rows) >= 5:
+                        break
+
+                try:
+                    ai_map = await ai_detect_column_mapping(first_headers, sample_rows)
+                    if ai_map:
+                        # Merge AI results into resolved map (AI fills gaps only)
+                        for field, idx in ai_map.items():
+                            if field not in resolved_header_map:
+                                resolved_header_map[field] = idx
+                        logger.info(
+                            "ai_column_mapping_merged",
+                            final_map=resolved_header_map,
+                        )
+                except Exception as e:
+                    logger.warning("ai_column_mapping_call_failed", error=str(e))
+
+        # Pre-scan: detect section headers for section_context support.
+        # A section header is a row where the name column has text
+        # but the price column is empty (e.g. "РОЗА ЭКВАДОР,,,,,,,,").
+        section_map: Dict[int, str] = {}  # row_index -> section_context
+        section_header_rows: set = set()  # indices of section header rows to skip
+        if rows and not is_matrix:
+            hmap = resolved_header_map or {}
+            sec_name_idx = hmap.get("name")
+            sec_price_idx = hmap.get("price")
+            current_section: str | None = None
+
+            for idx, rd in enumerate(rows):
+                rc = rd.get("cells", [])
+                has_name = (
+                    sec_name_idx is not None
+                    and sec_name_idx < len(rc)
+                    and rc[sec_name_idx].strip()
+                )
+                has_price = (
+                    sec_price_idx is not None
+                    and sec_price_idx < len(rc)
+                    and rc[sec_price_idx].strip()
+                )
+                if has_name and not has_price:
+                    # This row is a section header — skip during processing
+                    current_section = rc[sec_name_idx].strip()
+                    section_header_rows.add(idx)
+                else:
+                    section_map[idx] = current_section or ""
+
+        for row_idx, (row_data, raw_row) in enumerate(zip(rows, raw_rows)):
+            # Skip section header rows (e.g. "Эквадор", "Израиль") — not actual items
+            if row_idx in section_header_rows:
+                continue
             try:
                 if is_matrix and matrix_columns:
                     await self._process_matrix_row(
@@ -276,6 +607,8 @@ class ImportService:
                         row_data=row_data,
                         raw_row=raw_row,
                         summary=summary,
+                        section_context=section_map.get(row_idx) or None,
+                        header_map_override=resolved_header_map,
                     )
             except Exception as e:
                 # Log error but continue
@@ -295,6 +628,177 @@ class ImportService:
 
         return summary
 
+    @staticmethod
+    def _validate_offer(
+        price_min: float | None,
+        price_max: float | None,
+        length_cm: int | None,
+    ) -> tuple[str, str | None]:
+        """Validate an offer candidate and return (validation, notes).
+
+        Returns:
+            ("ok", None) if valid,
+            ("warning", "reason") if anomalous.
+        """
+        notes = []
+
+        if price_min is not None and (price_min < 5 or price_min > 50_000):
+            notes.append("price_anomaly")
+        if price_max is not None and price_max > 50_000:
+            notes.append("price_anomaly")
+
+        if length_cm is not None and (length_cm < 15 or length_cm > 200):
+            notes.append("length_anomaly")
+
+        if notes:
+            return "warning", ", ".join(notes)
+        return "ok", None
+
+    @staticmethod
+    def _build_expanded_varieties(
+        normalized,
+        raw_name: str,
+        section_context: str | None = None,
+    ) -> list[tuple[object, str]]:
+        """Expand a bundle into individual (normalized_result, synthetic_name) pairs.
+
+        For each variety in the bundle, builds a synthetic name like
+        "Роза спрей Лидия" and normalizes it independently.
+
+        Returns:
+            List of (NormalizedName, synthetic_name) tuples.
+        """
+        results = []
+        flower_type = normalized.flower_type or ""
+        subtype = normalized.flower_subtype or ""
+        origin = normalized.origin_country
+
+        for variety_name in normalized.bundle_varieties:
+            # Strip type/subtype prefix if variety already starts with it
+            # e.g. "Роза Аваланш" → "Аваланш" (type will be prepended below)
+            vn = variety_name
+            if flower_type:
+                ft_lower = flower_type.lower()
+                if vn.lower().startswith(ft_lower):
+                    vn = vn[len(ft_lower):].strip()
+                    # Also strip subtype if present after type
+                    if subtype and vn.lower().startswith(subtype.lower()):
+                        vn = vn[len(subtype):].strip()
+            if not vn:
+                vn = variety_name  # fallback to original if nothing left
+
+            # Build synthetic name: "Роза спрей Лидия"
+            parts = []
+            if flower_type:
+                parts.append(flower_type)
+            if subtype:
+                parts.append(subtype.lower())
+            parts.append(vn)
+            synthetic_name = " ".join(parts)
+
+            # Normalize the synthetic name
+            variety_norm = normalize_name_rich(synthetic_name, section_context=section_context)
+
+            # Inherit origin country from parent if not detected
+            if not variety_norm.origin_country and origin:
+                variety_norm.origin_country = origin
+
+            results.append((variety_norm, synthetic_name))
+
+        return results
+
+    async def _create_bundle_items(
+        self,
+        supplier_id: UUID,
+        import_batch_id: UUID,
+        raw_row: RawRow,
+        raw_name: str,
+        expanded: list[tuple[object, str]],
+        summary: Dict,
+    ) -> list:
+        """Create SupplierItem records for each expanded bundle variety.
+
+        Returns list of (supplier_item, variety_norm) tuples for OfferCandidate creation.
+        """
+        items = []
+        for variety_norm, synthetic_name in expanded:
+            # Build attributes for this variety
+            attrs = {
+                "origin_country": variety_norm.origin_country,
+                "colors": variety_norm.colors or [],
+                "flower_type": variety_norm.flower_type,
+                "subtype": variety_norm.flower_subtype,
+                "variety": variety_norm.variety,
+                "farm": variety_norm.farm,
+                "clean_name": variety_norm.clean_name,
+                "origin": "bundle_expansion",
+                "bundle_source": raw_name,
+            }
+            attrs = {k: v for k, v in attrs.items() if v is not None}
+            sources = {k: "parser" for k in attrs.keys()}
+            attrs["_sources"] = sources
+
+            name_norm = normalize_name(synthetic_name)
+            stable_key = generate_stable_key(
+                supplier_id=supplier_id,
+                raw_name=synthetic_name,
+                raw_group=None,
+            )
+
+            # Create or update SupplierItem
+            result = await self.db.execute(
+                select(SupplierItem).where(
+                    SupplierItem.supplier_id == supplier_id,
+                    SupplierItem.stable_key == stable_key,
+                )
+            )
+            supplier_item = result.scalar_one_or_none()
+
+            if supplier_item:
+                supplier_item.last_import_batch_id = import_batch_id
+                supplier_item.raw_name = synthetic_name
+                supplier_item.name_norm = name_norm
+                if supplier_item.status == "deleted":
+                    supplier_item.status = "active"
+                    supplier_item.deleted_at = None
+
+                # Merge attributes preserving manual edits
+                existing_attrs = supplier_item.attributes or {}
+                locked_fields = existing_attrs.get("_locked", [])
+                existing_sources = existing_attrs.get("_sources", {})
+                merged = dict(attrs)
+                merged_sources = dict(sources)
+                for field in locked_fields:
+                    if field in existing_attrs:
+                        merged[field] = existing_attrs[field]
+                        merged_sources[field] = existing_sources.get(field, "manual")
+                for field, source in existing_sources.items():
+                    if source == "manual" and field in existing_attrs and field not in locked_fields:
+                        merged[field] = existing_attrs[field]
+                        merged_sources[field] = "manual"
+                merged["_sources"] = merged_sources
+                merged["_locked"] = locked_fields
+                supplier_item.attributes = merged
+                summary["supplier_items_updated"] += 1
+            else:
+                supplier_item = SupplierItem(
+                    supplier_id=supplier_id,
+                    stable_key=stable_key,
+                    last_import_batch_id=import_batch_id,
+                    raw_name=synthetic_name,
+                    raw_group=None,
+                    name_norm=name_norm,
+                    attributes=attrs,
+                    status="active",
+                )
+                self.db.add(supplier_item)
+                await self.db.flush()
+                summary["supplier_items_created"] += 1
+
+            items.append((supplier_item, variety_norm))
+
+        return items
+
     async def _process_single_row(
         self,
         supplier_id: UUID,
@@ -303,12 +807,14 @@ class ImportService:
         row_data: Dict,
         raw_row: RawRow,
         summary: Dict,
+        section_context: str | None = None,
+        header_map_override: Dict[str, int] | None = None,
     ) -> None:
         """Process a single CSV row."""
-        # Normalize headers
+        # Use pre-resolved header map or compute from row headers
         headers = row_data["headers"]
         cells = row_data["cells"]
-        header_map = normalize_headers(headers)
+        header_map = header_map_override if header_map_override is not None else normalize_headers(headers)
 
         # Extract required fields
         name_idx = header_map.get("name")
@@ -373,7 +879,7 @@ class ImportService:
                 pack_qty = int(pack_qty_str)
 
         # Extract attributes using rich name normalizer
-        normalized = normalize_name_rich(raw_name)
+        normalized = normalize_name_rich(raw_name, section_context=section_context)
 
         # Use normalized values, falling back to legacy extraction
         length_cm = normalized.length_cm or extract_length_cm(raw_name)
@@ -391,20 +897,20 @@ class ImportService:
             "farm": normalized.farm,
             "clean_name": normalized.clean_name,
         }
+        if section_context:
+            attributes["section_context"] = section_context
 
-        # Add bundle detection flags if detected
-        if normalized.is_bundle_list:
-            attributes["is_bundle_list"] = True
-            attributes["bundle_varieties"] = normalized.bundle_varieties
-            attributes["needs_review"] = True
-            attributes["review_reason"] = "bundle_list_detected"
-            # Create parse event for bundle detection
+        # Bundle auto-expansion: split into individual items
+        if normalized.is_bundle_list and normalized.bundle_varieties:
+            expanded = self._build_expanded_varieties(
+                normalized, raw_name, section_context=section_context,
+            )
             await self._create_parse_event(
                 parse_run_id=parse_run_id,
                 raw_row_id=raw_row.id,
-                severity="warning",
-                code="BUNDLE_LIST_DETECTED",
-                message=f"Multiple varieties in one row: {len(normalized.bundle_varieties)} items",
+                severity="info",
+                code="BUNDLE_EXPANDED",
+                message=f"Bundle auto-expanded: {len(expanded)} varieties from one row",
                 payload={
                     "varieties": normalized.bundle_varieties,
                     "original": raw_name,
@@ -412,14 +918,42 @@ class ImportService:
             )
             summary["parse_events_count"] += 1
 
-        # Add warnings if any
+            items = await self._create_bundle_items(
+                supplier_id, import_batch_id, raw_row, raw_name, expanded, summary,
+            )
+            for supplier_item, variety_norm in items:
+                v_length = variety_norm.length_cm or length_cm
+                validation, validation_notes = self._validate_offer(
+                    price_data["price_min"], price_data["price_max"], v_length,
+                )
+                offer_candidate = OfferCandidate(
+                    supplier_item_id=supplier_item.id,
+                    import_batch_id=import_batch_id,
+                    raw_row_id=raw_row.id,
+                    length_cm=v_length,
+                    pack_type=None,
+                    pack_qty=pack_qty,
+                    price_type=price_data["price_type"],
+                    price_min=price_data["price_min"],
+                    price_max=price_data["price_max"],
+                    currency="RUB",
+                    tier_min_qty=None,
+                    tier_max_qty=None,
+                    availability="unknown",
+                    stock_qty=None,
+                    validation=validation,
+                    validation_notes=validation_notes,
+                )
+                self.db.add(offer_candidate)
+                summary["offer_candidates_created"] += 1
+            return
+
+        # Non-bundle warnings
         if normalized.warnings:
             attributes["warnings"] = normalized.warnings
-            if not attributes.get("needs_review"):
-                # Check for garbage text warnings
-                if any("garbage" in w for w in normalized.warnings):
-                    attributes["needs_review"] = True
-                    attributes["review_reason"] = "garbage_text_detected"
+            if any("garbage" in w for w in normalized.warnings):
+                attributes["needs_review"] = True
+                attributes["review_reason"] = "garbage_text_detected"
 
         # Remove None values
         attributes = {k: v for k, v in attributes.items() if v is not None}
@@ -498,6 +1032,9 @@ class ImportService:
             summary["supplier_items_created"] += 1
 
         # Create offer_candidate
+        validation, validation_notes = self._validate_offer(
+            price_data["price_min"], price_data["price_max"], length_cm,
+        )
         offer_candidate = OfferCandidate(
             supplier_item_id=supplier_item.id,
             import_batch_id=import_batch_id,
@@ -513,8 +1050,8 @@ class ImportService:
             tier_max_qty=None,
             availability="unknown",
             stock_qty=None,
-            validation="ok",
-            validation_notes=None,
+            validation=validation,
+            validation_notes=validation_notes,
         )
         self.db.add(offer_candidate)
         summary["offer_candidates_created"] += 1
@@ -568,18 +1105,15 @@ class ImportService:
             "clean_name": normalized.clean_name,
         }
 
-        # Add bundle detection flags if detected (matrix format)
-        if normalized.is_bundle_list:
-            attributes["is_bundle_list"] = True
-            attributes["bundle_varieties"] = normalized.bundle_varieties
-            attributes["needs_review"] = True
-            attributes["review_reason"] = "bundle_list_detected"
+        # Bundle auto-expansion for matrix format
+        if normalized.is_bundle_list and normalized.bundle_varieties:
+            expanded = self._build_expanded_varieties(normalized, raw_name)
             await self._create_parse_event(
                 parse_run_id=parse_run_id,
                 raw_row_id=raw_row.id,
-                severity="warning",
-                code="BUNDLE_LIST_DETECTED",
-                message=f"Multiple varieties in one row: {len(normalized.bundle_varieties)} items",
+                severity="info",
+                code="BUNDLE_EXPANDED",
+                message=f"Bundle auto-expanded (matrix): {len(expanded)} varieties from one row",
                 payload={
                     "varieties": normalized.bundle_varieties,
                     "original": raw_name,
@@ -587,13 +1121,54 @@ class ImportService:
             )
             summary["parse_events_count"] += 1
 
-        # Add warnings if any
+            items = await self._create_bundle_items(
+                supplier_id, import_batch_id, raw_row, raw_name, expanded, summary,
+            )
+
+            # Create OfferCandidates: each variety × each price column
+            for supplier_item, variety_norm in items:
+                candidates_created = 0
+                for col_idx, length_cm, pack_type in matrix_columns:
+                    if col_idx >= len(cells):
+                        continue
+                    raw_price = cells[col_idx].strip()
+                    if not raw_price:
+                        continue
+                    price_data = parse_price(raw_price)
+                    if price_data["error"] or price_data["price_min"] is None:
+                        continue
+                    validation, validation_notes = self._validate_offer(
+                        price_data["price_min"], price_data["price_max"], length_cm,
+                    )
+                    offer_candidate = OfferCandidate(
+                        supplier_item_id=supplier_item.id,
+                        import_batch_id=import_batch_id,
+                        raw_row_id=raw_row.id,
+                        length_cm=length_cm,
+                        pack_type=pack_type,
+                        pack_qty=None,
+                        price_type=price_data["price_type"],
+                        price_min=price_data["price_min"],
+                        price_max=price_data["price_max"],
+                        currency="RUB",
+                        tier_min_qty=None,
+                        tier_max_qty=None,
+                        availability="unknown",
+                        stock_qty=None,
+                        validation=validation,
+                        validation_notes=validation_notes,
+                    )
+                    self.db.add(offer_candidate)
+                    candidates_created += 1
+                summary["offer_candidates_created"] += candidates_created
+            return
+
+        # Non-bundle warnings
         if normalized.warnings:
             attributes["warnings"] = normalized.warnings
-            if not attributes.get("needs_review"):
-                if any("garbage" in w for w in normalized.warnings):
-                    attributes["needs_review"] = True
-                    attributes["review_reason"] = "garbage_text_detected"
+            if any("garbage" in w for w in normalized.warnings):
+                attributes["needs_review"] = True
+                attributes["review_reason"] = "garbage_text_detected"
 
         # Remove None values
         attributes = {k: v for k, v in attributes.items() if v is not None}
@@ -619,37 +1194,26 @@ class ImportService:
         supplier_item = result.scalar_one_or_none()
 
         if supplier_item:
-            # Update existing - preserve locked fields and manual changes
             supplier_item.last_import_batch_id = import_batch_id
             supplier_item.raw_name = raw_name
-
-            # Restore to active if was deleted (re-import should reactivate)
             if supplier_item.status == "deleted":
                 supplier_item.status = "active"
                 supplier_item.deleted_at = None
             supplier_item.name_norm = name_norm
 
-            # Merge attributes: preserve locked fields and manual sources
             existing_attrs = supplier_item.attributes or {}
             locked_fields = existing_attrs.get("_locked", [])
             existing_sources = existing_attrs.get("_sources", {})
-
-            # Start with new parser attributes
             merged = dict(attributes)
             merged_sources = dict(sources)
-
-            # Preserve locked fields from existing
             for field in locked_fields:
                 if field in existing_attrs:
                     merged[field] = existing_attrs[field]
                     merged_sources[field] = existing_sources.get(field, "manual")
-
-            # Preserve manually edited fields (source=manual)
             for field, source in existing_sources.items():
                 if source == "manual" and field in existing_attrs and field not in locked_fields:
                     merged[field] = existing_attrs[field]
                     merged_sources[field] = "manual"
-
             merged["_sources"] = merged_sources
             merged["_locked"] = locked_fields
             supplier_item.attributes = merged
@@ -677,9 +1241,8 @@ class ImportService:
 
             raw_price = cells[col_idx].strip()
             if not raw_price:
-                continue  # Skip empty cells
+                continue
 
-            # Parse price
             price_data = parse_price(raw_price)
             if price_data["error"] or price_data["price_min"] is None:
                 await self._create_parse_event(
@@ -693,7 +1256,9 @@ class ImportService:
                 summary["parse_events_count"] += 1
                 continue
 
-            # Create OfferCandidate
+            validation, validation_notes = self._validate_offer(
+                price_data["price_min"], price_data["price_max"], length_cm,
+            )
             offer_candidate = OfferCandidate(
                 supplier_item_id=supplier_item.id,
                 import_batch_id=import_batch_id,
@@ -709,8 +1274,8 @@ class ImportService:
                 tier_max_qty=None,
                 availability="unknown",
                 stock_qty=None,
-                validation="ok",
-                validation_notes=None,
+                validation=validation,
+                validation_notes=validation_notes,
             )
             self.db.add(offer_candidate)
             candidates_created += 1

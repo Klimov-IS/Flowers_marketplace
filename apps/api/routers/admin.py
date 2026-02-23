@@ -972,6 +972,92 @@ async def upload_csv_import(
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 
+@router.post("/suppliers/{supplier_id}/imports/pdf", response_model=ImportBatchResponse)
+async def upload_pdf_import(
+    supplier_id: UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+) -> ImportBatch:
+    """Upload and import a PDF price list for a supplier."""
+    result = await db.execute(select(Supplier).where(Supplier.id == supplier_id))
+    supplier = result.scalar_one_or_none()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="PDF file too large (max 10MB)")
+
+    import_service = ImportService(db)
+    try:
+        import_batch = await import_service.import_file(
+            supplier_id=supplier_id,
+            filename=file.filename,
+            content=content,
+        )
+        logger.info(
+            "pdf_import_completed",
+            batch_id=str(import_batch.id),
+            supplier_id=str(supplier_id),
+            filename=file.filename,
+        )
+        return import_batch
+    except Exception as e:
+        logger.error(
+            "pdf_import_failed",
+            supplier_id=str(supplier_id),
+            filename=file.filename,
+            error=str(e),
+        )
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+
+
+@router.post("/suppliers/{supplier_id}/imports/xlsx", response_model=ImportBatchResponse)
+async def upload_xlsx_import(
+    supplier_id: UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+) -> ImportBatch:
+    """Upload and import an XLSX price list for a supplier."""
+    result = await db.execute(select(Supplier).where(Supplier.id == supplier_id))
+    supplier = result.scalar_one_or_none()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Only XLSX/XLS files are supported")
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="XLSX file too large (max 10MB)")
+
+    import_service = ImportService(db)
+    try:
+        import_batch = await import_service.import_file(
+            supplier_id=supplier_id,
+            filename=file.filename,
+            content=content,
+        )
+        logger.info(
+            "xlsx_import_completed",
+            batch_id=str(import_batch.id),
+            supplier_id=str(supplier_id),
+            filename=file.filename,
+        )
+        return import_batch
+    except Exception as e:
+        logger.error(
+            "xlsx_import_failed",
+            supplier_id=str(supplier_id),
+            filename=file.filename,
+            error=str(e),
+        )
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+
+
 @router.get("/imports/{import_batch_id}", response_model=ImportSummaryResponse)
 async def get_import_summary(
     import_batch_id: UUID,

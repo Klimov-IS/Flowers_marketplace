@@ -30,7 +30,8 @@ API обеспечивает:
 11. [Buyers](#buyers-admin)
 12. [Orders](#orders-retail)
 13. [Supplier Orders](#supplier-orders-admin)
-14. [Error Handling](#error-responses)
+14. [Internal Telegram API](#internal-telegram-api) ← **NEW**
+15. [Error Handling](#error-responses)
 
 ---
 
@@ -2400,6 +2401,161 @@ curl http://localhost:8000/admin/orders/metrics
 
 ---
 
+## Internal Telegram API
+
+Внутренний API для Telegram-бота. Все endpoints защищены заголовком `X-Bot-Token`.
+
+**Prefix:** `/internal/telegram`
+
+**Аутентификация:** заголовок `X-Bot-Token` должен совпадать с `TELEGRAM_INTERNAL_TOKEN` из `.env`.
+
+---
+
+### Find Supplier by Phone
+
+**Endpoint:** `POST /internal/telegram/find-by-phone`
+
+**Request:**
+```json
+{
+  "phone": "+79001234567"
+}
+```
+
+**Response (200):**
+```json
+{
+  "found": true,
+  "entity_id": "uuid",
+  "entity_type": "supplier",
+  "name": "ООО Цветы Оптом",
+  "status": "active"
+}
+```
+
+Нормализует телефон (8→7, оставляет только цифры) и ищет в `suppliers.contacts.phone`.
+
+---
+
+### Create Telegram Link
+
+**Endpoint:** `POST /internal/telegram/link`
+
+**Request:**
+```json
+{
+  "telegram_user_id": 123456789,
+  "telegram_chat_id": 123456789,
+  "role": "supplier",
+  "entity_id": "uuid",
+  "username": "user_name",
+  "first_name": "Иван"
+}
+```
+
+**Response (200):** `LinkResponse` с id, entity_name.
+
+**409:** если Telegram-пользователь уже привязан.
+
+---
+
+### Get Telegram Link
+
+**Endpoint:** `GET /internal/telegram/link/{telegram_user_id}`
+
+**Response (200):** `LinkResponse` (id, telegram_user_id, role, entity_id, entity_name).
+
+**404:** если привязка не найдена.
+
+---
+
+### Delete Telegram Link
+
+**Endpoint:** `DELETE /internal/telegram/link/{telegram_user_id}`
+
+**Response (200):** `{"ok": true, "message": "Account unlinked"}`
+
+---
+
+### Register Supplier
+
+**Endpoint:** `POST /internal/telegram/register-supplier`
+
+Создаёт нового supplier со статусом `pending`.
+
+**Request:**
+```json
+{
+  "name": "Новые Цветы",
+  "phone": "+79001234567",
+  "city_name": "Москва"
+}
+```
+
+**Response (200):**
+```json
+{
+  "supplier_id": "uuid",
+  "name": "Новые Цветы",
+  "status": "pending"
+}
+```
+
+**409:** если поставщик с таким именем уже существует.
+
+---
+
+### Upload Price List
+
+**Endpoint:** `POST /internal/telegram/upload-price/{supplier_id}`
+
+Загрузка файла прайс-листа (CSV/XLSX/PDF). Проксирует в `ImportService.import_file()`.
+
+**Request:** `multipart/form-data` с полем `file`.
+
+**Ограничения:** максимум 10 МБ.
+
+**Response (200):**
+```json
+{
+  "batch_id": "uuid",
+  "status": "parsed",
+  "filename": "price.xlsx",
+  "raw_rows_count": 50,
+  "supplier_items_count": 45,
+  "offer_candidates_count": 120,
+  "parse_errors_count": 2,
+  "parse_errors": [
+    {"code": "PRICE_MISSING", "message": "..."}
+  ],
+  "type_detected_pct": 100,
+  "variety_detected_pct": 67
+}
+```
+
+---
+
+### Get Last Import
+
+**Endpoint:** `GET /internal/telegram/last-import/{supplier_id}`
+
+**Response (200):**
+```json
+{
+  "batch_id": "uuid",
+  "filename": "price.xlsx",
+  "status": "parsed",
+  "imported_at": "2026-02-23T10:00:00Z",
+  "raw_rows_count": 50,
+  "supplier_items_count": 45,
+  "offer_candidates_count": 120
+}
+```
+
+**404:** если у поставщика нет импортов.
+
+---
+
 ## Error Responses
 
 All endpoints follow consistent error format:
@@ -2478,6 +2634,7 @@ curl "http://localhost:8000/offers?product_type=rose"
 
 ## Version History
 
+- **v0.7.0** (2026-02-23): Добавлен Internal Telegram API — привязка, регистрация, загрузка прайсов через бота
 - **v0.6.0** (2026-02-06): Добавлены Import History endpoints — список импортов, ошибки парсинга, удаление, перепарсинг
 - **v0.5.0** (2026-02-05): Добавлен Flower Catalog API — иерархический справочник типов/субтипов/сортов цветов
 - **v0.4.0** (2026-02-03): Документация расширена: аутентификация, таблица содержания, русский язык

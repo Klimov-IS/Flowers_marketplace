@@ -6,6 +6,8 @@ from packages.core.parsing.csv_parser import (
     extract_matrix_columns,
 )
 from packages.core.parsing.headers import normalize_headers
+from packages.core.parsing.pdf_parser import parse_pdf_content, extract_pdf_text
+from packages.core.parsing.xlsx_parser import parse_xlsx_content
 from packages.core.parsing.price import parse_price
 from packages.core.parsing.name_normalizer import (
     normalize_name,
@@ -19,6 +21,9 @@ from packages.core.parsing.name_normalizer import (
 
 __all__ = [
     "parse_csv_content",
+    "parse_pdf_content",
+    "extract_pdf_text",
+    "parse_xlsx_content",
     "detect_matrix_format",
     "extract_matrix_columns",
     "normalize_headers",

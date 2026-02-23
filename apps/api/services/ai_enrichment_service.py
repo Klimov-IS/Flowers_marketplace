@@ -11,7 +11,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from apps.api.logging_config import get_logger
 from apps.api.models.ai import AIRun, AISuggestion, AIRunStatus, AISuggestionStatus
-from apps.api.models.catalog import FlowerType, FlowerSubtype
+from apps.api.models.catalog import FlowerType, FlowerSubtype, FlowerVariety
 from apps.api.models.items import SupplierItem
 from packages.core.ai import AIService
 from packages.core.ai.schemas import FieldExtraction
@@ -68,15 +68,33 @@ class AIEnrichmentService:
                 subtypes_by_type[type_name] = []
             subtypes_by_type[type_name].append(subtype_name.lower())
 
+        # Load known varieties grouped by type (for AI prompt)
+        varieties_result = await self.db.execute(
+            select(FlowerVariety.name, FlowerType.canonical_name)
+            .join(FlowerType, FlowerVariety.type_id == FlowerType.id)
+            .where(FlowerVariety.is_active == True)
+            .where(FlowerType.is_active == True)
+            .order_by(FlowerType.canonical_name, FlowerVariety.name)
+        )
+
+        known_varieties: dict[str, list[str]] = {}
+        for row in varieties_result:
+            variety_name, type_name = row
+            if type_name not in known_varieties:
+                known_varieties[type_name] = []
+            known_varieties[type_name].append(variety_name)
+
         logger.debug(
             "catalog_context_loaded",
             flower_types_count=len(flower_types),
             subtypes_count=sum(len(v) for v in subtypes_by_type.values()),
+            varieties_count=sum(len(v) for v in known_varieties.values()),
         )
 
         return {
             "flower_types": flower_types,
             "subtypes_by_type": subtypes_by_type,
+            "known_varieties": known_varieties,
         }
 
     async def enrich_supplier_items(
@@ -172,11 +190,12 @@ class AIEnrichmentService:
                 for i, item in enumerate(items_needing_ai)
             ]
 
-            # Call AI service with catalog context
+            # Call AI service with catalog context (including known varieties)
             response = await self.ai_service.extract_attributes_batch(
                 rows,
                 flower_types=catalog_context["flower_types"] or None,
                 subtypes_by_type=catalog_context["subtypes_by_type"] or None,
+                known_varieties=catalog_context.get("known_varieties") or None,
             )
 
             # Update AI run with token usage
@@ -343,18 +362,28 @@ class AIEnrichmentService:
         self,
         items: list[SupplierItem],
     ) -> list[SupplierItem]:
-        """Filter items that need AI enrichment."""
+        """Filter items that need AI enrichment.
+
+        Sends ALL items that don't have a clean_name yet (i.e., all new items),
+        plus any items missing key attributes. This ensures AI generates
+        clean_name for every position in every price list.
+        """
         needing_enrichment = []
 
         for item in items:
             attributes = item.attributes or {}
 
-            # Check if key attributes are missing
+            # Always enrich if clean_name is missing (every new item)
+            has_clean_name = bool(attributes.get("clean_name"))
+            if not has_clean_name:
+                needing_enrichment.append(item)
+                continue
+
+            # Also enrich if key attributes are missing
             has_flower_type = bool(attributes.get("flower_type"))
             has_country = bool(attributes.get("origin_country"))
             has_variety = bool(attributes.get("variety"))
 
-            # If any key attribute is missing, needs enrichment
             if not (has_flower_type and has_country and has_variety):
                 needing_enrichment.append(item)
 

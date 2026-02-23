@@ -40,10 +40,11 @@ ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
 ```
 /opt/flower-market/
 ├── apps/api/              # FastAPI backend
+├── apps/bot/              # Telegram bot (тонкий клиент к API)
 ├── frontend/dist/         # Собранный React (Vite)
 ├── venv/                  # Python 3.12 виртуальное окружение
 ├── alembic/               # Миграции БД
-├── packages/core/         # Бизнес-логика
+├── packages/core/         # Бизнес-логика + AI модули
 ├── .env                   # Конфигурация (НЕ в git!)
 ├── docker-compose.db.yml  # PostgreSQL контейнер
 └── deploy.sh              # Скрипт деплоя
@@ -54,6 +55,7 @@ ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
 | Сервис | Тип | Порт | Управление |
 |--------|-----|------|------------|
 | **API** | systemd | 8080 | `sudo systemctl {start|stop|restart} flower-api` |
+| **Telegram Bot** | systemd | 8081 | `sudo systemctl {start|stop|restart} flower-bot` |
 | **PostgreSQL** | Docker | 5433 | `docker compose -f docker-compose.db.yml {up|down}` |
 | **Nginx** | systemd | 80 | `sudo systemctl reload nginx` |
 
@@ -87,7 +89,8 @@ ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236 "cd /opt/flower-
 3. `alembic upgrade head` — миграции БД
 4. `npm run build` — сборка frontend с правильными путями
 5. `systemctl restart flower-api` — перезапуск API
-6. `nginx -t && systemctl reload nginx` — перезагрузка nginx
+6. `systemctl restart flower-bot` — перезапуск Telegram бота
+7. `nginx -t && systemctl reload nginx` — перезагрузка nginx
 
 ### Важные детали SSH подключения
 
@@ -141,6 +144,9 @@ sudo journalctl -u flower-api -f
 # API логи (последние 100 строк)
 sudo journalctl -u flower-api -n 100
 
+# Telegram Bot логи (live)
+sudo journalctl -u flower-bot -f
+
 # Nginx логи
 sudo tail -f /var/log/nginx/access.log
 sudo tail -f /var/log/nginx/error.log
@@ -151,6 +157,9 @@ sudo tail -f /var/log/nginx/error.log
 ```bash
 # API
 sudo systemctl status flower-api
+
+# Telegram Bot
+sudo systemctl status flower-bot
 
 # PostgreSQL
 sudo docker ps
@@ -217,6 +226,21 @@ JWT_SECRET_KEY=<generated>
 
 # CORS
 CORS_ORIGINS=http://158.160.217.236
+
+# AI Service (DeepSeek)
+DEEPSEEK_API_KEY=<your-deepseek-api-key>
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+AI_ENABLED=true
+AI_MAX_ROWS=5000
+
+# Telegram Bot
+TELEGRAM_BOT_TOKEN=<from-botfather>
+TELEGRAM_WEBHOOK_URL=https://158.160.217.236/flower/bot/webhook
+TELEGRAM_WEBHOOK_SECRET=<random-32-char>
+TELEGRAM_INTERNAL_TOKEN=<random-32-char>
+BOT_MODE=webhook
+API_BASE_URL=http://127.0.0.1:8080
 ```
 
 ### Nginx конфигурация
@@ -227,6 +251,10 @@ CORS_ORIGINS=http://158.160.217.236
 # Flower Market блок
 location /flower/api/ {
     proxy_pass http://127.0.0.1:8080/;
+}
+
+location /flower/bot/webhook {
+    proxy_pass http://127.0.0.1:8081/webhook;
 }
 
 location /flower/assets/ {
