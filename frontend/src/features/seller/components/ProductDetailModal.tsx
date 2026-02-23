@@ -13,6 +13,19 @@ import { useAppSelector } from '../../../hooks/useAppSelector';
 import type { FlatOfferVariant } from '../../../types/supplierItem';
 import { getFlowerImage, getDefaultFlowerImage } from '../../../utils/flowerImages';
 
+/**
+ * Resolve a photo URL by prepending the Vite base path.
+ * In dev: BASE_URL = "/" → "/uploads/photos/xxx.jpg"
+ * In prod: BASE_URL = "/flower/" → "/flower/uploads/photos/xxx.jpg"
+ */
+function resolvePhotoUrl(url: string): string {
+  const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+  if (basePath && url.startsWith('/uploads')) {
+    return basePath + url;
+  }
+  return url;
+}
+
 interface ProductDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -49,6 +62,7 @@ export default function ProductDetailModal({
   const user = useAppSelector((state) => state.auth.user);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   // Fetch all variants of this item
   const { data: variantsData } = useGetFlatItemsQuery(
@@ -89,6 +103,8 @@ export default function ProductDetailModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setUploadStatus('idle');
+
     // Show preview immediately
     const reader = new FileReader();
     reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
@@ -96,14 +112,22 @@ export default function ProductDetailModal({
 
     try {
       await uploadPhoto({ itemId: variant.item_id, file }).unwrap();
+      setUploadStatus('success');
+      setTimeout(() => setUploadStatus('idle'), 2000);
     } catch (error) {
       console.error('Failed to upload photo:', error);
       setPhotoPreview(null);
+      setUploadStatus('error');
+      setTimeout(() => setUploadStatus('idle'), 3000);
     }
+
+    // Reset input so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Determine the photo to show
-  const photoUrl = photoPreview || itemData.photo_url;
+  // Determine the photo to show: preview (data URL) > saved photo_url > type fallback
+  const savedPhotoUrl = itemData.photo_url ? resolvePhotoUrl(itemData.photo_url) : null;
+  const photoUrl = photoPreview || savedPhotoUrl;
   const fallbackImage = getFlowerImage(itemData.flower_type);
 
   return (
@@ -161,7 +185,21 @@ export default function ProductDetailModal({
               onChange={handlePhotoUpload}
             />
           </div>
-          {!photoUrl && (
+          {/* Upload status feedback */}
+          {uploadStatus === 'success' && (
+            <p className="text-xs text-green-600 mt-2 text-center flex items-center justify-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+              Фото сохранено
+            </p>
+          )}
+          {uploadStatus === 'error' && (
+            <p className="text-xs text-red-600 mt-2 text-center">
+              Ошибка загрузки
+            </p>
+          )}
+          {uploadStatus === 'idle' && !photoUrl && (
             <p className="text-xs text-gray-400 mt-2 text-center">
               Нажмите чтобы загрузить фото
             </p>
