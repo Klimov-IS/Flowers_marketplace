@@ -9,8 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import cast, func, select
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.config import settings
@@ -119,10 +118,10 @@ async def find_by_phone(
     """Find supplier by phone number in contacts JSONB."""
     phone = _normalize_phone(data.phone)
 
-    # Search in suppliers.contacts->'phone'
+    # Search in suppliers.contacts->'phone' (text extraction, no JSONB cast)
     result = await db.execute(
         select(Supplier).where(
-            cast(Supplier.contacts["phone"].astext, JSONB).is_not(None),
+            Supplier.contacts["phone"].astext.is_not(None),
         )
     )
     suppliers = result.scalars().all()
