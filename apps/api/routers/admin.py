@@ -256,6 +256,7 @@ class FlatOfferVariantResponse(BaseModel):
     item_status: str
     source_file: Optional[str] = None
     possible_duplicate: bool = False
+    has_pending_suggestions: bool = False
 
     class Config:
         from_attributes = True
@@ -268,6 +269,15 @@ class FlatItemsListResponse(BaseModel):
     total: int
     page: int
     per_page: int
+
+
+class AssortmentMetricsResponse(BaseModel):
+    """Metrics for assortment status pills."""
+
+    total_items: int = 0
+    published: int = 0
+    needs_review: int = 0
+    errors: int = 0
 
 
 # Update schemas for editable table
@@ -691,6 +701,10 @@ async def get_flat_items(
         "asc",
         description="Sort direction (asc, desc)"
     ),
+    has_suggestions: Optional[bool] = Query(
+        None,
+        description="Filter by pending AI suggestions (true = has needs_review suggestions)"
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> FlatItemsListResponse:
     """
@@ -786,6 +800,22 @@ async def get_flat_items(
         where_clauses.append("COALESCE(oc.stock_qty, 0) <= :stock_max")
         params["stock_max"] = stock_max
 
+    # AI suggestions filter
+    if has_suggestions is True:
+        where_clauses.append("""
+            EXISTS (
+                SELECT 1 FROM ai_suggestions ais
+                WHERE ais.target_id = si.id AND ais.applied_status = 'needs_review'
+            )
+        """)
+    elif has_suggestions is False:
+        where_clauses.append("""
+            NOT EXISTS (
+                SELECT 1 FROM ai_suggestions ais
+                WHERE ais.target_id = si.id AND ais.applied_status = 'needs_review'
+            )
+        """)
+
     where_sql = " AND ".join(where_clauses)
 
     # Sort clause
@@ -830,7 +860,11 @@ async def get_flat_items(
             si.attributes->>'origin_country' as origin_country,
             si.attributes->'colors' as colors_json,
             si.status as item_status,
-            ib.source_filename as source_file
+            ib.source_filename as source_file,
+            EXISTS (
+                SELECT 1 FROM ai_suggestions ais
+                WHERE ais.target_id = si.id AND ais.applied_status = 'needs_review'
+            ) as has_pending_suggestions
 
         FROM offer_candidates oc
         JOIN supplier_items si ON oc.supplier_item_id = si.id
@@ -897,6 +931,7 @@ async def get_flat_items(
                 item_status=row.item_status,
                 source_file=row.source_file,
                 possible_duplicate=is_duplicate,
+                has_pending_suggestions=row.has_pending_suggestions,
             )
         )
 
@@ -913,6 +948,77 @@ async def get_flat_items(
         total=total,
         page=page,
         per_page=per_page,
+    )
+
+
+@router.get("/suppliers/{supplier_id}/assortment-metrics", response_model=AssortmentMetricsResponse)
+async def get_assortment_metrics(
+    supplier_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> AssortmentMetricsResponse:
+    """
+    Get assortment metrics for status pills (total, published, needs_review, errors).
+    """
+    supplier_result = await db.execute(
+        select(Supplier).where(Supplier.id == supplier_id)
+    )
+    supplier = supplier_result.scalar_one_or_none()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    # Get the latest published import batch
+    latest_batch_sql = text("""
+        SELECT id FROM import_batches
+        WHERE supplier_id = :supplier_id AND status = 'published'
+        ORDER BY imported_at DESC
+        LIMIT 1
+    """)
+    latest_batch_result = await db.execute(latest_batch_sql, {"supplier_id": supplier_id})
+    latest_batch_row = latest_batch_result.first()
+    latest_batch_id = latest_batch_row.id if latest_batch_row else None
+
+    if not latest_batch_id:
+        return AssortmentMetricsResponse()
+
+    metrics_sql = text("""
+        SELECT
+            COUNT(*) as total_items,
+            COUNT(*) FILTER (
+                WHERE si.status = 'active'
+                AND NOT EXISTS (
+                    SELECT 1 FROM ai_suggestions ais
+                    WHERE ais.target_id = si.id AND ais.applied_status = 'needs_review'
+                )
+                AND COALESCE(oc.validation, 'ok') = 'ok'
+            ) as published,
+            COUNT(*) FILTER (
+                WHERE EXISTS (
+                    SELECT 1 FROM ai_suggestions ais
+                    WHERE ais.target_id = si.id AND ais.applied_status = 'needs_review'
+                )
+            ) as needs_review,
+            COUNT(*) FILTER (
+                WHERE oc.validation IS NOT NULL AND oc.validation != 'ok'
+            ) as errors
+        FROM offer_candidates oc
+        JOIN supplier_items si ON oc.supplier_item_id = si.id
+        WHERE si.supplier_id = :supplier_id
+          AND oc.import_batch_id = :latest_batch_id
+          AND si.status = ANY(:status_list)
+    """)
+
+    result = await db.execute(metrics_sql, {
+        "supplier_id": supplier_id,
+        "latest_batch_id": latest_batch_id,
+        "status_list": ["active", "hidden"],
+    })
+    row = result.first()
+
+    return AssortmentMetricsResponse(
+        total_items=row.total_items if row else 0,
+        published=row.published if row else 0,
+        needs_review=row.needs_review if row else 0,
+        errors=row.errors if row else 0,
     )
 
 
@@ -1437,6 +1543,7 @@ async def run_ai_enrichment(
 async def list_ai_suggestions(
     status: Optional[str] = Query(None, description="Filter by status (needs_review, pending, auto_applied, rejected)"),
     supplier_id: Optional[UUID] = Query(None, description="Filter by supplier"),
+    target_id: Optional[UUID] = Query(None, description="Filter by target entity ID (supplier_item or offer_candidate)"),
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(50, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_db),
@@ -1467,6 +1574,8 @@ async def list_ai_suggestions(
         query = query.where(AISuggestion.applied_status == status)
     if supplier_id:
         query = query.where(AIRun.supplier_id == supplier_id)
+    if target_id:
+        query = query.where(AISuggestion.target_id == target_id)
 
     # Count total
     count_query = select(func.count()).select_from(

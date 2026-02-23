@@ -108,6 +108,7 @@ export interface FlatOfferVariant {
   item_status: string;
   source_file: string | null;
   possible_duplicate: boolean;
+  has_pending_suggestions: boolean;
 }
 
 export interface FlatItemsResponse {
@@ -133,4 +134,5 @@ export interface FlatItemsParams {
   stock_max?: number;
   sort_by?: string;
   sort_dir?: 'asc' | 'desc';
+  has_suggestions?: boolean;
 }

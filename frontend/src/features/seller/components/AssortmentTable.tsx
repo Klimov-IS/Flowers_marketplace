@@ -13,6 +13,7 @@ import { getFlowerImage, getDefaultFlowerImage } from '../../../utils/flowerImag
 import FilterableHeader from './FilterableHeader';
 import type { FilterValue } from './ColumnFilter';
 import type { ColumnFilters } from './FilterBar';
+import AISuggestionRow from './AISuggestionRow';
 
 // Simple modal for viewing variant details
 function VariantDetailsModal({
@@ -143,6 +144,11 @@ interface AssortmentTableProps {
   // Sort props
   sort?: SortState;
   onSortChange?: (field: string) => void;
+  // AI suggestion expansion
+  expandedAIItemId?: string | null;
+  onToggleAIExpand?: (itemId: string) => void;
+  // Empty state action
+  onUploadClick?: () => void;
 }
 
 const PACK_TYPE_OPTIONS = [
@@ -176,6 +182,7 @@ function FlatVariantRow({
   onDeleteVariant,
   isSelected,
   onToggleSelect,
+  onAIClick,
 }: {
   variant: FlatOfferVariant;
   onViewDetails?: (variant: FlatOfferVariant) => void;
@@ -184,9 +191,10 @@ function FlatVariantRow({
   onDeleteVariant: (variantId: string) => void;
   isSelected?: boolean;
   onToggleSelect?: () => void;
+  onAIClick?: () => void;
 }) {
   return (
-    <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+    <tr className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${variant.has_pending_suggestions ? 'bg-yellow-50' : ''}`}>
       {/* Checkbox */}
       {onToggleSelect && (
         <td className="w-10 px-2 py-3 text-center">
@@ -317,6 +325,19 @@ function FlatVariantRow({
       {/* Actions */}
       <td className="px-3 py-3">
         <div className="flex gap-1">
+          {/* AI suggestion warning */}
+          {variant.has_pending_suggestions && onAIClick && (
+            <button
+              onClick={onAIClick}
+              className="p-1.5 text-yellow-600 hover:text-yellow-800 hover:bg-yellow-100 rounded transition-colors"
+              title="Есть предложения для проверки"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+
           {/* View Details */}
           <button
             onClick={() => onViewDetails?.(variant)}
@@ -396,6 +417,9 @@ export default function AssortmentTable({
   onFilterChange,
   sort,
   onSortChange,
+  expandedAIItemId,
+  onToggleAIExpand,
+  onUploadClick,
 }: AssortmentTableProps) {
   const [updateSupplierItem] = useUpdateSupplierItemMutation();
   const [updateOfferCandidate] = useUpdateOfferCandidateMutation();
@@ -488,7 +512,18 @@ export default function AssortmentTable({
           </svg>
         </div>
         <p className="text-lg text-gray-600 mb-2">Ассортимент пуст</p>
-        <p className="text-gray-500">Загрузите прайс-лист, чтобы добавить товары</p>
+        <p className="text-gray-500 mb-4">Загрузите прайс-лист, чтобы добавить товары</p>
+        {onUploadClick && (
+          <button
+            onClick={onUploadClick}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Загрузить прайс-лист
+          </button>
+        )}
       </div>
     );
   }
@@ -601,18 +636,36 @@ export default function AssortmentTable({
             </tr>
           </thead>
           <tbody>
-            {items.map((variant) => (
-              <FlatVariantRow
-                key={variant.variant_id}
-                variant={variant}
-                onViewDetails={setViewingVariant}
-                onUpdateItem={handleUpdateItem}
-                onUpdateVariant={handleUpdateVariant}
-                onDeleteVariant={handleDeleteVariant}
-                isSelected={selectedIds?.has(variant.variant_id)}
-                onToggleSelect={hasSelection ? () => handleToggleSelect(variant.variant_id) : undefined}
-              />
-            ))}
+            {items.map((variant) => {
+              // Total columns: checkbox(opt) + type + sort + country + color + size + pack + price + stock + actions = 9 or 10
+              const colSpan = hasSelection ? 10 : 9;
+              return (
+                <>{/* Fragment wrapping variant row + optional AI expand row */}
+                  <FlatVariantRow
+                    key={variant.variant_id}
+                    variant={variant}
+                    onViewDetails={setViewingVariant}
+                    onUpdateItem={handleUpdateItem}
+                    onUpdateVariant={handleUpdateVariant}
+                    onDeleteVariant={handleDeleteVariant}
+                    isSelected={selectedIds?.has(variant.variant_id)}
+                    onToggleSelect={hasSelection ? () => handleToggleSelect(variant.variant_id) : undefined}
+                    onAIClick={
+                      variant.has_pending_suggestions && onToggleAIExpand
+                        ? () => onToggleAIExpand(variant.item_id)
+                        : undefined
+                    }
+                  />
+                  {expandedAIItemId === variant.item_id && (
+                    <AISuggestionRow
+                      key={`ai-${variant.item_id}`}
+                      itemId={variant.item_id}
+                      colSpan={colSpan}
+                    />
+                  )}
+                </>
+              );
+            })}
           </tbody>
         </table>
       </div>

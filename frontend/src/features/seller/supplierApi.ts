@@ -53,8 +53,17 @@ export interface AISuggestionsResponse {
 export interface AISuggestionsParams {
   status?: string;
   supplier_id?: string;
+  target_id?: string;
   page?: number;
   per_page?: number;
+}
+
+// Assortment metrics for status pills
+export interface AssortmentMetrics {
+  total_items: number;
+  published: number;
+  needs_review: number;
+  errors: number;
 }
 
 export interface AISuggestionActionResponse {
@@ -206,6 +215,7 @@ export const supplierApi = createApi({
         stock_max,
         sort_by,
         sort_dir,
+        has_suggestions,
       }) => {
         const params = new URLSearchParams();
         if (q) params.append('q', q);
@@ -244,6 +254,8 @@ export const supplierApi = createApi({
         // Sorting
         if (sort_by) params.append('sort_by', sort_by);
         if (sort_dir) params.append('sort_dir', sort_dir);
+        // AI suggestions filter
+        if (has_suggestions !== undefined) params.append('has_suggestions', String(has_suggestions));
 
         const queryString = params.toString();
         return `/admin/suppliers/${supplier_id}/flat-items${queryString ? `?${queryString}` : ''}`;
@@ -332,7 +344,13 @@ export const supplierApi = createApi({
           body: formData,
         };
       },
-      invalidatesTags: ['ImportBatches'],
+      invalidatesTags: ['ImportBatches', 'SupplierItems', 'AISuggestions'],
+    }),
+
+    // Assortment metrics
+    getAssortmentMetrics: builder.query<AssortmentMetrics, string>({
+      query: (supplier_id) => `/admin/suppliers/${supplier_id}/assortment-metrics`,
+      providesTags: ['SupplierItems', 'AISuggestions'],
     }),
 
     // Import History endpoints
@@ -398,10 +416,11 @@ export const supplierApi = createApi({
 
     // AI Suggestions endpoints
     getAISuggestions: builder.query<AISuggestionsResponse, AISuggestionsParams>({
-      query: ({ status, supplier_id, page, per_page }) => {
+      query: ({ status, supplier_id, target_id, page, per_page }) => {
         const params = new URLSearchParams();
         if (status) params.append('status', status);
         if (supplier_id) params.append('supplier_id', supplier_id);
+        if (target_id) params.append('target_id', target_id);
         if (page) params.append('page', String(page));
         if (per_page) params.append('per_page', String(per_page));
 
@@ -508,6 +527,7 @@ export const {
   useConfirmOrderMutation,
   useRejectOrderMutation,
   useGetOrderMetricsQuery,
+  useGetAssortmentMetricsQuery,
   useUploadPriceListMutation,
   useUpdateSupplierItemMutation,
   useUpdateOfferCandidateMutation,

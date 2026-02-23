@@ -6,7 +6,12 @@ import Button from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import ImportHistory from './components/ImportHistory';
 
-export default function PriceListUpload() {
+interface PriceListUploadProps {
+  showHistory?: boolean;
+  onUploadSuccess?: () => void;
+}
+
+export default function PriceListUpload({ showHistory = true, onUploadSuccess }: PriceListUploadProps) {
   const user = useAppSelector((state) => state.auth.user);
   const [file, setFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
@@ -68,6 +73,7 @@ export default function PriceListUpload() {
       // Reset form
       setFile(null);
       setDescription('');
+      onUploadSuccess?.();
     } catch (error) {
       console.error('Upload failed:', error);
       showToast('Ошибка при загрузке прайс-листа', 'error');
@@ -195,7 +201,7 @@ export default function PriceListUpload() {
       </Card>
 
       {/* Import History Section */}
-      <ImportHistory supplierId={user.id} />
+      {showHistory && <ImportHistory supplierId={user.id} />}
     </div>
   );
 }

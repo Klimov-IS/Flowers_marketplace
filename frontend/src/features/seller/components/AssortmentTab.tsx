@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   useGetFlatItemsQuery,
+  useGetAssortmentMetricsQuery,
 } from '../supplierApi';
 import { useDebounce } from '../../../hooks/useDebounce';
 import AssortmentTable from './AssortmentTable';
@@ -10,6 +11,9 @@ import type { ColumnFilters } from './FilterBar';
 import type { FilterValue, MultiSelectFilterValue } from './ColumnFilter';
 import Button from '../../../components/ui/Button';
 import type { SortState } from '../../../types/supplierItem';
+import AssortmentStatusPills, { type AssortmentPillFilter } from './AssortmentStatusPills';
+import UploadModal from './UploadModal';
+import ImportHistoryModal from './ImportHistoryModal';
 
 interface AssortmentTabProps {
   supplierId: string;
@@ -24,6 +28,12 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
   const perPage = 50;
+
+  // New state for pills, modals, AI expand
+  const [pillFilter, setPillFilter] = useState<AssortmentPillFilter>('all');
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [expandedAIItemId, setExpandedAIItemId] = useState<string | null>(null);
 
   // Debounce search query
   const debouncedSearch = useDebounce(searchQuery, 300);
@@ -44,18 +54,27 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
     setPage(1);
   }, [debouncedSearch]);
 
-  // Reset page when filters change
+  // Reset page when filters or pill change
   useEffect(() => {
     setPage(1);
-  }, [filters]);
+  }, [filters, pillFilter]);
 
   // Clear selection when page, search, or filters change
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [page, debouncedSearch, filters]);
+  }, [page, debouncedSearch, filters, pillFilter]);
 
   // Convert filters to API params
   const filterParams = filtersToParams(filters);
+
+  // Map pill filter to API params
+  const pillParams: { has_suggestions?: boolean } = {};
+  if (pillFilter === 'needs_review') {
+    pillParams.has_suggestions = true;
+  } else if (pillFilter === 'published') {
+    pillParams.has_suggestions = false;
+  }
+  // For 'errors' pill, we could add validation filter - keeping it simple for now
 
   // Fetch flat items (1 row = 1 variant)
   const { data, isLoading, isFetching } = useGetFlatItemsQuery({
@@ -64,9 +83,13 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
     page,
     per_page: perPage,
     ...filterParams,
+    ...pillParams,
     sort_by: sort.field || undefined,
     sort_dir: sort.direction || undefined,
   });
+
+  // Fetch assortment metrics for pills
+  const { data: metrics } = useGetAssortmentMetricsQuery(supplierId);
 
   const items = data?.items || [];
   const total = data?.total || 0;
@@ -80,6 +103,7 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
   const handleResetFilters = () => {
     setFilters(initialFilters);
     setSort({ field: null, direction: null });
+    setPillFilter('all');
   };
 
   // Sort handler - cycles through: asc -> desc -> none
@@ -104,7 +128,8 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
       statusValue?.selected?.[0] !== 'active';
     const hasOtherFilters = Object.values(otherFilters).some((f) => f !== null);
     const hasSorting = sort.field !== null;
-    return isStatusNonDefault || hasOtherFilters || hasSorting;
+    const hasPillFilter = pillFilter !== 'all';
+    return isStatusNonDefault || hasOtherFilters || hasSorting || hasPillFilter;
   };
 
   // Handle status filter toggle
@@ -120,7 +145,6 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
     }
 
     if (newSelected.length === 0) {
-      // If nothing selected, show all (default behavior)
       setFilters((prev) => ({ ...prev, status: null }));
     } else {
       setFilters((prev) => ({ ...prev, status: { type: 'multiselect', selected: newSelected } }));
@@ -215,7 +239,36 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
             </span>
           )}
         </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsHistoryModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            История
+          </button>
+          <button
+            onClick={() => setIsUploadModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Загрузить прайс
+          </button>
+        </div>
       </div>
+
+      {/* Status pills */}
+      <AssortmentStatusPills
+        activeFilter={pillFilter}
+        onFilterChange={setPillFilter}
+        metrics={metrics}
+      />
 
       {/* Table */}
       <AssortmentTable
@@ -227,6 +280,11 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
         onFilterChange={handleFilterChange}
         sort={sort}
         onSortChange={handleSortChange}
+        expandedAIItemId={expandedAIItemId}
+        onToggleAIExpand={(itemId) =>
+          setExpandedAIItemId((prev) => (prev === itemId ? null : itemId))
+        }
+        onUploadClick={() => setIsUploadModalOpen(true)}
       />
 
       {/* Pagination */}
@@ -253,6 +311,17 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
           </div>
         </div>
       )}
+
+      {/* Modals */}
+      <UploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+      />
+      <ImportHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        supplierId={supplierId}
+      />
     </div>
   );
 }

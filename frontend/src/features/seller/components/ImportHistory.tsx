@@ -10,6 +10,7 @@ import Button from '../../../components/ui/Button';
 
 interface ImportHistoryProps {
   supplierId: string;
+  compact?: boolean;
 }
 
 // Status badge component
@@ -212,7 +213,7 @@ function ImportRow({
   );
 }
 
-export default function ImportHistory({ supplierId }: ImportHistoryProps) {
+export default function ImportHistory({ supplierId, compact = false }: ImportHistoryProps) {
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -256,10 +257,12 @@ export default function ImportHistory({ supplierId }: ImportHistoryProps) {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div className="px-4 py-3 border-b bg-gray-50">
-        <h3 className="font-medium text-gray-900">История импортов</h3>
-      </div>
+    <div className={compact ? 'overflow-hidden' : 'bg-white rounded-lg border border-gray-200 overflow-hidden'}>
+      {!compact && (
+        <div className="px-4 py-3 border-b bg-gray-50">
+          <h3 className="font-medium text-gray-900">История импортов</h3>
+        </div>
+      )}
 
       <table className="w-full">
         <thead>

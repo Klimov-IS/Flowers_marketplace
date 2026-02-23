@@ -5,18 +5,17 @@ import {
   useGetOrderMetricsQuery,
   useConfirmOrderMutation,
   useRejectOrderMutation,
-  useGetAISuggestionsQuery,
+  useGetAssortmentMetricsQuery,
 } from './supplierApi';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import TabsNav from './components/TabsNav';
 import AssortmentTab from './components/AssortmentTab';
-import AIReviewTab from './components/AIReviewTab';
-import PriceListUpload from './PriceListUpload';
+import AssortmentMetrics from './components/AssortmentMetrics';
 import RejectOrderModal from './RejectOrderModal';
 
-type TabId = 'assortment' | 'orders' | 'upload' | 'ai-review';
+type TabId = 'assortment' | 'orders';
 
 export default function SellerDashboard() {
   const user = useAppSelector((state) => state.auth.user);
@@ -30,15 +29,14 @@ export default function SellerDashboard() {
     { skip: !user?.id || user.role !== 'seller' }
   );
 
-  const { data: metrics } = useGetOrderMetricsQuery(user?.id || '', {
+  const { data: orderMetrics } = useGetOrderMetricsQuery(user?.id || '', {
     skip: !user?.id || user.role !== 'seller',
   });
 
-  // Fetch AI suggestions count for badge
-  const { data: aiSuggestionsData } = useGetAISuggestionsQuery(
-    { status: 'needs_review', supplier_id: user?.id, per_page: 1 },
-    { skip: !user?.id || user.role !== 'seller' }
-  );
+  // Fetch assortment metrics for contextual display
+  const { data: assortmentMetrics } = useGetAssortmentMetricsQuery(user?.id || '', {
+    skip: !user?.id || user.role !== 'seller',
+  });
 
   const [confirmOrder, { isLoading: isConfirming }] = useConfirmOrderMutation();
   const [rejectOrder] = useRejectOrderMutation();
@@ -68,31 +66,19 @@ export default function SellerDashboard() {
 
   const statusBadgeVariant = (status: string) => {
     switch (status) {
-      case 'pending':
-        return 'warning';
-      case 'confirmed':
-        return 'success';
-      case 'rejected':
-        return 'danger';
-      case 'cancelled':
-        return 'default';
-      default:
-        return 'default';
+      case 'pending': return 'warning' as const;
+      case 'confirmed': return 'success' as const;
+      case 'rejected': return 'danger' as const;
+      default: return 'default' as const;
     }
   };
 
   const statusLabel = (status: string) => {
     switch (status) {
-      case 'pending':
-        return 'Ожидает';
-      case 'confirmed':
-        return 'Подтвержден';
-      case 'rejected':
-        return 'Отклонен';
-      case 'cancelled':
-        return 'Отменен';
-      default:
-        return status;
+      case 'pending': return 'Ожидает';
+      case 'confirmed': return 'Подтвержден';
+      case 'rejected': return 'Отклонен';
+      default: return status;
     }
   };
 
@@ -103,20 +89,13 @@ export default function SellerDashboard() {
     { value: 'rejected', label: 'Отклонены' },
   ];
 
-  // Tabs configuration
+  // Tabs configuration — only 2 tabs
   const tabs = [
     { id: 'assortment', label: 'Ассортимент' },
     {
       id: 'orders',
       label: 'Заказы',
-      badge: metrics?.pending,
-      badgeVariant: 'warning' as const,
-    },
-    { id: 'upload', label: 'Загрузка прайса' },
-    {
-      id: 'ai-review',
-      label: 'AI Проверка',
-      badge: aiSuggestionsData?.total,
+      badge: orderMetrics?.pending,
       badgeVariant: 'warning' as const,
     },
   ];
@@ -136,34 +115,38 @@ export default function SellerDashboard() {
     <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-3xl font-bold mb-6">Кабинет продавца</h1>
 
-      {/* Metrics */}
-      {metrics && (
+      {/* Contextual Metrics */}
+      {activeTab === 'orders' && orderMetrics && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card className="p-6 text-center">
             <div className="text-4xl font-bold text-primary-600 mb-2">
-              {metrics.total_orders}
+              {orderMetrics.total_orders}
             </div>
             <div className="text-gray-600">Всего заказов</div>
           </Card>
           <Card className="p-6 text-center">
             <div className="text-4xl font-bold text-orange-600 mb-2">
-              {metrics.pending}
+              {orderMetrics.pending}
             </div>
             <div className="text-gray-600">Ожидают обработки</div>
           </Card>
           <Card className="p-6 text-center">
             <div className="text-4xl font-bold text-green-600 mb-2">
-              {metrics.confirmed}
+              {orderMetrics.confirmed}
             </div>
             <div className="text-gray-600">Подтверждено</div>
           </Card>
           <Card className="p-6 text-center">
             <div className="text-4xl font-bold text-primary-600 mb-2">
-              {parseFloat(metrics.total_revenue).toLocaleString()} ₽
+              {parseFloat(orderMetrics.total_revenue).toLocaleString()} ₽
             </div>
             <div className="text-gray-600">Общая выручка</div>
           </Card>
         </div>
+      )}
+
+      {activeTab === 'assortment' && (
+        <AssortmentMetrics metrics={assortmentMetrics} />
       )}
 
       {/* Tabs */}
@@ -176,23 +159,6 @@ export default function SellerDashboard() {
       {/* Tab Content */}
       {activeTab === 'assortment' && (
         <AssortmentTab supplierId={user.id} />
-      )}
-
-      {activeTab === 'upload' && (
-        <div>
-          <h2 className="text-xl font-semibold mb-4">Загрузка прайс-листа</h2>
-          <PriceListUpload />
-        </div>
-      )}
-
-      {activeTab === 'ai-review' && (
-        <div>
-          <h2 className="text-xl font-semibold mb-4">AI-предложения для проверки</h2>
-          <p className="text-sm text-gray-600 mb-4">
-            Здесь отображаются предложения AI с низкой уверенностью, требующие вашей проверки
-          </p>
-          <AIReviewTab supplierId={user.id} />
-        </div>
       )}
 
       {activeTab === 'orders' && (
