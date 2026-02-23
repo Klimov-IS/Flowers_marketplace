@@ -626,6 +626,10 @@ class ImportService:
                 )
                 summary["parse_events_count"] += 1
 
+        # Flush all pending changes so subsequent queries (AI enrichment)
+        # can see updated last_import_batch_id on existing items
+        await self.db.flush()
+
         return summary
 
     @staticmethod
