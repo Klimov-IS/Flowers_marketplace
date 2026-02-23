@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAppSelector } from '../../hooks/useAppSelector';
+import { useAppDispatch } from '../../hooks/useAppDispatch';
+import { setUser } from '../auth/authSlice';
+import { useUpdateProfileMutation } from '../auth/authApi';
 import {
   useGetSupplierOrdersQuery,
   useGetOrderMetricsQuery,
@@ -9,6 +12,7 @@ import {
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import { useToast } from '../../components/ui/Toast';
 import TabsNav from './components/TabsNav';
 import AssortmentTab from './components/AssortmentTab';
 import RejectOrderModal from './RejectOrderModal';
@@ -17,9 +21,54 @@ type TabId = 'assortment' | 'orders' | 'profile';
 
 export default function SellerDashboard() {
   const user = useAppSelector((state) => state.auth.user);
+  const dispatch = useAppDispatch();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<TabId>('assortment');
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [rejectingOrder, setRejectingOrder] = useState<string | null>(null);
+
+  // Profile form state
+  const [profileName, setProfileName] = useState(user?.name || '');
+  const [profileEmail, setProfileEmail] = useState(user?.email || '');
+  const [profilePhone, setProfilePhone] = useState(user?.phone || '');
+  const [profileCity, setProfileCity] = useState(user?.city_name || '');
+  const [updateProfile, { isLoading: isSavingProfile }] = useUpdateProfileMutation();
+
+  // Sync form when user changes (e.g. after login)
+  useEffect(() => {
+    if (user) {
+      setProfileName(user.name);
+      setProfileEmail(user.email || '');
+      setProfilePhone(user.phone || '');
+      setProfileCity(user.city_name || '');
+    }
+  }, [user]);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    try {
+      const result = await updateProfile({
+        name: profileName || undefined,
+        email: profileEmail || undefined,
+        phone: profilePhone || undefined,
+        city_name: profileCity || undefined,
+      }).unwrap();
+
+      // Update local user state
+      dispatch(setUser({
+        ...user,
+        name: result.name,
+        email: result.email,
+        phone: result.phone || undefined,
+        city_name: result.city_name || undefined,
+      }));
+      showToast('Профиль сохранён', 'success');
+    } catch (error: any) {
+      console.error('Failed to save profile:', error);
+      const detail = error?.data?.detail;
+      showToast(typeof detail === 'string' ? detail : 'Ошибка сохранения профиля', 'error');
+    }
+  };
 
   // Listen for tab switch from header dropdown
   useEffect(() => {
@@ -252,20 +301,47 @@ export default function SellerDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-500 mb-1">Название</label>
-              <p className="text-gray-900 font-medium">{user.name}</p>
+              <input
+                type="text"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-500 mb-1">Email</label>
-              <p className="text-gray-900">{user.email || '—'}</p>
+              <input
+                type="email"
+                value={profileEmail}
+                onChange={(e) => setProfileEmail(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-500 mb-1">Телефон</label>
-              <p className="text-gray-900">{user.phone || '—'}</p>
+              <input
+                type="tel"
+                value={profilePhone}
+                onChange={(e) => setProfilePhone(e.target.value)}
+                placeholder="+7 (999) 123-45-67"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-500 mb-1">Город</label>
-              <p className="text-gray-900">{user.city_name || '—'}</p>
+              <input
+                type="text"
+                value={profileCity}
+                onChange={(e) => setProfileCity(e.target.value)}
+                placeholder="Москва"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
             </div>
+          </div>
+          <div className="mt-6">
+            <Button onClick={handleSaveProfile} disabled={isSavingProfile}>
+              {isSavingProfile ? 'Сохранение...' : 'Сохранить'}
+            </Button>
           </div>
         </Card>
       )}

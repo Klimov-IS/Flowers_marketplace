@@ -62,6 +62,15 @@ class UserResponse(BaseModel):
     city_name: str | None = None
 
 
+class UpdateProfileRequest(BaseModel):
+    """Update user profile request. All fields optional."""
+
+    name: str | None = Field(None, min_length=2, max_length=255)
+    email: EmailStr | None = None
+    phone: str | None = Field(None, min_length=10, max_length=20)
+    city_name: str | None = Field(None, description="City name (will find or create)")
+
+
 class MessageResponse(BaseModel):
     """Simple message response."""
 

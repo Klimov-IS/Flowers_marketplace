@@ -39,6 +39,14 @@ export interface UserResponse {
   phone: string | null;
   role: 'buyer' | 'supplier';
   status: string;
+  city_name: string | null;
+}
+
+export interface UpdateProfileRequest {
+  name?: string;
+  email?: string;
+  phone?: string;
+  city_name?: string;
 }
 
 export const authApi = createApi({
@@ -90,6 +98,14 @@ export const authApi = createApi({
       query: () => '/auth/me',
     }),
 
+    updateProfile: builder.mutation<UserResponse, UpdateProfileRequest>({
+      query: (data) => ({
+        url: '/auth/me',
+        method: 'PATCH',
+        body: data,
+      }),
+    }),
+
     logout: builder.mutation<{ message: string }, void>({
       query: () => ({
         url: '/auth/logout',
@@ -105,5 +121,6 @@ export const {
   useRegisterSupplierMutation,
   useRefreshTokenMutation,
   useGetCurrentUserQuery,
+  useUpdateProfileMutation,
   useLogoutMutation,
 } = authApi;

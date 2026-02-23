@@ -22,6 +22,7 @@ from apps.api.auth.schemas import (
     RegisterBuyerRequest,
     RegisterSupplierRequest,
     TokenResponse,
+    UpdateProfileRequest,
     UserResponse,
 )
 from apps.api.database import get_db
@@ -361,6 +362,99 @@ async def get_current_user_info(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="User not found",
     )
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_profile(
+    request: UpdateProfileRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    """Update current user profile."""
+    # Resolve city if provided
+    city = None
+    if request.city_name:
+        result = await db.execute(select(City).where(City.name == request.city_name))
+        city = result.scalar_one_or_none()
+        if not city:
+            # Create city on the fly
+            city = City(name=request.city_name)
+            db.add(city)
+            await db.flush()
+
+    if current_user.role == "buyer":
+        result = await db.execute(
+            select(Buyer).options(selectinload(Buyer.city)).where(Buyer.id == current_user.id)
+        )
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if request.name is not None:
+            user.name = request.name
+        if request.email is not None:
+            user.email = request.email.lower()
+        if request.phone is not None:
+            user.phone = request.phone
+        if city:
+            user.city_id = city.id
+
+        await db.commit()
+        await db.refresh(user)
+        # Re-load city relationship
+        result = await db.execute(
+            select(Buyer).options(selectinload(Buyer.city)).where(Buyer.id == user.id)
+        )
+        user = result.scalar_one()
+
+        return UserResponse(
+            id=str(user.id),
+            name=user.name,
+            email=user.email,
+            phone=user.phone,
+            role="buyer",
+            status=user.status,
+            city_name=user.city.name if user.city else None,
+        )
+
+    elif current_user.role == "supplier":
+        result = await db.execute(
+            select(Supplier).options(selectinload(Supplier.city)).where(Supplier.id == current_user.id)
+        )
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if request.name is not None:
+            user.name = request.name
+        if request.email is not None:
+            user.email = request.email.lower()
+        if request.phone is not None:
+            contacts = user.contacts or {}
+            contacts["phone"] = request.phone
+            user.contacts = contacts
+        if city:
+            user.city_id = city.id
+
+        await db.commit()
+        await db.refresh(user)
+        # Re-load city relationship
+        result = await db.execute(
+            select(Supplier).options(selectinload(Supplier.city)).where(Supplier.id == user.id)
+        )
+        user = result.scalar_one()
+
+        return UserResponse(
+            id=str(user.id),
+            name=user.name,
+            email=user.email,
+            phone=user.contacts.get("phone") if user.contacts else None,
+            role="supplier",
+            status=user.status,
+            city_name=user.city.name if user.city else None,
+        )
+
+    raise HTTPException(status_code=400, detail="Invalid role")
 
 
 @router.post("/logout", response_model=MessageResponse)

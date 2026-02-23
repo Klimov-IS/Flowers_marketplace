@@ -1,10 +1,9 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../hooks/useAppSelector';
 import { useAppDispatch } from '../../hooks/useAppDispatch';
 import { logout } from '../../features/auth/authSlice';
 
 export default function Header() {
-  const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const cart = useAppSelector((state) => state.cart);
@@ -16,11 +15,6 @@ export default function Header() {
     0
   );
 
-  const navLinks = [
-    { path: '/', label: 'Витрина' },
-    { path: '/seller', label: 'Кабинет продавца' },
-  ];
-
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login');
@@ -30,29 +24,12 @@ export default function Header() {
     <header className="bg-white shadow-sm sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo */}
+          {/* Logo — links to catalog */}
           <Link to="/" className="flex items-center">
             <span className="text-2xl font-bold text-primary-600">
-              Цветочный B2B
+              Цветочный маркет
             </span>
           </Link>
-
-          {/* Navigation */}
-          <nav className="hidden md:flex space-x-8">
-            {navLinks.map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                className={`${
-                  location.pathname === link.path
-                    ? 'text-primary-600 border-b-2 border-primary-600'
-                    : 'text-gray-700 hover:text-primary-600'
-                } px-3 py-2 text-sm font-medium transition-colors`}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
 
           {/* Right section */}
           <div className="flex items-center space-x-4">
