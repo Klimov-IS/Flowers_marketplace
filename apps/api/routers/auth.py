@@ -236,6 +236,19 @@ async def register_supplier(
         status="active",  # For MVP, auto-activate. In production: "pending"
     )
     db.add(supplier)
+    await db.flush()  # Get supplier.id before creating buyer
+
+    # Auto-create buyer profile so supplier can also place orders
+    buyer = Buyer(
+        id=supplier.id,
+        name=request.name,
+        email=email,
+        phone=request.phone,
+        password_hash=supplier.password_hash,
+        city_id=city_id,
+        status="active",
+    )
+    db.add(buyer)
     await db.commit()
     await db.refresh(supplier)
 
