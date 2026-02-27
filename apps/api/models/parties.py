@@ -1,9 +1,10 @@
 """Party models (suppliers, buyers)."""
+from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -46,6 +47,14 @@ class Supplier(Base, UUIDMixin, TimestampMixin):
         default=dict,
         server_default="{}",
     )
+    # Extended profile fields
+    legal_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    warehouse_address: Mapped[str | None] = mapped_column(String, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    min_order_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=10, scale=2), nullable=True
+    )
+    avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Relationships
     city: Mapped["City | None"] = relationship("City", back_populates="suppliers")

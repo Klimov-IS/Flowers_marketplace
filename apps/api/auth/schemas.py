@@ -60,6 +60,15 @@ class UserResponse(BaseModel):
     role: Literal["buyer", "supplier"]
     status: str
     city_name: str | None = None
+    # Extended supplier profile fields
+    legal_name: str | None = None
+    warehouse_address: str | None = None
+    description: str | None = None
+    min_order_amount: float | None = None
+    avatar_url: str | None = None
+    contact_person: str | None = None
+    working_hours_from: str | None = None
+    working_hours_to: str | None = None
 
 
 class UpdateProfileRequest(BaseModel):
@@ -69,6 +78,14 @@ class UpdateProfileRequest(BaseModel):
     email: EmailStr | None = None
     phone: str | None = Field(None, min_length=10, max_length=20)
     city_name: str | None = Field(None, description="City name (will find or create)")
+    # Extended supplier profile fields
+    legal_name: str | None = None
+    warehouse_address: str | None = None
+    description: str | None = None
+    min_order_amount: float | None = None
+    contact_person: str | None = None
+    working_hours_from: str | None = None
+    working_hours_to: str | None = None
 
 
 class MessageResponse(BaseModel):

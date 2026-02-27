@@ -48,11 +48,18 @@ const OrderCheckIcon = (
 );
 
 /* ───── Status config ───── */
+const AssembledIcon = (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+  </svg>
+);
+
 const statusConfig: Record<string, { icon: React.ReactNode; iconBg: string; badgeBg: string; label: string; dimCard?: boolean }> = {
-  pending:   { icon: ClockIcon,   iconBg: 'bg-sky-50 text-sky-600',     badgeBg: 'bg-sky-100 text-sky-700',       label: 'Новый' },
-  confirmed: { icon: CheckIcon,   iconBg: 'bg-primary-50 text-primary-600', badgeBg: 'bg-primary-100 text-primary-700', label: 'Подтверждён' },
-  rejected:  { icon: XCircleIcon, iconBg: 'bg-red-50 text-red-600',     badgeBg: 'bg-red-100 text-red-700',       label: 'Отклонён' },
-  cancelled: { icon: XCircleIcon, iconBg: 'bg-gray-100 text-gray-400',  badgeBg: 'bg-gray-100 text-gray-500',     label: 'Отменён', dimCard: true },
+  pending:   { icon: ClockIcon,     iconBg: 'bg-sky-50 text-sky-600',         badgeBg: 'bg-sky-100 text-sky-700',       label: 'Новый' },
+  confirmed: { icon: CheckIcon,     iconBg: 'bg-primary-50 text-primary-600', badgeBg: 'bg-primary-100 text-primary-700', label: 'Подтверждён' },
+  assembled: { icon: AssembledIcon, iconBg: 'bg-sky-50 text-sky-600',         badgeBg: 'bg-sky-100 text-sky-700',       label: 'Собран' },
+  rejected:  { icon: XCircleIcon,   iconBg: 'bg-red-50 text-red-600',         badgeBg: 'bg-red-100 text-red-700',       label: 'Отклонён' },
+  cancelled: { icon: XCircleIcon,   iconBg: 'bg-gray-100 text-gray-400',      badgeBg: 'bg-gray-100 text-gray-500',     label: 'Отменён', dimCard: true },
 };
 
 export default function BuyerDashboard() {

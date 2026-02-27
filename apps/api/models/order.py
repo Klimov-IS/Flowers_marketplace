@@ -22,7 +22,7 @@ class Order(Base, UUIDMixin, TimestampMixin):
     )
     status: Mapped[str] = mapped_column(
         String, nullable=False, server_default="pending", index=True
-    )  # pending, confirmed, rejected, cancelled
+    )  # pending, confirmed, assembled, rejected, cancelled
     total_amount: Mapped[Decimal] = mapped_column(
         Numeric(precision=10, scale=2), nullable=False
     )
@@ -35,6 +35,7 @@ class Order(Base, UUIDMixin, TimestampMixin):
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assembled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     buyer: Mapped["Buyer"] = relationship("Buyer", back_populates="orders")

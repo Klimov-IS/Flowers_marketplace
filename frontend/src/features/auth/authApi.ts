@@ -41,6 +41,15 @@ export interface UserResponse {
   role: 'buyer' | 'supplier';
   status: string;
   city_name: string | null;
+  // Extended supplier profile fields
+  legal_name?: string | null;
+  warehouse_address?: string | null;
+  description?: string | null;
+  min_order_amount?: number | null;
+  avatar_url?: string | null;
+  contact_person?: string | null;
+  working_hours_from?: string | null;
+  working_hours_to?: string | null;
 }
 
 export interface UpdateProfileRequest {
@@ -48,6 +57,14 @@ export interface UpdateProfileRequest {
   email?: string;
   phone?: string;
   city_name?: string;
+  // Extended supplier profile fields
+  legal_name?: string;
+  warehouse_address?: string;
+  description?: string;
+  min_order_amount?: number;
+  contact_person?: string;
+  working_hours_from?: string;
+  working_hours_to?: string;
 }
 
 const rawBaseQuery = fetchBaseQuery({

@@ -2577,6 +2577,7 @@ class OrderMetricsResponse(BaseModel):
     total_orders: int
     pending: int
     confirmed: int
+    assembled: int = 0
     rejected: int
     cancelled: int
     total_revenue: Decimal

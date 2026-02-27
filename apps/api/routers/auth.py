@@ -2,7 +2,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -361,19 +361,50 @@ async def get_current_user_info(
         )
         user = result.scalar_one_or_none()
         if user:
+            contacts = user.contacts or {}
             return UserResponse(
                 id=str(user.id),
                 name=user.name,
                 email=user.email,
-                phone=user.contacts.get("phone") if user.contacts else None,
+                phone=contacts.get("phone"),
                 role="supplier",
                 status=user.status,
                 city_name=user.city.name if user.city else None,
+                legal_name=user.legal_name,
+                warehouse_address=user.warehouse_address,
+                description=user.description,
+                min_order_amount=float(user.min_order_amount) if user.min_order_amount else None,
+                avatar_url=user.avatar_url,
+                contact_person=contacts.get("contact_person"),
+                working_hours_from=contacts.get("working_hours_from"),
+                working_hours_to=contacts.get("working_hours_to"),
             )
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="User not found",
+    )
+
+
+def _build_supplier_response(user) -> UserResponse:
+    """Build UserResponse for a supplier."""
+    contacts = user.contacts or {}
+    return UserResponse(
+        id=str(user.id),
+        name=user.name,
+        email=user.email,
+        phone=contacts.get("phone"),
+        role="supplier",
+        status=user.status,
+        city_name=user.city.name if user.city else None,
+        legal_name=user.legal_name,
+        warehouse_address=user.warehouse_address,
+        description=user.description,
+        min_order_amount=float(user.min_order_amount) if user.min_order_amount else None,
+        avatar_url=user.avatar_url,
+        contact_person=contacts.get("contact_person"),
+        working_hours_from=contacts.get("working_hours_from"),
+        working_hours_to=contacts.get("working_hours_to"),
     )
 
 
@@ -414,7 +445,6 @@ async def update_profile(
 
         await db.commit()
         await db.refresh(user)
-        # Re-load city relationship
         result = await db.execute(
             select(Buyer).options(selectinload(Buyer.city)).where(Buyer.id == user.id)
         )
@@ -442,32 +472,99 @@ async def update_profile(
             user.name = request.name
         if request.email is not None:
             user.email = request.email.lower()
+
+        # Update contacts JSONB
+        contacts = user.contacts or {}
         if request.phone is not None:
-            contacts = user.contacts or {}
             contacts["phone"] = request.phone
-            user.contacts = contacts
+        if request.contact_person is not None:
+            contacts["contact_person"] = request.contact_person
+        if request.working_hours_from is not None:
+            contacts["working_hours_from"] = request.working_hours_from
+        if request.working_hours_to is not None:
+            contacts["working_hours_to"] = request.working_hours_to
+        user.contacts = contacts
+
+        # Update dedicated columns
+        if request.legal_name is not None:
+            user.legal_name = request.legal_name
+        if request.warehouse_address is not None:
+            user.warehouse_address = request.warehouse_address
+        if request.description is not None:
+            user.description = request.description
+        if request.min_order_amount is not None:
+            from decimal import Decimal
+            user.min_order_amount = Decimal(str(request.min_order_amount))
         if city:
             user.city_id = city.id
 
+        # Mark JSONB as modified so SQLAlchemy detects change
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(user, "contacts")
+
         await db.commit()
         await db.refresh(user)
-        # Re-load city relationship
         result = await db.execute(
             select(Supplier).options(selectinload(Supplier.city)).where(Supplier.id == user.id)
         )
         user = result.scalar_one()
 
-        return UserResponse(
-            id=str(user.id),
-            name=user.name,
-            email=user.email,
-            phone=user.contacts.get("phone") if user.contacts else None,
-            role="supplier",
-            status=user.status,
-            city_name=user.city.name if user.city else None,
-        )
+        return _build_supplier_response(user)
 
     raise HTTPException(status_code=400, detail="Invalid role")
+
+
+@router.post("/me/avatar")
+async def upload_avatar(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload avatar image for supplier profile."""
+    if current_user.role != "supplier":
+        raise HTTPException(status_code=400, detail="Only suppliers can upload avatars")
+
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {file.content_type}. Allowed: JPEG, PNG, WebP"
+        )
+
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size: 5MB")
+
+    import os
+    import uuid as uuid_module
+
+    upload_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+        "uploads", "avatars"
+    )
+    os.makedirs(upload_dir, exist_ok=True)
+
+    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg"
+    filename = f"{uuid_module.uuid4().hex}.{ext}"
+    filepath = os.path.join(upload_dir, filename)
+
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    avatar_url = f"/uploads/avatars/{filename}"
+
+    result = await db.execute(
+        select(Supplier).where(Supplier.id == current_user.id)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    user.avatar_url = avatar_url
+    await db.commit()
+
+    logger.info("avatar_uploaded", user_id=str(current_user.id), avatar_url=avatar_url)
+    return {"avatar_url": avatar_url}
 
 
 @router.post("/logout", response_model=MessageResponse)

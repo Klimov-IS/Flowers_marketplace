@@ -322,6 +322,18 @@ export const supplierApi = createApi({
       invalidatesTags: ['SupplierOrders'],
     }),
 
+    assembleOrder: builder.mutation<
+      { order_id: string; status: string; assembled_at: string },
+      { supplier_id: string; order_id: string }
+    >({
+      query: ({ supplier_id, order_id }) => ({
+        url: `/admin/suppliers/${supplier_id}/orders/assemble`,
+        method: 'POST',
+        body: { order_id },
+      }),
+      invalidatesTags: ['SupplierOrders'],
+    }),
+
     getOrderMetrics: builder.query<OrderMetrics, string>({
       query: (supplier_id) => `/admin/suppliers/${supplier_id}/orders/metrics`,
     }),
@@ -564,6 +576,7 @@ export const {
   useGetSupplierOrdersQuery,
   useConfirmOrderMutation,
   useRejectOrderMutation,
+  useAssembleOrderMutation,
   useGetOrderMetricsQuery,
   useGetAssortmentMetricsQuery,
   useUploadPriceListMutation,

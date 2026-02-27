@@ -319,6 +319,46 @@ class OrderService:
 
         return order
 
+    async def assemble_order(
+        self,
+        order_id: UUID,
+        supplier_id: UUID,
+    ) -> Order:
+        """
+        Mark order as assembled/picked (supplier action).
+
+        Validation:
+        1. Order exists and belongs to supplier
+        2. Order status is 'confirmed'
+        """
+        log = logger.bind(order_id=str(order_id), supplier_id=str(supplier_id))
+        log.info("order.assemble.start")
+
+        result = await self.db.execute(
+            select(Order).where(Order.id == order_id)
+        )
+        order = result.scalar_one_or_none()
+
+        if not order:
+            log.warning("order.not_found")
+            raise ValueError(f"Order not found: {order_id}")
+
+        if order.supplier_id != supplier_id:
+            log.warning("order.wrong_supplier", actual=str(order.supplier_id))
+            raise ValueError(f"Order does not belong to supplier {supplier_id}")
+
+        if order.status != "confirmed":
+            log.warning("order.not_confirmed", status=order.status)
+            raise ValueError(f"Order cannot be assembled, current status: {order.status}")
+
+        order.status = "assembled"
+        order.assembled_at = datetime.utcnow()
+
+        await self.db.flush()
+        log.info("order.assemble.complete", assembled_at=order.assembled_at)
+
+        return order
+
     async def get_order_metrics(self, supplier_id: UUID | None = None) -> Dict:
         """
         Get order statistics.
@@ -327,13 +367,7 @@ class OrderService:
             supplier_id: Optional supplier filter
 
         Returns:
-            Dict with:
-                - total_orders: Total count
-                - pending: Count of pending orders
-                - confirmed: Count of confirmed orders
-                - rejected: Count of rejected orders
-                - cancelled: Count of cancelled orders
-                - total_revenue: Sum of confirmed order amounts (Decimal)
+            Dict with order counts by status and revenue totals.
         """
         log = logger.bind(supplier_id=str(supplier_id) if supplier_id else "all")
         log.info("order.metrics.start")
@@ -349,6 +383,9 @@ class OrderService:
                 cast(Order.status == literal_column("'confirmed'"), Integer)
             ).label("confirmed"),
             func.sum(
+                cast(Order.status == literal_column("'assembled'"), Integer)
+            ).label("assembled"),
+            func.sum(
                 cast(Order.status == literal_column("'rejected'"), Integer)
             ).label("rejected"),
             func.sum(
@@ -356,7 +393,7 @@ class OrderService:
             ).label("cancelled"),
             func.sum(
                 case(
-                    (Order.status == literal_column("'confirmed'"), Order.total_amount),
+                    (Order.status.in_(["confirmed", "assembled"]), Order.total_amount),
                     else_=0
                 )
             ).label("revenue"),
@@ -372,6 +409,7 @@ class OrderService:
             "total_orders": row.total or 0,
             "pending": row.pending or 0,
             "confirmed": row.confirmed or 0,
+            "assembled": row.assembled or 0,
             "rejected": row.rejected or 0,
             "cancelled": row.cancelled or 0,
             "total_revenue": row.revenue or Decimal("0"),

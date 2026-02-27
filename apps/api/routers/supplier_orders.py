@@ -31,6 +31,12 @@ class OrderReject(BaseModel):
     reason: str
 
 
+class OrderAssemble(BaseModel):
+    """Schema for assembling an order."""
+
+    order_id: UUID
+
+
 class OrderActionResponse(BaseModel):
     """Schema for order action response."""
 
@@ -39,6 +45,7 @@ class OrderActionResponse(BaseModel):
     confirmed_at: str | None
     rejected_at: str | None
     rejection_reason: str | None
+    assembled_at: str | None = None
 
     class Config:
         from_attributes = True
@@ -50,6 +57,7 @@ class OrderMetricsResponse(BaseModel):
     total_orders: int
     pending: int
     confirmed: int
+    assembled: int = 0
     rejected: int
     cancelled: int
     total_revenue: Decimal
@@ -64,21 +72,7 @@ async def list_supplier_orders(
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
 ) -> List[Order]:
-    """
-    List orders for supplier (supplier admin endpoint).
-
-    MVP: No authentication - supplier_id from path.
-
-    Args:
-        supplier_id: Supplier UUID
-        status: Optional status filter
-        limit: Max results (default 50)
-        offset: Offset for pagination
-        db: Database session
-
-    Returns:
-        List of orders for supplier
-    """
+    """List orders for supplier."""
     # Validate supplier exists
     result = await db.execute(
         select(Supplier).where(Supplier.id == supplier_id)
@@ -102,9 +96,20 @@ async def list_supplier_orders(
     for order in orders:
         await db.refresh(order, ["items", "buyer"])
 
-    # Convert to dict for response
+    # Convert to dict for response (include items for expandable details)
     response = []
     for order in orders:
+        order_items = []
+        for item in order.items:
+            order_items.append({
+                "id": str(item.id),
+                "offer_id": str(item.offer_id),
+                "quantity": item.quantity,
+                "unit_price": str(item.unit_price),
+                "total_price": str(item.total_price),
+                "notes": item.notes,
+            })
+
         response.append({
             "id": order.id,
             "buyer_id": order.buyer_id,
@@ -118,11 +123,13 @@ async def list_supplier_orders(
             "confirmed_at": str(order.confirmed_at) if order.confirmed_at else None,
             "rejected_at": str(order.rejected_at) if order.rejected_at else None,
             "rejection_reason": order.rejection_reason,
+            "assembled_at": str(order.assembled_at) if order.assembled_at else None,
             "buyer": {
                 "id": order.buyer.id,
                 "name": order.buyer.name,
                 "phone": order.buyer.phone,
             },
+            "items": order_items,
             "items_count": len(order.items),
         })
 
@@ -135,21 +142,7 @@ async def confirm_order(
     action_data: OrderConfirm,
     db: AsyncSession = Depends(get_db),
 ) -> Order:
-    """
-    Confirm an order (supplier action).
-
-    Args:
-        supplier_id: Supplier UUID
-        action_data: Confirmation data
-        db: Database session
-
-    Returns:
-        Updated order
-
-    Raises:
-        HTTPException 400: Order cannot be confirmed (wrong status, wrong supplier)
-        HTTPException 404: Order not found
-    """
+    """Confirm an order (supplier action)."""
     order_service = OrderService(db)
 
     try:
@@ -178,21 +171,7 @@ async def reject_order(
     action_data: OrderReject,
     db: AsyncSession = Depends(get_db),
 ) -> Order:
-    """
-    Reject an order (supplier action).
-
-    Args:
-        supplier_id: Supplier UUID
-        action_data: Rejection data with reason
-        db: Database session
-
-    Returns:
-        Updated order
-
-    Raises:
-        HTTPException 400: Order cannot be rejected (wrong status, wrong supplier)
-        HTTPException 404: Order not found
-    """
+    """Reject an order (supplier action)."""
     order_service = OrderService(db)
 
     try:
@@ -217,24 +196,41 @@ async def reject_order(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/assemble", response_model=OrderActionResponse)
+async def assemble_order(
+    supplier_id: UUID,
+    action_data: OrderAssemble,
+    db: AsyncSession = Depends(get_db),
+) -> Order:
+    """Mark order as assembled/picked (supplier action)."""
+    order_service = OrderService(db)
+
+    try:
+        order = await order_service.assemble_order(
+            order_id=action_data.order_id,
+            supplier_id=supplier_id,
+        )
+        await db.commit()
+        await db.refresh(order)
+
+        logger.info(
+            "order_assembled",
+            order_id=str(order.id),
+            supplier_id=str(supplier_id),
+        )
+        return order
+
+    except ValueError as e:
+        logger.warning("order_assemble_failed", error=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/metrics", response_model=OrderMetricsResponse)
 async def get_supplier_order_metrics(
     supplier_id: UUID,
     db: AsyncSession = Depends(get_db),
 ) -> OrderMetricsResponse:
-    """
-    Get order metrics for supplier (supplier admin endpoint).
-
-    Args:
-        supplier_id: Supplier UUID
-        db: Database session
-
-    Returns:
-        Order statistics
-
-    Raises:
-        HTTPException 404: Supplier not found
-    """
+    """Get order metrics for supplier."""
     # Validate supplier exists
     result = await db.execute(
         select(Supplier).where(Supplier.id == supplier_id)
