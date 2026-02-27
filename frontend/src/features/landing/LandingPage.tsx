@@ -149,12 +149,12 @@ function HeroSection() {
                 </svg>
                 Я покупатель
               </Link>
-              <a href="#for-suppliers" className="inline-flex items-center justify-center gap-2 bg-white hover:bg-gray-50 active:scale-[0.97] text-gray-700 font-semibold px-8 py-4 rounded-xl text-base transition-all duration-150 border border-gray-200 shadow-sm">
+              <Link to="/register" className="inline-flex items-center justify-center gap-2 bg-white hover:bg-gray-50 active:scale-[0.97] text-gray-700 font-semibold px-8 py-4 rounded-xl text-base transition-all duration-150 border border-gray-200 shadow-sm">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
                 </svg>
                 Я поставщик
-              </a>
+              </Link>
             </div>
 
             {/* Stats */}
@@ -410,27 +410,27 @@ function CTASection() {
 
           <div className="grid sm:grid-cols-2 gap-4 sm:gap-6 mb-8">
             {/* Buyer */}
-            <Link to="/register" className="bg-white rounded-2xl p-8 border-2 border-gray-100 hover:border-primary-300 hover:shadow-md transition-all duration-200 group text-left">
-              <div className="w-16 h-16 bg-primary-50 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-primary-100 transition-colors">
+            <Link to="/register" className="bg-white rounded-2xl p-8 border-2 border-gray-100 hover:border-primary-300 hover:shadow-md transition-all duration-200 group flex flex-col items-center">
+              <div className="w-16 h-16 bg-primary-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-primary-100 transition-colors">
                 <svg className="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2 text-center">Покупатель</h3>
-              <p className="text-sm text-gray-500 mb-6 text-center">Флорист, цветочный салон, event-агентство</p>
-              <span className="block text-center bg-primary-500 hover:bg-primary-600 active:scale-[0.97] text-white font-medium px-6 py-3 rounded-xl transition-all duration-150">Зарегистрироваться</span>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Покупатель</h3>
+              <p className="text-sm text-gray-500 mb-6 text-center flex-1">Флорист, цветочный салон, event-агентство</p>
+              <span className="block w-full text-center bg-primary-500 hover:bg-primary-600 active:scale-[0.97] text-white font-medium px-6 py-3 rounded-xl transition-all duration-150">Зарегистрироваться</span>
             </Link>
 
             {/* Supplier */}
-            <Link to="/register" className="bg-white rounded-2xl p-8 border-2 border-gray-100 hover:border-amber-300 hover:shadow-md transition-all duration-200 group text-left">
-              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-amber-100 transition-colors">
+            <Link to="/register" className="bg-white rounded-2xl p-8 border-2 border-gray-100 hover:border-amber-300 hover:shadow-md transition-all duration-200 group flex flex-col items-center">
+              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-amber-100 transition-colors">
                 <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2 text-center">Поставщик</h3>
-              <p className="text-sm text-gray-500 mb-6 text-center">Оптовая база, питомник, импортёр</p>
-              <span className="block text-center bg-amber-500 hover:bg-amber-600 active:scale-[0.97] text-white font-medium px-6 py-3 rounded-xl transition-all duration-150">Зарегистрироваться</span>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Поставщик</h3>
+              <p className="text-sm text-gray-500 mb-6 text-center flex-1">Оптовая база, питомник, импортёр</p>
+              <span className="block w-full text-center bg-amber-500 hover:bg-amber-600 active:scale-[0.97] text-white font-medium px-6 py-3 rounded-xl transition-all duration-150">Зарегистрироваться</span>
             </Link>
           </div>
 
