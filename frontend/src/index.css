@@ -62,6 +62,14 @@
   pointer-events: auto;
 }
 
+/* Error shake animation */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+.shake { animation: shake 0.4s ease; }
+
 /* Hero background */
 .hero-bg {
   background: linear-gradient(135deg, rgba(240,253,244,0.95) 0%, rgba(255,255,255,0.85) 50%, rgba(220,252,231,0.9) 100%);
