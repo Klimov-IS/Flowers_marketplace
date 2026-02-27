@@ -62,6 +62,21 @@
   pointer-events: auto;
 }
 
+/* Tab active indicator */
+.tab-active {
+  position: relative;
+}
+.tab-active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #22C55E;
+  border-radius: 1px;
+}
+
 /* Error shake animation */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }

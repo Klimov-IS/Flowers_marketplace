@@ -82,7 +82,7 @@ export default function CheckoutModal({
     <Modal isOpen={isOpen} onClose={onClose} title="Оформление заказа" size="lg">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {/* Order Summary */}
-        <div className="bg-gray-50 rounded-lg p-4">
+        <div className="bg-gray-50 rounded-xl p-4">
           <h4 className="font-semibold mb-3">Ваш заказ из {supplier.supplier_name}</h4>
           <div className="space-y-2">
             {supplier.items.map((item) => (
@@ -124,7 +124,7 @@ export default function CheckoutModal({
             </label>
             <textarea
               placeholder="Особые пожелания, время доставки..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
               rows={3}
               {...register('notes')}
             />
