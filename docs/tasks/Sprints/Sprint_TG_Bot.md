@@ -720,7 +720,7 @@ apps/bot/
 ```env
 # Telegram Bot
 TELEGRAM_BOT_TOKEN=7123456789:AAH...
-TELEGRAM_WEBHOOK_URL=https://158.160.217.236/flower/bot/webhook
+TELEGRAM_WEBHOOK_URL=https://158.160.229.16/flower/bot/webhook
 TELEGRAM_WEBHOOK_SECRET=<random-32-char-string>
 TELEGRAM_INTERNAL_TOKEN=<random-32-char-string>
 

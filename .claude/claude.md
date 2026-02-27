@@ -144,7 +144,7 @@ A task is done only when:
 git add <files> && git commit -m "feat(scope): description" && git push origin main
 
 # 2. Deploy (одна команда!)
-ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236 "cd /opt/flower-market && ./deploy.sh"
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.229.16 "cd /opt/flower-market && ./deploy.sh"
 ```
 
 ### Детали подключения
@@ -152,7 +152,7 @@ ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236 "cd /opt/flower-
 |----------|----------|
 | **SSH User** | `ubuntu` (НЕ root!) |
 | **SSH Key** | `~/.ssh/yandex-cloud-wb-reputation` |
-| **Server IP** | `158.160.217.236` |
+| **Server IP** | `158.160.229.16` |
 | **App Path** | `/opt/flower-market/` |
 | **Service** | `flower-api` (systemd) |
 | **DB Container** | `flower_postgres` (Docker) |
@@ -184,6 +184,10 @@ sudo docker exec -it flower_postgres psql -U flower_user -d flower_market
 - **Frontend**: https://вцвет.рф/flower/
 - **API**: https://вцвет.рф/flower/api/
 - **Swagger**: https://вцвет.рф/flower/api/docs
-- **IP (legacy)**: http://158.160.217.236/flower/
+- **IP (legacy)**: http://158.160.229.16/flower/
+
+### SSL
+- **Тип**: Let's Encrypt (certbot, автообновление)
+- **DNS**: Cloudflare DNS only (серое облако, без proxy)
 
 Full deployment docs: `/docs/DEPLOYMENT.md`

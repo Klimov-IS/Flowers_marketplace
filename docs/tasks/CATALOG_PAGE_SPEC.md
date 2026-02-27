@@ -2,7 +2,7 @@
 
 ## Статус: Фаза 4 завершена (Sidebar Filters)
 ## Прототип: `prototype/catalog_page.html` ✅
-## Production: http://158.160.217.236/flower/
+## Production: http://158.160.229.16/flower/
 
 ---
 

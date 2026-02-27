@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Кабинет покупателя — Цветочный маркет</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'] },
+          colors: {
+            brand: { 50:'#F0FDF4', 100:'#DCFCE7', 200:'#BBF7D0', 300:'#86EFAC', 400:'#4ADE80', 500:'#22C55E', 600:'#16A34A', 700:'#15803D', 800:'#166534', 900:'#14532D' },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+    /* Tab indicator */
+    .tab-btn { position: relative; }
+    .tab-btn.active::after {
+      content: ''; position: absolute; bottom: -1px; left: 0; right: 0;
+      height: 2px; background: #22C55E; border-radius: 1px;
+    }
+    /* Remove animation */
+    @keyframes fade-out { from { opacity:1; max-height:200px; } to { opacity:0; max-height:0; } }
+  </style>
+</head>
+<body class="font-sans text-gray-900 antialiased bg-gray-50 min-h-screen">
+
+  <!-- ============================================ -->
+  <!-- HEADER -->
+  <!-- ============================================ -->
+  <header class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="catalog.html" class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-brand-500 rounded-xl flex items-center justify-center">
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
+          </div>
+          <span class="text-lg font-bold text-gray-900 hidden sm:inline">Цветочный<span class="text-brand-600"> маркет</span></span>
+        </a>
+        <div class="flex items-center gap-3">
+          <a href="catalog.html" class="text-sm text-gray-600 hover:text-gray-900 font-medium transition-colors hidden sm:inline">Каталог</a>
+          <div class="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center">
+            <span class="text-sm font-semibold text-brand-700">А</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================ -->
+  <!-- TABS -->
+  <!-- ============================================ -->
+  <div class="bg-white border-b border-gray-100">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex gap-6">
+        <button onclick="switchTab('cart')" id="tab-cart" class="tab-btn active py-3.5 text-sm font-medium text-brand-600 transition-colors">
+          Корзина
+          <span class="ml-1.5 px-1.5 py-0.5 bg-brand-100 text-brand-700 rounded-full text-xs font-semibold">5</span>
+        </button>
+        <button onclick="switchTab('orders')" id="tab-orders" class="tab-btn py-3.5 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors">
+          Мои заказы
+          <span class="ml-1.5 px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">3</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- CART TAB -->
+  <!-- ============================================ -->
+  <main id="content-cart" class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div class="grid lg:grid-cols-3 gap-6">
+
+      <!-- Cart items -->
+      <div class="lg:col-span-2 space-y-4">
+
+        <!-- Supplier group 1 -->
+        <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <!-- Supplier header -->
+          <div class="flex items-center gap-3 px-5 py-3.5 bg-gray-50 border-b border-gray-100">
+            <div class="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center">
+              <span class="text-xs font-bold text-brand-700">Ф+</span>
+            </div>
+            <div>
+              <div class="text-sm font-semibold text-gray-900">Флора+</div>
+              <div class="text-xs text-gray-500">3 позиции</div>
+            </div>
+          </div>
+
+          <!-- Item 1 -->
+          <div class="px-5 py-4 border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+            <div class="flex gap-4">
+              <div class="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-xl flex items-center justify-center shrink-0">
+                <span class="text-2xl sm:text-3xl">&#127801;</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 class="text-sm font-semibold text-gray-900">Роза Red Naomi</h4>
+                    <p class="text-xs text-gray-500 mt-0.5">60 см &middot; Эквадор &middot; 45 &#8381;/шт</p>
+                  </div>
+                  <button class="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                  </button>
+                </div>
+                <div class="flex items-center justify-between mt-3">
+                  <div class="flex items-center gap-1.5">
+                    <button class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 text-sm">&minus;</button>
+                    <input type="number" value="5" min="1" class="w-12 text-center border border-gray-200 rounded-lg py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+                    <button class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 text-sm">+</button>
+                    <span class="text-xs text-gray-500">упак.</span>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-sm font-bold text-gray-900">4 500 &#8381;</div>
+                    <div class="text-xs text-gray-500">100 шт &times; 45 &#8381;</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 2 -->
+          <div class="px-5 py-4 border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+            <div class="flex gap-4">
+              <div class="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-xl flex items-center justify-center shrink-0">
+                <span class="text-2xl sm:text-3xl">&#127803;</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 class="text-sm font-semibold text-gray-900">Хризантема Анастасия</h4>
+                    <p class="text-xs text-gray-500 mt-0.5">70 см &middot; Кения &middot; 85 &#8381;/шт</p>
+                  </div>
+                  <button class="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                  </button>
+                </div>
+                <div class="flex items-center justify-between mt-3">
+                  <div class="flex items-center gap-1.5">
+                    <button class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 text-sm">&minus;</button>
+                    <input type="number" value="10" min="1" class="w-12 text-center border border-gray-200 rounded-lg py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+                    <button class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 text-sm">+</button>
+                    <span class="text-xs text-gray-500">шт</span>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-sm font-bold text-gray-900">850 &#8381;</div>
+                    <div class="text-xs text-gray-500">10 шт &times; 85 &#8381;</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 3 -->
+          <div class="px-5 py-4 hover:bg-gray-50/50 transition-colors">
+            <div class="flex gap-4">
+              <div class="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-xl flex items-center justify-center shrink-0">
+                <span class="text-2xl sm:text-3xl">&#127804;</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 class="text-sm font-semibold text-gray-900">Гвоздика Mondeo</h4>
+                    <p class="text-xs text-gray-500 mt-0.5">60 см &middot; Колумбия &middot; 28 &#8381;/шт</p>
+                  </div>
+                  <button class="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                  </button>
+                </div>
+                <div class="flex items-center justify-between mt-3">
+                  <div class="flex items-center gap-1.5">
+                    <button class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 text-sm">&minus;</button>
+                    <input type="number" value="4" min="1" class="w-12 text-center border border-gray-200 rounded-lg py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+                    <button class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 text-sm">+</button>
+                    <span class="text-xs text-gray-500">упак.</span>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-sm font-bold text-gray-900">2 800 &#8381;</div>
+                    <div class="text-xs text-gray-500">100 шт &times; 28 &#8381;</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Supplier subtotal -->
+          <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+            <span class="text-sm text-gray-500">Подытог по Флора+</span>
+            <span class="text-sm font-bold text-gray-900">8 150 &#8381;</span>
+          </div>
+        </div>
+
+        <!-- Supplier group 2 -->
+        <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-3.5 bg-gray-50 border-b border-gray-100">
+            <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+              <span class="text-xs font-bold text-amber-700">ЦТ</span>
+            </div>
+            <div>
+              <div class="text-sm font-semibold text-gray-900">ЦветоТорг</div>
+              <div class="text-xs text-gray-500">2 позиции</div>
+            </div>
+          </div>
+
+          <div class="px-5 py-4 border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+            <div class="flex gap-4">
+              <div class="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-xl flex items-center justify-center shrink-0">
+                <span class="text-2xl sm:text-3xl">&#127799;</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 class="text-sm font-semibold text-gray-900">Тюльпан Strong Gold</h4>
+                    <p class="text-xs text-gray-500 mt-0.5">40 см &middot; Нидерланды &middot; 32 &#8381;/шт</p>
+                  </div>
+                  <button class="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                  </button>
+                </div>
+                <div class="flex items-center justify-between mt-3">
+                  <div class="flex items-center gap-1.5">
+                    <button class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 text-sm">&minus;</button>
+                    <input type="number" value="10" min="1" class="w-12 text-center border border-gray-200 rounded-lg py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+                    <button class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 text-sm">+</button>
+                    <span class="text-xs text-gray-500">упак.</span>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-sm font-bold text-gray-900">6 400 &#8381;</div>
+                    <div class="text-xs text-gray-500">200 шт &times; 32 &#8381;</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="px-5 py-4 hover:bg-gray-50/50 transition-colors">
+            <div class="flex gap-4">
+              <div class="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-xl flex items-center justify-center shrink-0">
+                <span class="text-2xl sm:text-3xl">&#127774;</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 class="text-sm font-semibold text-gray-900">Гербера Magnum</h4>
+                    <p class="text-xs text-gray-500 mt-0.5">45 см &middot; Нидерланды &middot; 55 &#8381;/шт</p>
+                  </div>
+                  <button class="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                  </button>
+                </div>
+                <div class="flex items-center justify-between mt-3">
+                  <div class="flex items-center gap-1.5">
+                    <button class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 text-sm">&minus;</button>
+                    <input type="number" value="3" min="1" class="w-12 text-center border border-gray-200 rounded-lg py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+                    <button class="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 text-sm">+</button>
+                    <span class="text-xs text-gray-500">упак.</span>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-sm font-bold text-gray-900">1 650 &#8381;</div>
+                    <div class="text-xs text-gray-500">30 шт &times; 55 &#8381;</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+            <span class="text-sm text-gray-500">Подытог по ЦветоТорг</span>
+            <span class="text-sm font-bold text-gray-900">8 050 &#8381;</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Order summary (sticky sidebar) -->
+      <div class="lg:col-span-1">
+        <div class="sticky top-[140px]">
+          <div class="bg-white rounded-2xl shadow-sm p-5">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Итого заказа</h3>
+
+            <div class="space-y-2.5 mb-4">
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-500">Флора+ (3 позиции)</span>
+                <span class="text-gray-900 font-medium">8 150 &#8381;</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-500">ЦветоТорг (2 позиции)</span>
+                <span class="text-gray-900 font-medium">8 050 &#8381;</span>
+              </div>
+              <div class="border-t border-gray-100 pt-2.5">
+                <div class="flex justify-between">
+                  <span class="text-base font-semibold text-gray-900">Итого</span>
+                  <span class="text-xl font-bold text-brand-600">16 200 &#8381;</span>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">5 позиций, 440 шт</p>
+              </div>
+            </div>
+
+            <!-- Comment -->
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">Комментарий к заказу</label>
+              <textarea rows="2" placeholder="Дополнительные пожелания..." class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all resize-none"></textarea>
+            </div>
+
+            <button class="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.97] text-white font-semibold py-3.5 rounded-xl text-sm transition-all duration-150 flex items-center justify-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              Оформить заказ
+            </button>
+
+            <p class="text-xs text-gray-400 text-center mt-3">Заказы отправляются напрямую поставщикам. Оплата при получении.</p>
+          </div>
+
+          <a href="catalog.html" class="flex items-center justify-center gap-2 text-sm text-brand-600 hover:text-brand-700 font-medium mt-4 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
+            Продолжить покупки
+          </a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============================================ -->
+  <!-- ORDERS TAB -->
+  <!-- ============================================ -->
+  <div id="content-orders" class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
+    <div class="space-y-4">
+
+      <!-- Order 1 — Confirmed -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center">
+              <svg class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-gray-900">Заказ #1042</span>
+                <span class="px-2 py-0.5 bg-brand-100 text-brand-700 rounded-full text-xs font-medium">Подтверждён</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">27 февраля 2026 &middot; Флора+</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="text-lg font-bold text-gray-900">8 150 &#8381;</div>
+            <div class="text-xs text-gray-500">3 позиции</div>
+          </div>
+        </div>
+        <!-- Expandable details -->
+        <div class="px-5 py-3 bg-gray-50">
+          <div class="space-y-2">
+            <div class="flex justify-between text-sm"><span class="text-gray-600">Роза Red Naomi 60 см</span><span class="text-gray-900">5 упак. &mdash; 4 500 &#8381;</span></div>
+            <div class="flex justify-between text-sm"><span class="text-gray-600">Хризантема Анастасия 70 см</span><span class="text-gray-900">10 шт &mdash; 850 &#8381;</span></div>
+            <div class="flex justify-between text-sm"><span class="text-gray-600">Гвоздика Mondeo 60 см</span><span class="text-gray-900">4 упак. &mdash; 2 800 &#8381;</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Order 2 — New -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center">
+              <svg class="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-gray-900">Заказ #1041</span>
+                <span class="px-2 py-0.5 bg-sky-100 text-sky-700 rounded-full text-xs font-medium">Новый</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">26 февраля 2026 &middot; ЦветоТорг</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="text-lg font-bold text-gray-900">6 400 &#8381;</div>
+            <div class="text-xs text-gray-500">1 позиция</div>
+          </div>
+        </div>
+        <div class="px-5 py-3 bg-gray-50">
+          <div class="flex justify-between text-sm"><span class="text-gray-600">Тюльпан Strong Gold 40 см</span><span class="text-gray-900">10 упак. &mdash; 6 400 &#8381;</span></div>
+        </div>
+      </div>
+
+      <!-- Order 3 — Cancelled -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden opacity-70">
+        <div class="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-gray-900">Заказ #1038</span>
+                <span class="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">Отменён</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">20 февраля 2026 &middot; РозаМир</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="text-lg font-bold text-gray-400 line-through">3 200 &#8381;</div>
+            <div class="text-xs text-gray-500">2 позиции</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function switchTab(tab) {
+      document.getElementById('content-cart').classList.toggle('hidden', tab !== 'cart');
+      document.getElementById('content-orders').classList.toggle('hidden', tab !== 'orders');
+      document.getElementById('tab-cart').classList.toggle('active', tab === 'cart');
+      document.getElementById('tab-orders').classList.toggle('active', tab === 'orders');
+      // Text color
+      document.getElementById('tab-cart').classList.toggle('text-brand-600', tab === 'cart');
+      document.getElementById('tab-cart').classList.toggle('text-gray-500', tab !== 'cart');
+      document.getElementById('tab-orders').classList.toggle('text-brand-600', tab === 'orders');
+      document.getElementById('tab-orders').classList.toggle('text-gray-500', tab !== 'orders');
+    }
+  </script>
+</body>
+</html>

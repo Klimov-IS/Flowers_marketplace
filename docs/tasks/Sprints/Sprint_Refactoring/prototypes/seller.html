@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Кабинет поставщика — Цветочный маркет</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'] },
+          colors: {
+            brand: { 50:'#F0FDF4', 100:'#DCFCE7', 200:'#BBF7D0', 300:'#86EFAC', 400:'#4ADE80', 500:'#22C55E', 600:'#16A34A', 700:'#15803D', 800:'#166534', 900:'#14532D' },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    /* Tab indicator */
+    .tab-btn { position: relative; }
+    .tab-btn.active::after {
+      content: ''; position: absolute; bottom: -1px; left: 0; right: 0;
+      height: 2px; background: #22C55E; border-radius: 1px;
+    }
+    /* Zebra rows */
+    .zebra-row:nth-child(even) { background-color: #F9FAFB; }
+    /* Checkbox custom */
+    .cb-brand:checked { background-color: #22C55E; border-color: #22C55E; }
+    /* Drag-over state */
+    .drop-zone.drag-over { border-color: #22C55E; background-color: #F0FDF4; }
+    /* Table horizontal scroll on mobile */
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .table-wrap::-webkit-scrollbar { height: 6px; }
+    .table-wrap::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+    /* Toggle switch */
+    .toggle-switch { width: 36px; height: 20px; border-radius: 10px; position: relative; cursor: pointer; transition: background-color 0.2s; }
+    .toggle-switch::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 16px; height: 16px; border-radius: 50%; background: white; transition: transform 0.2s;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    }
+    .toggle-switch.on { background-color: #22C55E; }
+    .toggle-switch.on::after { transform: translateX(16px); }
+    .toggle-switch.off { background-color: #D1D5DB; }
+    /* Inline edit */
+    .editable:hover { background-color: #F0FDF4; cursor: pointer; border-radius: 6px; }
+    /* Upload progress bar */
+    @keyframes progress-fill { from { width: 0; } to { width: 100%; } }
+    .progress-animate { animation: progress-fill 2s ease-out forwards; }
+    /* Fade in */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.3s ease-out; }
+  </style>
+</head>
+<body class="font-sans text-gray-900 antialiased bg-gray-50 min-h-screen">
+
+  <!-- ============================================ -->
+  <!-- HEADER -->
+  <!-- ============================================ -->
+  <header class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="catalog.html" class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-brand-500 rounded-xl flex items-center justify-center">
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
+          </div>
+          <span class="text-lg font-bold text-gray-900 hidden sm:inline">Цветочный<span class="text-brand-600"> маркет</span></span>
+        </a>
+        <div class="flex items-center gap-3">
+          <a href="catalog.html" class="text-sm text-gray-600 hover:text-gray-900 font-medium transition-colors hidden sm:inline">Каталог</a>
+          <!-- Notifications bell -->
+          <button class="relative p-2 rounded-lg hover:bg-gray-100 transition-colors">
+            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+            <span class="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full"></span>
+          </button>
+          <!-- Avatar -->
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+              <span class="text-sm font-semibold text-amber-700">Ф</span>
+            </div>
+            <div class="hidden sm:block text-left">
+              <span class="text-sm font-medium text-gray-700 block leading-tight">Флора+</span>
+              <span class="text-xs text-gray-500">Поставщик</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================ -->
+  <!-- TABS -->
+  <!-- ============================================ -->
+  <div class="bg-white border-b border-gray-100">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex gap-1 sm:gap-6 overflow-x-auto">
+        <button onclick="switchTab('assortment')" id="tab-assortment" class="tab-btn active py-3.5 px-2 sm:px-0 text-sm font-medium text-brand-600 transition-colors whitespace-nowrap">
+          Ассортимент
+          <span class="ml-1 px-1.5 py-0.5 bg-brand-100 text-brand-700 rounded-full text-xs font-semibold">24</span>
+        </button>
+        <button onclick="switchTab('upload')" id="tab-upload" class="tab-btn py-3.5 px-2 sm:px-0 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors whitespace-nowrap">
+          Загрузка прайса
+        </button>
+        <button onclick="switchTab('orders')" id="tab-orders" class="tab-btn py-3.5 px-2 sm:px-0 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors whitespace-nowrap">
+          Заказы
+          <span class="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold">3</span>
+        </button>
+        <button onclick="switchTab('profile')" id="tab-profile" class="tab-btn py-3.5 px-2 sm:px-0 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors whitespace-nowrap">
+          Профиль
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- TAB: ASSORTMENT -->
+  <!-- ============================================ -->
+  <main id="content-assortment" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 fade-in">
+
+    <!-- Top bar: search + actions -->
+    <div class="flex flex-col sm:flex-row gap-3 mb-4">
+      <div class="relative flex-1">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+        <input type="search" placeholder="Поиск по названию, сорту..." class="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-white" />
+      </div>
+      <div class="flex gap-2">
+        <select class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500">
+          <option>Все статусы</option>
+          <option>Активные</option>
+          <option>На модерации</option>
+          <option>Отклонённые</option>
+        </select>
+        <button class="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 active:scale-[0.97] text-white rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+          <span class="hidden sm:inline">Добавить</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bulk actions bar (shown when items selected) -->
+    <div id="bulk-bar" class="hidden mb-4 bg-brand-50 border border-brand-200 rounded-xl px-4 py-3 flex items-center justify-between fade-in">
+      <span class="text-sm text-brand-800 font-medium">Выбрано: <span id="selected-count">0</span> позиций</span>
+      <div class="flex gap-2">
+        <button class="text-sm px-3 py-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 transition-colors">Изменить цену</button>
+        <button class="text-sm px-3 py-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 transition-colors">Скрыть</button>
+        <button class="text-sm px-3 py-1.5 rounded-lg bg-white border border-rose-200 hover:bg-rose-50 text-rose-600 transition-colors">Удалить</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div class="table-wrap">
+        <table class="w-full min-w-[900px]">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-100">
+              <th class="pl-4 pr-2 py-3 w-10">
+                <input type="checkbox" class="w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" onclick="toggleAll(this)" />
+              </th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Название</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Сорт</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Цвет</th>
+              <th class="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Длина</th>
+              <th class="px-3 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Цена, &#8381;</th>
+              <th class="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Упак.</th>
+              <th class="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Наличие</th>
+              <th class="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Статус</th>
+              <th class="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-20">Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Row 1 — with AI suggestion highlight -->
+            <tr class="zebra-row border-b border-gray-50 hover:bg-brand-50/30 transition-colors bg-brand-50/20">
+              <td class="pl-4 pr-2 py-3"><input type="checkbox" class="row-cb w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" /></td>
+              <td class="px-3 py-3">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-medium text-gray-900 editable">Роза Red Naomi</span>
+                  <span class="px-1.5 py-0.5 bg-brand-100 text-brand-700 rounded-full text-[10px] font-medium" title="AI предлагает обновить цену">AI</span>
+                </div>
+              </td>
+              <td class="px-3 py-3 text-sm text-gray-700 editable">Red Naomi</td>
+              <td class="px-3 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded-full bg-red-500 ring-1 ring-red-200"></span>
+                  <span class="text-sm text-gray-700">Красный</span>
+                </div>
+              </td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700 editable">60 см</td>
+              <td class="px-3 py-3 text-right text-sm font-semibold text-gray-900 editable">45</td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700">20</td>
+              <td class="px-3 py-3 text-center">
+                <div class="toggle-switch on mx-auto" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <span class="px-2 py-0.5 bg-brand-100 text-brand-700 rounded-full text-xs font-medium">Активен</span>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <div class="flex items-center justify-center gap-1">
+                  <button class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors" title="Редактировать">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+                  </button>
+                  <button class="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors" title="Удалить">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 2 -->
+            <tr class="zebra-row border-b border-gray-50 hover:bg-gray-50/70 transition-colors">
+              <td class="pl-4 pr-2 py-3"><input type="checkbox" class="row-cb w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" /></td>
+              <td class="px-3 py-3 text-sm font-medium text-gray-900 editable">Роза Freedom</td>
+              <td class="px-3 py-3 text-sm text-gray-700 editable">Freedom</td>
+              <td class="px-3 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded-full bg-red-600 ring-1 ring-red-200"></span>
+                  <span class="text-sm text-gray-700">Красный</span>
+                </div>
+              </td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700 editable">50 см</td>
+              <td class="px-3 py-3 text-right text-sm font-semibold text-gray-900 editable">38</td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700">25</td>
+              <td class="px-3 py-3 text-center">
+                <div class="toggle-switch on mx-auto" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <span class="px-2 py-0.5 bg-brand-100 text-brand-700 rounded-full text-xs font-medium">Активен</span>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <div class="flex items-center justify-center gap-1">
+                  <button class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg></button>
+                  <button class="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 3 -->
+            <tr class="zebra-row border-b border-gray-50 hover:bg-gray-50/70 transition-colors">
+              <td class="pl-4 pr-2 py-3"><input type="checkbox" class="row-cb w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" /></td>
+              <td class="px-3 py-3 text-sm font-medium text-gray-900 editable">Тюльпан Strong Gold</td>
+              <td class="px-3 py-3 text-sm text-gray-700 editable">Strong Gold</td>
+              <td class="px-3 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded-full bg-yellow-400 ring-1 ring-yellow-200"></span>
+                  <span class="text-sm text-gray-700">Жёлтый</span>
+                </div>
+              </td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700 editable">40 см</td>
+              <td class="px-3 py-3 text-right text-sm font-semibold text-gray-900 editable">30</td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700">20</td>
+              <td class="px-3 py-3 text-center">
+                <div class="toggle-switch on mx-auto" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <span class="px-2 py-0.5 bg-brand-100 text-brand-700 rounded-full text-xs font-medium">Активен</span>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <div class="flex items-center justify-center gap-1">
+                  <button class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg></button>
+                  <button class="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 4 -->
+            <tr class="zebra-row border-b border-gray-50 hover:bg-gray-50/70 transition-colors">
+              <td class="pl-4 pr-2 py-3"><input type="checkbox" class="row-cb w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" /></td>
+              <td class="px-3 py-3 text-sm font-medium text-gray-900 editable">Хризантема Анастасия</td>
+              <td class="px-3 py-3 text-sm text-gray-700 editable">Анастасия</td>
+              <td class="px-3 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded-full bg-white ring-1 ring-gray-300"></span>
+                  <span class="text-sm text-gray-700">Белый</span>
+                </div>
+              </td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700 editable">70 см</td>
+              <td class="px-3 py-3 text-right text-sm font-semibold text-gray-900 editable">85</td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700">10</td>
+              <td class="px-3 py-3 text-center">
+                <div class="toggle-switch on mx-auto" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <span class="px-2 py-0.5 bg-brand-100 text-brand-700 rounded-full text-xs font-medium">Активен</span>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <div class="flex items-center justify-center gap-1">
+                  <button class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg></button>
+                  <button class="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 5 - On moderation -->
+            <tr class="zebra-row border-b border-gray-50 hover:bg-gray-50/70 transition-colors">
+              <td class="pl-4 pr-2 py-3"><input type="checkbox" class="row-cb w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" /></td>
+              <td class="px-3 py-3 text-sm font-medium text-gray-900 editable">Гвоздика Mondeo</td>
+              <td class="px-3 py-3 text-sm text-gray-700 editable">Mondeo</td>
+              <td class="px-3 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded-full bg-pink-400 ring-1 ring-pink-200"></span>
+                  <span class="text-sm text-gray-700">Розовый</span>
+                </div>
+              </td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700 editable">60 см</td>
+              <td class="px-3 py-3 text-right text-sm font-semibold text-gray-900 editable">28</td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700">20</td>
+              <td class="px-3 py-3 text-center">
+                <div class="toggle-switch off mx-auto" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">Модерация</span>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <div class="flex items-center justify-center gap-1">
+                  <button class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg></button>
+                  <button class="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 6 -->
+            <tr class="zebra-row border-b border-gray-50 hover:bg-gray-50/70 transition-colors">
+              <td class="pl-4 pr-2 py-3"><input type="checkbox" class="row-cb w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" /></td>
+              <td class="px-3 py-3 text-sm font-medium text-gray-900 editable">Лилия Siberia</td>
+              <td class="px-3 py-3 text-sm text-gray-700 editable">Siberia</td>
+              <td class="px-3 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded-full bg-white ring-1 ring-gray-300"></span>
+                  <span class="text-sm text-gray-700">Белый</span>
+                </div>
+              </td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700 editable">80 см</td>
+              <td class="px-3 py-3 text-right text-sm font-semibold text-gray-900 editable">120</td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700">5</td>
+              <td class="px-3 py-3 text-center">
+                <div class="toggle-switch on mx-auto" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <span class="px-2 py-0.5 bg-brand-100 text-brand-700 rounded-full text-xs font-medium">Активен</span>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <div class="flex items-center justify-center gap-1">
+                  <button class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg></button>
+                  <button class="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 7 - Rejected -->
+            <tr class="zebra-row hover:bg-gray-50/70 transition-colors opacity-60">
+              <td class="pl-4 pr-2 py-3"><input type="checkbox" class="row-cb w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" /></td>
+              <td class="px-3 py-3 text-sm font-medium text-gray-900 editable">Эустома ABC Blue</td>
+              <td class="px-3 py-3 text-sm text-gray-700 editable">ABC Blue</td>
+              <td class="px-3 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-3 h-3 rounded-full bg-blue-400 ring-1 ring-blue-200"></span>
+                  <span class="text-sm text-gray-700">Голубой</span>
+                </div>
+              </td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700 editable">50 см</td>
+              <td class="px-3 py-3 text-right text-sm font-semibold text-gray-900 editable">95</td>
+              <td class="px-3 py-3 text-center text-sm text-gray-700">10</td>
+              <td class="px-3 py-3 text-center">
+                <div class="toggle-switch off mx-auto" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">Отклонён</span>
+              </td>
+              <td class="px-3 py-3 text-center">
+                <div class="flex items-center justify-center gap-1">
+                  <button class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg></button>
+                  <button class="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg></button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Table footer -->
+      <div class="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+        <span class="text-sm text-gray-500">Показано 7 из 24 позиций</span>
+        <div class="flex items-center gap-1">
+          <button class="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-white text-gray-700 transition-colors">&larr;</button>
+          <button class="w-8 h-8 text-sm rounded-lg bg-brand-500 text-white font-medium">1</button>
+          <button class="w-8 h-8 text-sm rounded-lg border border-gray-200 hover:bg-white text-gray-700 transition-colors">2</button>
+          <button class="w-8 h-8 text-sm rounded-lg border border-gray-200 hover:bg-white text-gray-700 transition-colors">3</button>
+          <button class="w-8 h-8 text-sm rounded-lg border border-gray-200 hover:bg-white text-gray-700 transition-colors">4</button>
+          <button class="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-white text-gray-700 transition-colors">&rarr;</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============================================ -->
+  <!-- TAB: UPLOAD PRICE LIST -->
+  <!-- ============================================ -->
+  <main id="content-upload" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
+    <div class="grid lg:grid-cols-2 gap-6">
+
+      <!-- Left: Upload zone -->
+      <div>
+        <h2 class="text-xl font-bold text-gray-900 mb-4">Загрузка прайс-листа</h2>
+
+        <!-- Drop zone -->
+        <div id="drop-zone" class="drop-zone border-2 border-dashed border-gray-300 rounded-2xl p-10 text-center hover:border-brand-400 hover:bg-brand-50/30 transition-all duration-200 cursor-pointer"
+          ondragover="event.preventDefault(); this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="event.preventDefault(); this.classList.remove('drag-over'); handleUpload()">
+          <div class="mx-auto w-16 h-16 bg-brand-50 rounded-2xl flex items-center justify-center mb-4">
+            <svg class="w-8 h-8 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+          </div>
+          <p class="text-base font-medium text-gray-900 mb-1">Перетащите файл сюда</p>
+          <p class="text-sm text-gray-500 mb-4">или нажмите для выбора</p>
+          <p class="text-xs text-gray-400">Поддерживаемые форматы: XLSX, CSV &middot; Макс. 10 МБ</p>
+        </div>
+
+        <!-- Upload progress (demo) -->
+        <div id="upload-progress" class="hidden mt-4 bg-white rounded-2xl shadow-sm p-5 fade-in">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-brand-50 rounded-xl flex items-center justify-center">
+              <svg class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-gray-900 truncate">Прайс_Февраль_2026.xlsx</p>
+              <p class="text-xs text-gray-500">2.4 МБ</p>
+            </div>
+            <span class="text-sm font-semibold text-brand-600">100%</span>
+          </div>
+          <div class="w-full bg-gray-100 rounded-full h-1.5">
+            <div class="bg-brand-500 h-1.5 rounded-full progress-animate"></div>
+          </div>
+          <div class="mt-3 flex items-center gap-2">
+            <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+            <span class="text-sm text-brand-700 font-medium">Файл загружен. Парсинг завершён: 48 позиций найдено, 2 ошибки</span>
+          </div>
+        </div>
+
+        <!-- Tips -->
+        <div class="mt-6 bg-sky-50 border border-sky-100 rounded-2xl p-4">
+          <div class="flex gap-3">
+            <svg class="w-5 h-5 text-sky-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
+            <div>
+              <p class="text-sm font-medium text-sky-900 mb-1">Рекомендации по формату</p>
+              <ul class="text-sm text-sky-800 space-y-1">
+                <li>&bull; Первая строка — заголовки: Название, Сорт, Цвет, Длина, Цена, Упаковка</li>
+                <li>&bull; Цена указывается за штуку в рублях</li>
+                <li>&bull; Длина стебля — число в сантиметрах</li>
+                <li>&bull; Один файл на одну загрузку</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Upload history -->
+      <div>
+        <h2 class="text-xl font-bold text-gray-900 mb-4">История загрузок</h2>
+        <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div class="table-wrap">
+            <table class="w-full min-w-[500px]">
+              <thead>
+                <tr class="bg-gray-50 border-b border-gray-100">
+                  <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Дата</th>
+                  <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Файл</th>
+                  <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Позиций</th>
+                  <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="border-b border-gray-50 hover:bg-gray-50/70 transition-colors">
+                  <td class="px-4 py-3 text-sm text-gray-700">27.02.2026</td>
+                  <td class="px-4 py-3">
+                    <div class="flex items-center gap-2">
+                      <svg class="w-4 h-4 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                      <span class="text-sm text-gray-900 truncate">Прайс_Февраль_2026.xlsx</span>
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 text-center text-sm text-gray-700">48</td>
+                  <td class="px-4 py-3 text-center">
+                    <span class="px-2 py-0.5 bg-brand-100 text-brand-700 rounded-full text-xs font-medium">Опубликован</span>
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-50 hover:bg-gray-50/70 transition-colors bg-gray-50">
+                  <td class="px-4 py-3 text-sm text-gray-700">20.02.2026</td>
+                  <td class="px-4 py-3">
+                    <div class="flex items-center gap-2">
+                      <svg class="w-4 h-4 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                      <span class="text-sm text-gray-900 truncate">Прайс_Февраль_v1.xlsx</span>
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 text-center text-sm text-gray-700">42</td>
+                  <td class="px-4 py-3 text-center">
+                    <span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">Заменён</span>
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-50 hover:bg-gray-50/70 transition-colors">
+                  <td class="px-4 py-3 text-sm text-gray-700">05.02.2026</td>
+                  <td class="px-4 py-3">
+                    <div class="flex items-center gap-2">
+                      <svg class="w-4 h-4 text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                      <span class="text-sm text-gray-900 truncate">price_export.csv</span>
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 text-center text-sm text-gray-700">—</td>
+                  <td class="px-4 py-3 text-center">
+                    <span class="px-2 py-0.5 bg-rose-100 text-rose-700 rounded-full text-xs font-medium">Ошибка</span>
+                  </td>
+                </tr>
+                <tr class="hover:bg-gray-50/70 transition-colors bg-gray-50">
+                  <td class="px-4 py-3 text-sm text-gray-700">28.01.2026</td>
+                  <td class="px-4 py-3">
+                    <div class="flex items-center gap-2">
+                      <svg class="w-4 h-4 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                      <span class="text-sm text-gray-900 truncate">Прайс_Январь_2026.xlsx</span>
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 text-center text-sm text-gray-700">38</td>
+                  <td class="px-4 py-3 text-center">
+                    <span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">Заменён</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============================================ -->
+  <!-- TAB: ORDERS -->
+  <!-- ============================================ -->
+  <main id="content-orders" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
+
+    <!-- Stats cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div class="bg-white rounded-2xl shadow-sm p-4">
+        <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Новые</p>
+        <p class="text-2xl font-bold text-amber-600 mt-1">2</p>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm p-4">
+        <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Подтверждённые</p>
+        <p class="text-2xl font-bold text-brand-600 mt-1">5</p>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm p-4">
+        <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Собранные</p>
+        <p class="text-2xl font-bold text-sky-600 mt-1">3</p>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm p-4">
+        <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">За месяц</p>
+        <p class="text-2xl font-bold text-gray-900 mt-1">127 500 &#8381;</p>
+      </div>
+    </div>
+
+    <!-- Orders list -->
+    <div class="space-y-4">
+
+      <!-- Order 1 — New (needs action) -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden border-l-4 border-amber-400">
+        <div class="px-5 py-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
+                <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-semibold text-gray-900">Заказ #1042</h3>
+                  <span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">Новый</span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">27 фев 2026, 14:30 &middot; Покупатель: Салон «Лаванда»</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-lg font-bold text-gray-900">12 600 &#8381;</span>
+            </div>
+          </div>
+
+          <!-- Order items (expanded) -->
+          <div class="mt-4 bg-gray-50 rounded-xl p-4">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between text-sm">
+                <div class="flex items-center gap-2">
+                  <span>&#127801;</span>
+                  <span class="text-gray-900">Роза Red Naomi 60 см</span>
+                </div>
+                <div class="text-gray-700">5 упак. &times; 20 шт &times; 45 &#8381; = <span class="font-semibold">4 500 &#8381;</span></div>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <div class="flex items-center gap-2">
+                  <span>&#127799;</span>
+                  <span class="text-gray-900">Тюльпан Strong Gold 40 см</span>
+                </div>
+                <div class="text-gray-700">10 упак. &times; 20 шт &times; 30 &#8381; = <span class="font-semibold">6 000 &#8381;</span></div>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <div class="flex items-center gap-2">
+                  <span>&#127804;</span>
+                  <span class="text-gray-900">Гвоздика Mondeo 60 см</span>
+                </div>
+                <div class="text-gray-700">15 шт &times; 28 &#8381; = <span class="font-semibold">420 &#8381;</span></div>
+              </div>
+            </div>
+            <div class="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+              <p class="text-xs text-gray-500">Комментарий: <span class="text-gray-700 italic">«Нужна доставка до 10:00 утра»</span></p>
+              <p class="text-sm font-bold text-gray-900">Итого: 10 920 &#8381;</p>
+            </div>
+          </div>
+
+          <!-- Action buttons -->
+          <div class="mt-4 flex flex-col sm:flex-row gap-2">
+            <button class="flex-1 inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 active:scale-[0.97] text-white rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+              Подтвердить
+            </button>
+            <button class="flex-1 inline-flex items-center justify-center gap-2 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" /></svg>
+              Связаться
+            </button>
+            <button class="inline-flex items-center justify-center gap-2 border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              Отклонить
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Order 2 — New -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden border-l-4 border-amber-400">
+        <div class="px-5 py-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
+                <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-semibold text-gray-900">Заказ #1041</h3>
+                  <span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">Новый</span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">27 фев 2026, 11:15 &middot; Покупатель: ИП Козлова М.А.</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-lg font-bold text-gray-900">8 400 &#8381;</span>
+              <button class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors" title="Развернуть">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+              </button>
+            </div>
+          </div>
+          <!-- Collapsed: action buttons -->
+          <div class="mt-3 flex gap-2">
+            <button class="inline-flex items-center gap-1.5 bg-brand-500 hover:bg-brand-600 active:scale-[0.97] text-white rounded-xl px-4 py-2 text-sm font-medium transition-all duration-150">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+              Подтвердить
+            </button>
+            <button class="inline-flex items-center gap-1.5 border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-150">Отклонить</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Order 3 — Confirmed -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden border-l-4 border-brand-400">
+        <div class="px-5 py-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-brand-50 rounded-xl flex items-center justify-center">
+                <svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-semibold text-gray-900">Заказ #1039</h3>
+                  <span class="px-2 py-0.5 bg-brand-100 text-brand-700 rounded-full text-xs font-medium">Подтверждён</span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">26 фев 2026, 09:45 &middot; Покупатель: Цветочный рай</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-lg font-bold text-gray-900">23 400 &#8381;</span>
+              <button class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+              </button>
+            </div>
+          </div>
+          <div class="mt-3 flex gap-2">
+            <button class="inline-flex items-center gap-1.5 bg-sky-500 hover:bg-sky-600 active:scale-[0.97] text-white rounded-xl px-4 py-2 text-sm font-medium transition-all duration-150">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
+              Собран
+            </button>
+            <button class="inline-flex items-center gap-1.5 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-150">Связаться</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Order 4 — Assembled / Ready -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden border-l-4 border-sky-400">
+        <div class="px-5 py-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center">
+                <svg class="w-5 h-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-semibold text-gray-900">Заказ #1035</h3>
+                  <span class="px-2 py-0.5 bg-sky-100 text-sky-700 rounded-full text-xs font-medium">Собран</span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">25 фев 2026, 16:20 &middot; Покупатель: Букет Столицы</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-lg font-bold text-gray-900">15 750 &#8381;</span>
+              <button class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+              </button>
+            </div>
+          </div>
+          <div class="mt-3">
+            <span class="text-xs text-sky-600 font-medium">Ожидает самовывоза покупателем</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Order 5 — Cancelled -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden border-l-4 border-gray-300 opacity-60">
+        <div class="px-5 py-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
+                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-semibold text-gray-900">Заказ #1030</h3>
+                  <span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">Отменён</span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">22 фев 2026, 08:10 &middot; Покупатель: Флористика PRO</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-lg font-bold text-gray-500 line-through">6 300 &#8381;</span>
+            </div>
+          </div>
+          <div class="mt-2">
+            <span class="text-xs text-gray-500">Причина: Покупатель отменил заказ</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============================================ -->
+  <!-- TAB: PROFILE -->
+  <!-- ============================================ -->
+  <main id="content-profile" class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
+
+    <h2 class="text-xl font-bold text-gray-900 mb-6">Профиль компании</h2>
+
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+
+      <!-- Avatar / Logo section -->
+      <div class="px-6 py-8 bg-gradient-to-br from-brand-50 to-brand-100/50 flex flex-col items-center">
+        <div class="relative group">
+          <div class="w-24 h-24 rounded-2xl bg-white shadow-md flex items-center justify-center overflow-hidden">
+            <span class="text-4xl font-bold text-brand-600">Ф+</span>
+          </div>
+          <button class="absolute inset-0 rounded-2xl bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-all duration-200 opacity-0 group-hover:opacity-100">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" /></svg>
+          </button>
+        </div>
+        <p class="text-sm text-brand-700 mt-3 font-medium">Нажмите для загрузки логотипа</p>
+      </div>
+
+      <!-- Form fields -->
+      <div class="p-6 space-y-5">
+        <!-- Company name -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Название компании</label>
+          <input type="text" value="Флора+" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+        </div>
+
+        <!-- Legal name -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Юридическое название</label>
+          <input type="text" value="ООО «Флора Плюс»" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+        </div>
+
+        <!-- Contact grid -->
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Контактное лицо</label>
+            <input type="text" value="Иванов Пётр Сергеевич" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Телефон</label>
+            <input type="tel" value="+7 (999) 123-45-67" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+          </div>
+        </div>
+
+        <!-- Email -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+          <input type="email" value="info@floraplus.ru" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+        </div>
+
+        <!-- Address -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Адрес склада / самовывоза</label>
+          <input type="text" value="г. Москва, ул. Цветочная, д. 15, стр. 2" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+        </div>
+
+        <!-- Description -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Описание компании</label>
+          <textarea rows="3" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 resize-none">Оптовая база цветов с 2015 года. Прямые поставки из Эквадора, Кении и Колумбии. Ежедневное обновление ассортимента. Самовывоз с 6:00 до 18:00.</textarea>
+        </div>
+
+        <!-- Working hours -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Время работы</label>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="relative">
+              <input type="text" value="06:00" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">с</span>
+            </div>
+            <div class="relative">
+              <input type="text" value="18:00" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">до</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Minimum order -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Минимальный заказ, &#8381;</label>
+          <input type="number" value="3000" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
+          <p class="text-xs text-gray-500 mt-1">Минимальная сумма заказа для оформления. Оставьте пустым, если ограничений нет.</p>
+        </div>
+
+        <!-- Divider -->
+        <div class="border-t border-gray-100"></div>
+
+        <!-- Save + Cancel -->
+        <div class="flex items-center justify-between">
+          <p class="text-xs text-gray-400">Последнее обновление: 25 фев 2026</p>
+          <div class="flex gap-3">
+            <button class="border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl px-5 py-2.5 text-sm font-medium transition-all duration-150">Отмена</button>
+            <button class="bg-brand-500 hover:bg-brand-600 active:scale-[0.97] text-white rounded-xl px-6 py-2.5 text-sm font-medium transition-all duration-150">Сохранить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Danger zone -->
+    <div class="mt-6 bg-white rounded-2xl shadow-sm p-6 border border-rose-100">
+      <h3 class="text-sm font-semibold text-rose-700 mb-2">Опасная зона</h3>
+      <p class="text-sm text-gray-600 mb-4">Удаление аккаунта необратимо. Все данные, включая историю заказов и ассортимент, будут удалены.</p>
+      <button class="border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-150">
+        Удалить аккаунт
+      </button>
+    </div>
+  </main>
+
+  <!-- ============================================ -->
+  <!-- FOOTER -->
+  <!-- ============================================ -->
+  <footer class="bg-gray-900 text-gray-400 mt-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <span class="text-sm">Цветочный маркет &copy; 2026</span>
+      <div class="flex items-center gap-4 text-sm">
+        <a href="#" class="hover:text-white transition-colors">Поддержка</a>
+        <a href="#" class="hover:text-white transition-colors">Условия</a>
+        <a href="#" class="hover:text-white transition-colors">Политика</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============================================ -->
+  <!-- SCRIPTS -->
+  <!-- ============================================ -->
+  <script>
+    // ---- Tab switching ----
+    function switchTab(tab) {
+      // Hide all content
+      document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
+      // Deactivate all tabs
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.classList.remove('text-brand-600');
+        btn.classList.add('text-gray-500');
+      });
+      // Show target content
+      const content = document.getElementById('content-' + tab);
+      if (content) {
+        content.classList.remove('hidden');
+        content.classList.add('fade-in');
+      }
+      // Activate tab
+      const tabBtn = document.getElementById('tab-' + tab);
+      if (tabBtn) {
+        tabBtn.classList.add('active', 'text-brand-600');
+        tabBtn.classList.remove('text-gray-500');
+      }
+    }
+
+    // ---- Bulk selection ----
+    function toggleAll(masterCb) {
+      const cbs = document.querySelectorAll('.row-cb');
+      cbs.forEach(cb => cb.checked = masterCb.checked);
+      updateBulkBar();
+    }
+
+    document.addEventListener('change', function(e) {
+      if (e.target.classList.contains('row-cb')) {
+        updateBulkBar();
+      }
+    });
+
+    function updateBulkBar() {
+      const checked = document.querySelectorAll('.row-cb:checked').length;
+      const bar = document.getElementById('bulk-bar');
+      if (checked > 0) {
+        bar.classList.remove('hidden');
+        bar.classList.add('flex');
+        document.getElementById('selected-count').textContent = checked;
+      } else {
+        bar.classList.add('hidden');
+        bar.classList.remove('flex');
+      }
+    }
+
+    // ---- Upload demo ----
+    function handleUpload() {
+      const progress = document.getElementById('upload-progress');
+      progress.classList.remove('hidden');
+    }
+
+    // Click on drop zone triggers file dialog (demo)
+    document.getElementById('drop-zone')?.addEventListener('click', function() {
+      handleUpload();
+    });
+  </script>
+
+  <!-- Demo nav (bottom fixed) -->
+  <div class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur-md rounded-full px-4 py-2 flex items-center gap-2 shadow-xl z-50">
+    <span class="text-xs text-gray-400 mr-2">Прототипы:</span>
+    <a href="landing.html" class="text-xs text-gray-300 hover:text-white px-2 py-1 rounded-full hover:bg-white/10 transition-colors">Landing</a>
+    <a href="catalog.html" class="text-xs text-gray-300 hover:text-white px-2 py-1 rounded-full hover:bg-white/10 transition-colors">Каталог</a>
+    <a href="auth.html" class="text-xs text-gray-300 hover:text-white px-2 py-1 rounded-full hover:bg-white/10 transition-colors">Авторизация</a>
+    <a href="buyer.html" class="text-xs text-gray-300 hover:text-white px-2 py-1 rounded-full hover:bg-white/10 transition-colors">Покупатель</a>
+    <a href="seller.html" class="text-xs bg-white/20 text-white px-2 py-1 rounded-full">Поставщик</a>
+  </div>
+
+</body>
+</html>

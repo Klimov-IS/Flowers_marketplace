@@ -89,9 +89,9 @@ docs/
 | [DEPLOYMENT.md](DEPLOYMENT.md) | **Руководство по деплою** — сервер, SSH, команды, troubleshooting |
 
 **Текущий деплой:**
-- **Frontend**: http://158.160.217.236/flower/
-- **API**: http://158.160.217.236/flower/api/
-- **API Docs**: http://158.160.217.236/flower/api/docs
+- **Frontend**: http://158.160.229.16/flower/
+- **API**: http://158.160.229.16/flower/api/
+- **API Docs**: http://158.160.229.16/flower/api/docs
 
 ---
 

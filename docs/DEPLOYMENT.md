@@ -5,17 +5,18 @@
 | Параметр | Значение |
 |----------|----------|
 | **Домен** | вцвет.рф (`xn--b1aaj6cr.xn--p1ai`) |
-| **IP** | 158.160.217.236 |
+| **IP** | 158.160.229.16 |
 | **Хостинг** | Yandex Cloud |
 | **ОС** | Ubuntu 24.04 LTS |
 | **Hostname** | wb-reputation-prod |
-| **CDN/SSL** | Cloudflare (Full Strict) |
+| **SSL** | Let's Encrypt (certbot auto-renewal) |
+| **DNS** | Cloudflare (DNS only, серое облако) |
 
 ## SSH доступ
 
 ```bash
 # Подключение к серверу
-ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.229.16
 
 # Ключ расположен в
 ~/.ssh/yandex-cloud-wb-reputation
@@ -27,7 +28,7 @@ ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
 
 | Проект | Путь | Порт | URL |
 |--------|------|------|-----|
-| **WB-Reputation** | /var/www/wb-reputation | 3000 (PM2) | http://158.160.217.236/ |
+| **WB-Reputation** | /var/www/wb-reputation | 3000 (PM2) | http://158.160.229.16/ |
 | **Flower Market** | /opt/flower-market | 8080 (systemd) | https://вцвет.рф/flower/ |
 
 ### Важно
@@ -71,7 +72,7 @@ ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
 
 ```bash
 # С локальной машины (Windows/Mac/Linux):
-ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236 "cd /opt/flower-market && ./deploy.sh"
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.229.16 "cd /opt/flower-market && ./deploy.sh"
 ```
 
 **Полный процесс:**
@@ -82,7 +83,7 @@ git commit -m "feat(scope): description"
 git push origin main
 
 # 2. Деплой на сервер (одна команда!)
-ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236 "cd /opt/flower-market && ./deploy.sh"
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.229.16 "cd /opt/flower-market && ./deploy.sh"
 ```
 
 Скрипт `deploy.sh` автоматически выполняет:
@@ -100,7 +101,7 @@ ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236 "cd /opt/flower-
 |----------|----------|------------|
 | **User** | `ubuntu` | ⚠️ НЕ root! |
 | **Key** | `~/.ssh/yandex-cloud-wb-reputation` | Обязателен |
-| **IP** | `158.160.217.236` | Yandex Cloud |
+| **IP** | `158.160.229.16` | Yandex Cloud |
 | **SCP Flag** | `-O` | Для Windows/старых клиентов |
 
 ⚠️ **Частые ошибки:**
@@ -118,10 +119,10 @@ cd "c:\Users\79025\Desktop\проекты\Маркетплейс"
 tar -czvf deploy.tar.gz apps packages infra frontend/dist --exclude='__pycache__' --exclude='*.pyc'
 
 # 2. Загрузить на сервер (⚠️ флаг -O обязателен на Windows!)
-scp -O -i ~/.ssh/yandex-cloud-wb-reputation deploy.tar.gz ubuntu@158.160.217.236:~/
+scp -O -i ~/.ssh/yandex-cloud-wb-reputation deploy.tar.gz ubuntu@158.160.229.16:~/
 
 # 3. На сервере: распаковать и перезапустить
-ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236 "
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.229.16 "
   sudo tar -xzf ~/deploy.tar.gz -C /opt/flower-market/
   sudo systemctl restart flower-api
   rm ~/deploy.tar.gz
@@ -227,7 +228,7 @@ API_PORT=8080
 JWT_SECRET_KEY=<generated>
 
 # CORS
-CORS_ORIGINS=http://158.160.217.236,https://xn--b1aaj6cr.xn--p1ai
+CORS_ORIGINS=http://158.160.229.16,https://xn--b1aaj6cr.xn--p1ai
 
 # AI Service (DeepSeek)
 DEEPSEEK_API_KEY=<your-deepseek-api-key>
@@ -252,13 +253,13 @@ API_BASE_URL=http://127.0.0.1:8080
 
 Два server-блока для Flower Market:
 
-1. **HTTPS вцвет.рф** (основной, через Cloudflare):
+1. **HTTPS вцвет.рф** (основной, Let's Encrypt):
 ```nginx
 server {
     listen 443 ssl http2;
     server_name xn--b1aaj6cr.xn--p1ai;
-    ssl_certificate /etc/ssl/flower-market/origin.crt;
-    ssl_certificate_key /etc/ssl/flower-market/origin.key;
+    ssl_certificate /etc/letsencrypt/live/xn--b1aaj6cr.xn--p1ai/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/xn--b1aaj6cr.xn--p1ai/privkey.pem;
     # ... Flower Market locations (/flower/*)
 }
 ```
@@ -267,25 +268,36 @@ server {
 ```nginx
 server {
     listen 80;
-    server_name 158.160.217.236;
+    server_name 158.160.229.16;
     # ... Flower Market locations (/flower/*)
     # ... WB-Reputation locations (/)
 }
 ```
 
-### SSL сертификат
+### SSL сертификат (Let's Encrypt)
 
 | Параметр | Значение |
 |----------|----------|
-| **Тип** | Cloudflare Origin Certificate |
-| **Путь cert** | `/etc/ssl/flower-market/origin.crt` |
-| **Путь key** | `/etc/ssl/flower-market/origin.key` |
-| **SAN** | `*.вцвет.рф`, `вцвет.рф` |
-| **Срок действия** | 2026-02-23 — 2041-02-19 |
-| **Cloudflare режим** | Full (strict) |
+| **Тип** | Let's Encrypt (автообновление через certbot) |
+| **Путь cert** | `/etc/letsencrypt/live/xn--b1aaj6cr.xn--p1ai/fullchain.pem` |
+| **Путь key** | `/etc/letsencrypt/live/xn--b1aaj6cr.xn--p1ai/privkey.pem` |
+| **CN** | `xn--b1aaj6cr.xn--p1ai` (вцвет.рф) |
+| **Срок действия** | 90 дней (автообновление каждые 60 дней) |
+| **Certbot таймер** | `systemd certbot.timer` (проверка 2 раза в день) |
 
-> **Важно:** Origin Certificate работает ТОЛЬКО через Cloudflare proxy.
-> Прямой доступ по IP использует HTTP (порт 80).
+```bash
+# Проверить статус автообновления
+sudo systemctl status certbot.timer
+
+# Ручное обновление (тест)
+sudo certbot renew --dry-run
+
+# Принудительное обновление
+sudo certbot renew --force-renewal
+```
+
+> **Важно:** DNS в Cloudflare настроен как **DNS only** (серое облако).
+> Трафик идёт напрямую к серверу, минуя Cloudflare proxy.
 
 ---
 
@@ -296,26 +308,26 @@ server {
 **Permission denied (publickey)**
 ```bash
 # Забыли указать ключ! Правильно:
-ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.229.16
 ```
 
 **Please login as user "NONE" rather than "root"**
 ```bash
 # Yandex Cloud не разрешает root. Используйте ubuntu:
-ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236  # ✅
-ssh -i ~/.ssh/yandex-cloud-wb-reputation root@158.160.217.236    # ❌
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.229.16  # ✅
+ssh -i ~/.ssh/yandex-cloud-wb-reputation root@158.160.229.16    # ❌
 ```
 
 **SCP: Received message too long**
 ```bash
 # На Windows добавьте флаг -O для legacy протокола:
-scp -O -i ~/.ssh/yandex-cloud-wb-reputation file.tar.gz ubuntu@158.160.217.236:~/
+scp -O -i ~/.ssh/yandex-cloud-wb-reputation file.tar.gz ubuntu@158.160.229.16:~/
 ```
 
 **Could not open connection to authentication agent**
 ```bash
 # SSH agent не запущен. Используйте -i напрямую:
-ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.217.236
+ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.229.16
 ```
 
 ### API не запускается
@@ -379,8 +391,8 @@ curl http://127.0.0.1:8080/health
 
 | Ресурс | URL |
 |--------|-----|
-| **Frontend** | http://158.160.217.236/flower/ |
-| **API** | http://158.160.217.236/flower/api/ |
+| **Frontend** | http://158.160.229.16/flower/ |
+| **API** | http://158.160.229.16/flower/api/ |
 
 ---
 
@@ -388,4 +400,4 @@ curl http://127.0.0.1:8080/health
 
 - **Репозиторий**: (добавить ссылку на GitHub/GitLab)
 - **Yandex Cloud Console**: https://console.yandex.cloud/
-- **Cloudflare Dashboard**: https://dash.cloudflare.com/ (домен вцвет.рф)
+- **Cloudflare Dashboard**: https://dash.cloudflare.com/ (DNS only для вцвет.рф)
