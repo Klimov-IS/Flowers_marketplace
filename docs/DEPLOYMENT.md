@@ -29,7 +29,7 @@ ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.229.16
 | Проект | Путь | Порт | URL |
 |--------|------|------|-----|
 | **WB-Reputation** | /var/www/wb-reputation | 3000 (PM2) | http://158.160.229.16/ |
-| **Flower Market** | /opt/flower-market | 8080 (systemd) | https://вцвет.рф/flower/ |
+| **Flower Market** | /opt/flower-market | 8080 (systemd) | https://вцвет.рф/ |
 
 ### Важно
 - Проекты **НЕ влияют** друг на друга
@@ -90,7 +90,7 @@ ssh -i ~/.ssh/yandex-cloud-wb-reputation ubuntu@158.160.229.16 "cd /opt/flower-m
 1. `git pull origin main` — получение последнего кода
 2. `pip install -r requirements.txt` — установка Python зависимостей
 3. `alembic upgrade head` — миграции БД
-4. `npm run build` — сборка frontend с правильными путями
+4. `npm run build` — сборка frontend
 5. `systemctl restart flower-api` — перезапуск API
 6. `systemctl restart flower-bot` — перезапуск Telegram бота
 7. `nginx -t && systemctl reload nginx` — перезагрузка nginx
@@ -239,7 +239,7 @@ AI_MAX_ROWS=5000
 
 # Telegram Bot
 TELEGRAM_BOT_TOKEN=<from-botfather>
-TELEGRAM_WEBHOOK_URL=https://xn--b1aaj6cr.xn--p1ai/flower/bot/webhook
+TELEGRAM_WEBHOOK_URL=https://xn--b1aaj6cr.xn--p1ai/bot/webhook
 TELEGRAM_WEBHOOK_SECRET=<random-32-char>
 TELEGRAM_INTERNAL_TOKEN=<random-32-char>
 BOT_MODE=webhook
@@ -258,9 +258,8 @@ API_BASE_URL=http://127.0.0.1:8080
 server {
     listen 443 ssl http2;
     server_name xn--b1aaj6cr.xn--p1ai;
-    ssl_certificate /etc/letsencrypt/live/xn--b1aaj6cr.xn--p1ai/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/xn--b1aaj6cr.xn--p1ai/privkey.pem;
-    # ... Flower Market locations (/flower/*)
+    root /opt/flower-market/frontend/dist;
+    # SPA served from root /, API at /api/
 }
 ```
 
@@ -273,6 +272,9 @@ server {
     # ... WB-Reputation locations (/)
 }
 ```
+
+> **Примечание:** На домене вцвет.рф фронтенд отдаётся от корня `/`.
+> Старые ссылки `/flower/*` автоматически редиректятся на `/`.
 
 ### SSL сертификат (Let's Encrypt)
 
@@ -357,9 +359,9 @@ cd /opt/flower-market && git status
 # Проверить, что dist существует
 ls -la /opt/flower-market/frontend/dist/
 
-# Пересобрать с правильным base path
+# Пересобрать
 cd /opt/flower-market/frontend
-VITE_BASE_PATH=/flower/ VITE_API_BASE_URL=/flower/api npm run build
+VITE_API_BASE_URL=/api npm run build
 ```
 
 ### 502 Bad Gateway
@@ -381,11 +383,11 @@ curl http://127.0.0.1:8080/health
 
 | Ресурс | URL |
 |--------|-----|
-| **Frontend** | https://вцвет.рф/flower/ |
-| **API** | https://вцвет.рф/flower/api/ |
-| **API Docs (Swagger)** | https://вцвет.рф/flower/api/docs |
-| **API Docs (ReDoc)** | https://вцвет.рф/flower/api/redoc |
-| **Health Check** | https://вцвет.рф/flower/api/health |
+| **Frontend** | https://вцвет.рф/ |
+| **API** | https://вцвет.рф/api/ |
+| **API Docs (Swagger)** | https://вцвет.рф/api/docs |
+| **API Docs (ReDoc)** | https://вцвет.рф/api/redoc |
+| **Health Check** | https://вцвет.рф/api/health |
 
 ### Обратная совместимость (IP, HTTP)
 
@@ -393,6 +395,8 @@ curl http://127.0.0.1:8080/health
 |--------|-----|
 | **Frontend** | http://158.160.229.16/flower/ |
 | **API** | http://158.160.229.16/flower/api/ |
+
+> Старые ссылки `/flower/*` на домене автоматически редиректятся на `/`.
 
 ---
 
