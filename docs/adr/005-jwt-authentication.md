@@ -133,8 +133,29 @@ def create_refresh_token(user_id: UUID, role: str) -> str:
 4. **Refresh rotation**: новый refresh при каждом использовании
 5. **Blacklist** (production): Redis для отозванных токенов
 
+## Password Reset Flow
+
+Восстановление пароля через Telegram-бота (добавлено 2026-03-02):
+
+```
+1. POST /auth/forgot-password (email + role)
+   → Найти пользователя → Найти TelegramLink → Сгенерировать 6-digit code
+   → SHA-256 hash → password_reset_codes → Отправить в Telegram
+2. POST /auth/verify-reset-code (email + role + code)
+   → Проверить hash → Выдать JWT type="password_reset" (TTL 5 мин)
+3. POST /auth/reset-password (reset_token + new_password)
+   → Валидировать JWT → Обновить password_hash (bcrypt)
+```
+
+**Безопасность:**
+- Код: 6 цифр, SHA-256 в БД, TTL 10 мин
+- Макс 5 попыток ввода, rate limit 3 кода / 15 мин
+- Reset-токен: JWT с type="password_reset", TTL 5 мин
+- Требует привязанного Telegram-аккаунта
+
 ## Эволюция
 
 1. MVP: stateless JWT
 2. Production: добавить blacklist в Redis
 3. Future: OAuth2 для third-party интеграций
+4. Password reset: через Telegram-бота (реализовано)

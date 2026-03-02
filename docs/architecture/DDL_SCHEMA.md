@@ -617,5 +617,23 @@ CREATE INDEX IF NOT EXISTS ix_order_lines_order ON order_lines (order_id);
 CREATE INDEX IF NOT EXISTS ix_order_events_order_time ON order_events (order_id, created_at DESC);
 
 -- =========================================================
+-- 11) Password Reset (via Telegram)
+-- =========================================================
+CREATE TABLE IF NOT EXISTS password_reset_codes (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id           uuid NOT NULL,              -- FK to suppliers.id or buyers.id
+  role              varchar(20) NOT NULL,        -- 'supplier' or 'buyer'
+  code_hash         varchar(64) NOT NULL,        -- SHA-256 hex of 6-digit code
+  telegram_chat_id  bigint NOT NULL,             -- where the code was sent
+  expires_at        timestamptz NOT NULL,         -- created_at + 10 min
+  attempts          integer NOT NULL DEFAULT 0,  -- failed verification attempts (max 5)
+  used_at           timestamptz NULL,            -- set when code is verified
+  created_at        timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_reset_codes_user
+ON password_reset_codes (user_id, role);
+
+-- =========================================================
 -- End of DDL
 -- =========================================================

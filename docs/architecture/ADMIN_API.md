@@ -346,6 +346,93 @@ curl -X POST http://localhost:8000/auth/logout \
 
 ---
 
+### Forgot Password (Request Reset Code)
+
+**Endpoint**: `POST /auth/forgot-password`
+
+**Description**: Отправляет 6-значный код сброса пароля в привязанный Telegram.
+
+**Request Body**:
+```json
+{
+  "email": "user@example.com",
+  "role": "buyer"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "status": "code_sent",
+  "expires_in": 600
+}
+```
+
+**Errors**:
+- `400` — Email не найден или Telegram не привязан
+- `429` — Слишком много запросов (макс 3 за 15 мин)
+- `502` — Ошибка отправки в Telegram
+
+---
+
+### Verify Reset Code
+
+**Endpoint**: `POST /auth/verify-reset-code`
+
+**Description**: Проверяет 6-значный код и возвращает одноразовый reset-токен (TTL 5 мин).
+
+**Request Body**:
+```json
+{
+  "email": "user@example.com",
+  "role": "buyer",
+  "code": "847291"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "reset_token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+**Errors**:
+- `400` — Неверный код / код истёк / превышено количество попыток (макс 5)
+
+---
+
+### Reset Password
+
+**Endpoint**: `POST /auth/reset-password`
+
+**Description**: Устанавливает новый пароль по reset-токену.
+
+**Request Body**:
+```json
+{
+  "reset_token": "eyJhbGciOiJIUzI1NiIs...",
+  "new_password": "newSecurePassword123"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "message": "Пароль успешно изменён"
+}
+```
+
+**Errors**:
+- `400` — Недействительный/истёкший токен
+
+**Notes**:
+- Код отправляется через Telegram Bot API (нужна привязка аккаунта к боту)
+- Код хранится как SHA-256 хеш, не в открытом виде
+- При сбросе пароля supplier обновляется и дублирующий buyer-аккаунт
+
+---
+
 ## Health
 
 ### Check API Health

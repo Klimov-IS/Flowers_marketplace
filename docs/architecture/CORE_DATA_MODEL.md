@@ -111,6 +111,22 @@
 
 **Связь:** один Telegram-пользователь может быть привязан только к одной сущности (unique по telegram_user_id).
 
+#### `password_reset_code` (Коды сброса пароля)
+Одноразовые 6-значные коды, отправляемые через Telegram-бота для восстановления пароля.
+- id (UUID)
+- user_id (UUID) — FK на supplier.id или buyer.id
+- role (String(20)) — 'supplier' или 'buyer'
+- code_hash (String(64)) — SHA-256 хеш кода (код не хранится в открытом виде)
+- telegram_chat_id (BigInteger) — куда отправлен (для аудита)
+- expires_at (TimestampTZ) — TTL 10 минут
+- attempts (Integer, default 0) — счётчик неудачных попыток (макс 5)
+- used_at (TimestampTZ, nullable) — когда использован
+- created_at (TimestampTZ)
+
+**Индексы:** `(user_id, role)`
+
+**Безопасность:** rate limit 3 кода за 15 мин на email, блокировка после 5 неверных попыток.
+
 *(Auth/users можно держать отдельным сервисом — здесь только доменные сущности.)*
 
 ---
