@@ -41,6 +41,7 @@ class Settings(BaseSettings):
 
     # Telegram Bot
     telegram_internal_token: str = ""  # Token for bot → API auth
+    telegram_bot_token: str = ""  # Bot token for sending messages via Bot API
 
     @property
     def cors_origins_list(self) -> list[str]:

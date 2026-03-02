@@ -1,9 +1,12 @@
 """Authentication router."""
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,18 +19,24 @@ from apps.api.auth.jwt import (
 )
 from apps.api.auth.password import hash_password, verify_password
 from apps.api.auth.schemas import (
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     LoginRequest,
     MessageResponse,
     RefreshTokenRequest,
     RegisterBuyerRequest,
     RegisterSupplierRequest,
+    ResetPasswordRequest,
     TokenResponse,
     UpdateProfileRequest,
     UserResponse,
+    VerifyResetCodeRequest,
+    VerifyResetCodeResponse,
 )
+from apps.api.auth.telegram_notify import send_reset_code
 from apps.api.database import get_db
 from apps.api.logging_config import get_logger
-from apps.api.models import Buyer, City, Supplier
+from apps.api.models import Buyer, City, PasswordResetCode, Supplier, TelegramLink
 
 logger = get_logger(__name__)
 
@@ -565,6 +574,210 @@ async def upload_avatar(
 
     logger.info("avatar_uploaded", user_id=str(current_user.id), avatar_url=avatar_url)
     return {"avatar_url": avatar_url}
+
+
+# ── Password Reset ──
+
+RESET_CODE_TTL = timedelta(minutes=10)
+RESET_CODE_MAX_ATTEMPTS = 5
+RESET_CODE_RATE_LIMIT = 3  # max codes per 15 min
+RESET_CODE_RATE_WINDOW = timedelta(minutes=15)
+
+
+async def _find_user_by_email(email: str, role: str, db: AsyncSession):
+    """Find a buyer or supplier by email. Returns (user, user_id) or raises 400."""
+    if role == "buyer":
+        result = await db.execute(select(Buyer).where(Buyer.email == email))
+    else:
+        result = await db.execute(select(Supplier).where(Supplier.email == email))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=400, detail="Аккаунт с таким email не найден")
+    return user
+
+
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+async def forgot_password(
+    request: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a 6-digit reset code to the user's linked Telegram."""
+    email = request.email.lower()
+    user = await _find_user_by_email(email, request.role, db)
+
+    # Check Telegram link
+    link_result = await db.execute(
+        select(TelegramLink).where(
+            TelegramLink.entity_id == user.id,
+            TelegramLink.role == request.role,
+            TelegramLink.is_active.is_(True),
+        )
+    )
+    tg_link = link_result.scalar_one_or_none()
+    if not tg_link:
+        raise HTTPException(
+            status_code=400,
+            detail="К этому аккаунту не привязан Telegram. Привяжите бота, чтобы восстановить пароль.",
+        )
+
+    # Rate limit: max N codes in last 15 min
+    since = datetime.now(timezone.utc) - RESET_CODE_RATE_WINDOW
+    count_result = await db.execute(
+        select(func.count()).select_from(PasswordResetCode).where(
+            PasswordResetCode.user_id == user.id,
+            PasswordResetCode.role == request.role,
+            PasswordResetCode.created_at >= since,
+        )
+    )
+    if count_result.scalar() >= RESET_CODE_RATE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail="Слишком много запросов. Попробуйте через несколько минут.",
+        )
+
+    # Generate code
+    code = str(secrets.randbelow(900000) + 100000)
+    code_hash = hashlib.sha256(code.encode()).hexdigest()
+
+    reset_entry = PasswordResetCode(
+        user_id=user.id,
+        role=request.role,
+        code_hash=code_hash,
+        telegram_chat_id=tg_link.telegram_chat_id,
+        expires_at=datetime.now(timezone.utc) + RESET_CODE_TTL,
+    )
+    db.add(reset_entry)
+    await db.flush()
+
+    # Send via Telegram
+    sent = await send_reset_code(tg_link.telegram_chat_id, code)
+    if not sent:
+        raise HTTPException(
+            status_code=502,
+            detail="Не удалось отправить код в Telegram. Попробуйте позже.",
+        )
+
+    logger.info("password_reset_requested", user_id=str(user.id), role=request.role)
+
+    return ForgotPasswordResponse(status="code_sent", expires_in=int(RESET_CODE_TTL.total_seconds()))
+
+
+@router.post("/verify-reset-code", response_model=VerifyResetCodeResponse)
+async def verify_reset_code(
+    request: VerifyResetCodeRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Verify the 6-digit code and return a short-lived reset token."""
+    email = request.email.lower()
+    user = await _find_user_by_email(email, request.role, db)
+
+    # Find the latest unused, non-expired code
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(PasswordResetCode)
+        .where(
+            PasswordResetCode.user_id == user.id,
+            PasswordResetCode.role == request.role,
+            PasswordResetCode.used_at.is_(None),
+            PasswordResetCode.expires_at > now,
+            PasswordResetCode.attempts < RESET_CODE_MAX_ATTEMPTS,
+        )
+        .order_by(PasswordResetCode.created_at.desc())
+        .limit(1)
+    )
+    reset_entry = result.scalar_one_or_none()
+
+    if not reset_entry:
+        raise HTTPException(
+            status_code=400,
+            detail="Код не найден или истёк. Запросите новый код.",
+        )
+
+    # Verify hash
+    input_hash = hashlib.sha256(request.code.encode()).hexdigest()
+    if input_hash != reset_entry.code_hash:
+        reset_entry.attempts += 1
+        await db.flush()
+        remaining = RESET_CODE_MAX_ATTEMPTS - reset_entry.attempts
+        if remaining <= 0:
+            reset_entry.used_at = now  # block this code
+            await db.flush()
+            raise HTTPException(
+                status_code=400,
+                detail="Превышено количество попыток. Запросите новый код.",
+            )
+        raise HTTPException(
+            status_code=400,
+            detail=f"Неверный код. Осталось попыток: {remaining}",
+        )
+
+    # Code is correct — mark used, issue reset token
+    reset_entry.used_at = now
+    await db.flush()
+
+    reset_token = create_access_token(
+        subject=user.id,
+        role=request.role,
+        expires_delta=timedelta(minutes=5),
+        extra_claims={"type": "password_reset"},
+    )
+
+    logger.info("password_reset_code_verified", user_id=str(user.id), role=request.role)
+
+    return VerifyResetCodeResponse(reset_token=reset_token)
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(
+    request: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Set a new password using the reset token."""
+    payload = verify_token(request.reset_token)
+
+    if not payload or payload.get("type") != "password_reset":
+        raise HTTPException(
+            status_code=400,
+            detail="Недействительная или истёкшая ссылка для сброса пароля.",
+        )
+
+    user_id_str = payload.get("sub")
+    role = payload.get("role")
+    if not user_id_str or not role:
+        raise HTTPException(status_code=400, detail="Некорректный токен.")
+
+    try:
+        user_id = UUID(user_id_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Некорректный токен.")
+
+    new_hash = hash_password(request.new_password)
+
+    if role == "buyer":
+        result = await db.execute(select(Buyer).where(Buyer.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден.")
+        user.password_hash = new_hash
+    elif role == "supplier":
+        result = await db.execute(select(Supplier).where(Supplier.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден.")
+        user.password_hash = new_hash
+        # Also update the dual buyer record if it exists
+        buyer_result = await db.execute(select(Buyer).where(Buyer.id == user_id))
+        buyer = buyer_result.scalar_one_or_none()
+        if buyer:
+            buyer.password_hash = new_hash
+    else:
+        raise HTTPException(status_code=400, detail="Некорректная роль.")
+
+    await db.flush()
+
+    logger.info("password_reset_completed", user_id=str(user_id), role=role)
+
+    return MessageResponse(message="Пароль успешно изменён")
 
 
 @router.post("/logout", response_model=MessageResponse)

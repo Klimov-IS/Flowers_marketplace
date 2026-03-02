@@ -148,9 +148,9 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-sm font-medium text-gray-700">Пароль</label>
-                <button type="button" className="text-xs text-primary-600 hover:text-primary-700 font-medium transition-colors">
+                <Link to="/reset-password" className="text-xs text-primary-600 hover:text-primary-700 font-medium transition-colors">
                   Забыли пароль?
-                </button>
+                </Link>
               </div>
               <div className="relative">
                 <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">

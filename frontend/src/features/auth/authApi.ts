@@ -52,6 +52,33 @@ export interface UserResponse {
   working_hours_to?: string | null;
 }
 
+// ── Password Reset ──
+
+export interface ForgotPasswordRequest {
+  email: string;
+  role: 'buyer' | 'supplier';
+}
+
+export interface ForgotPasswordResponse {
+  status: string;
+  expires_in: number;
+}
+
+export interface VerifyResetCodeRequest {
+  email: string;
+  role: 'buyer' | 'supplier';
+  code: string;
+}
+
+export interface VerifyResetCodeResponse {
+  reset_token: string;
+}
+
+export interface ResetPasswordRequest {
+  reset_token: string;
+  new_password: string;
+}
+
 export interface UpdateProfileRequest {
   name?: string;
   email?: string;
@@ -169,6 +196,32 @@ export const authApi = createApi({
         method: 'POST',
       }),
     }),
+
+    // ── Password Reset ──
+
+    forgotPassword: builder.mutation<ForgotPasswordResponse, ForgotPasswordRequest>({
+      query: (data) => ({
+        url: '/auth/forgot-password',
+        method: 'POST',
+        body: data,
+      }),
+    }),
+
+    verifyResetCode: builder.mutation<VerifyResetCodeResponse, VerifyResetCodeRequest>({
+      query: (data) => ({
+        url: '/auth/verify-reset-code',
+        method: 'POST',
+        body: data,
+      }),
+    }),
+
+    resetPassword: builder.mutation<{ message: string }, ResetPasswordRequest>({
+      query: (data) => ({
+        url: '/auth/reset-password',
+        method: 'POST',
+        body: data,
+      }),
+    }),
   }),
 });
 
@@ -180,4 +233,7 @@ export const {
   useGetCurrentUserQuery,
   useUpdateProfileMutation,
   useLogoutMutation,
+  useForgotPasswordMutation,
+  useVerifyResetCodeMutation,
+  useResetPasswordMutation,
 } = authApi;

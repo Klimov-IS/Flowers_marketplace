@@ -24,6 +24,7 @@ from apps.api.models.normalized import (
 from apps.api.models.order import Order, OrderItem
 from apps.api.models.parties import Supplier
 from apps.api.models.telegram import TelegramLink
+from apps.api.models.password_reset import PasswordResetCode
 from apps.api.models.ai import AIRun, AISuggestion
 
 __all__ = [
@@ -48,6 +49,7 @@ __all__ = [
     "AIRun",
     "AISuggestion",
     "TelegramLink",
+    "PasswordResetCode",
     # Catalog models
     "FlowerCategory",
     "FlowerType",

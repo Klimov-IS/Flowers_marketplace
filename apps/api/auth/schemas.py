@@ -92,3 +92,41 @@ class MessageResponse(BaseModel):
     """Simple message response."""
 
     message: str
+
+
+# ── Password Reset ──
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Request to send a reset code via Telegram."""
+
+    email: EmailStr = Field(..., description="Account email")
+    role: Literal["buyer", "supplier"] = Field(..., description="Account role")
+
+
+class ForgotPasswordResponse(BaseModel):
+    """Response after sending a reset code."""
+
+    status: str = "code_sent"
+    expires_in: int = Field(600, description="Code TTL in seconds")
+
+
+class VerifyResetCodeRequest(BaseModel):
+    """Verify the 6-digit code received in Telegram."""
+
+    email: EmailStr
+    role: Literal["buyer", "supplier"]
+    code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class VerifyResetCodeResponse(BaseModel):
+    """Response with a short-lived reset token."""
+
+    reset_token: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """Set a new password using the reset token."""
+
+    reset_token: str
+    new_password: str = Field(..., min_length=6, max_length=128)
