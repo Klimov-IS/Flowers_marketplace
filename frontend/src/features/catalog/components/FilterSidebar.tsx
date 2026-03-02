@@ -42,7 +42,7 @@ interface FilterSidebarProps {
 export default function FilterSidebar({ filters, onFilterChange, onReset }: FilterSidebarProps) {
   return (
     <aside className="hidden lg:block w-64 shrink-0">
-      <div className="sticky top-[140px] space-y-6">
+      <div className="sticky top-[140px] max-h-[calc(100vh-160px)] overflow-y-auto space-y-6 pr-1 scrollbar-thin">
         {/* Header */}
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-gray-900">Фильтры</h3>
