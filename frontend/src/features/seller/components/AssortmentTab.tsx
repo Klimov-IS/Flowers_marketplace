@@ -10,7 +10,6 @@ import type { ColumnFilters } from './FilterBar';
 import type { FilterValue } from './ColumnFilter';
 import type { SortState } from '../../../types/supplierItem';
 import UploadModal from './UploadModal';
-import ImportHistoryModal from './ImportHistoryModal';
 
 type StatusFilter = 'all' | 'published' | 'needs_review' | 'errors';
 
@@ -35,7 +34,6 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [expandedAIItemId, setExpandedAIItemId] = useState<string | null>(null);
 
   const debouncedSearch = useDebounce(searchQuery, 300);
@@ -46,7 +44,6 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
 
   const filterParams = filtersToParams(filters);
 
-  // Map status filter to API params
   const pillParams: { has_suggestions?: boolean } = {};
   if (statusFilter === 'needs_review') {
     pillParams.has_suggestions = true;
@@ -95,7 +92,7 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
 
   return (
     <div className="space-y-4">
-      {/* ── Top Bar ──────────────────────────────────────────────────────────── */}
+      {/* ── Top Bar ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <div className="flex flex-1 gap-3 items-center w-full sm:w-auto">
           {/* Search */}
@@ -131,44 +128,30 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
             })}
           </select>
 
-          {/* Reset */}
+          {/* Reset — text button */}
           {hasActiveFilters && (
             <button
               onClick={handleResetFilters}
-              className="text-sm text-gray-400 hover:text-gray-600 transition-colors whitespace-nowrap"
-              title="Сбросить все фильтры"
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors whitespace-nowrap underline decoration-dashed underline-offset-2"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              Сбросить
             </button>
           )}
         </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setIsHistoryModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            История
-          </button>
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors font-medium"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Добавить
-          </button>
-        </div>
+        {/* Upload button */}
+        <button
+          onClick={() => setIsUploadModalOpen(true)}
+          className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors font-medium"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          Загрузить прайс
+        </button>
       </div>
 
-      {/* ── Bulk Actions Bar (visible when items selected) ─────────────────── */}
+      {/* ── Bulk Actions Bar ──────────────────────────────────────────────── */}
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-3 px-4 py-2.5 bg-primary-50 border border-primary-200 rounded-xl text-sm">
           <span className="text-primary-700 font-medium">
@@ -187,7 +170,7 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
         </div>
       )}
 
-      {/* ── Table ────────────────────────────────────────────────────────────── */}
+      {/* ── Table ─────────────────────────────────────────────────────────── */}
       <AssortmentTable
         items={items}
         isLoading={isLoading}
@@ -204,7 +187,7 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
         onUploadClick={() => setIsUploadModalOpen(true)}
       />
 
-      {/* ── Pagination ───────────────────────────────────────────────────────── */}
+      {/* ── Pagination ────────────────────────────────────────────────────── */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-gray-500">
@@ -221,7 +204,6 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
               </svg>
             </button>
 
-            {/* Page numbers */}
             {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
               let pageNum: number;
               if (totalPages <= 5) {
@@ -262,15 +244,10 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
         </div>
       )}
 
-      {/* ── Modals ───────────────────────────────────────────────────────────── */}
+      {/* ── Modal ─────────────────────────────────────────────────────────── */}
       <UploadModal
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
-      />
-      <ImportHistoryModal
-        isOpen={isHistoryModalOpen}
-        onClose={() => setIsHistoryModalOpen(false)}
-        supplierId={supplierId}
       />
     </div>
   );

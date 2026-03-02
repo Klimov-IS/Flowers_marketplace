@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { FlatOfferVariant, SortState } from '../../../types/supplierItem';
 import {
   useUpdateSupplierItemMutation,
@@ -23,22 +23,170 @@ function resolvePhotoUrl(url: string): string {
   return url;
 }
 
-// ── Color display map ────────────────────────────────────────────────────────
-const COLOR_MAP: Record<string, { bg: string; extra?: string }> = {
-  'красный': { bg: 'bg-red-500' },
-  'белый': { bg: 'bg-white', extra: 'border border-gray-300' },
-  'розовый': { bg: 'bg-pink-400' },
-  'жёлтый': { bg: 'bg-yellow-400' },
-  'желтый': { bg: 'bg-yellow-400' },
-  'оранжевый': { bg: 'bg-orange-500' },
-  'фиолетовый': { bg: 'bg-purple-500' },
-  'синий': { bg: 'bg-blue-500' },
-  'зелёный': { bg: 'bg-green-500' },
-  'зеленый': { bg: 'bg-green-500' },
-  'микс': { bg: 'bg-gradient-to-br from-red-400 via-yellow-300 to-pink-400' },
-};
+// ── Color options (shared with EditableColorSelect) ──────────────────────────
+const COLOR_OPTIONS = [
+  { value: 'белый', label: 'Белый', hex: '#FFFFFF', border: true },
+  { value: 'кремовый', label: 'Кремовый', hex: '#FFFDD0' },
+  { value: 'желтый', label: 'Желтый', hex: '#FFD700' },
+  { value: 'оранжевый', label: 'Оранжевый', hex: '#FF8C00' },
+  { value: 'персиковый', label: 'Персиковый', hex: '#FFDAB9' },
+  { value: 'коралловый', label: 'Коралловый', hex: '#FF7F50' },
+  { value: 'розовый', label: 'Розовый', hex: '#FFB6C1' },
+  { value: 'пудровый', label: 'Пудровый', hex: '#E8CCD7' },
+  { value: 'красный', label: 'Красный', hex: '#DC143C' },
+  { value: 'бордовый', label: 'Бордовый', hex: '#8B0000' },
+  { value: 'лавандовый', label: 'Лавандовый', hex: '#E6E6FA' },
+  { value: 'сиреневый', label: 'Сиреневый', hex: '#C8A2C8' },
+  { value: 'лиловый', label: 'Лиловый', hex: '#B666D2' },
+  { value: 'фиолетовый', label: 'Фиолетовый', hex: '#8B008B' },
+  { value: 'синий', label: 'Синий', hex: '#4169E1' },
+  { value: 'зеленый', label: 'Зеленый', hex: '#228B22' },
+  { value: 'биколор', label: 'Биколор', hex: 'linear-gradient(135deg, #FFB6C1 50%, #FFFFFF 50%)' },
+  { value: 'микс', label: 'Микс', hex: 'linear-gradient(135deg, #FF6B6B, #4ECDC4, #45B7D1, #96CEB4)' },
+];
 
-// ── Toggle Switch ────────────────────────────────────────────────────────────
+function getColorStyle(hex: string): React.CSSProperties {
+  if (hex.startsWith('linear')) return { background: hex };
+  return { backgroundColor: hex };
+}
+
+function findColorOption(name: string) {
+  return COLOR_OPTIONS.find((o) => o.value === name.toLowerCase());
+}
+
+// ── Inline Color Picker ──────────────────────────────────────────────────────
+function InlineColorPicker({
+  colors,
+  onSave,
+}: {
+  colors: string[];
+  onSave: (colors: string[]) => Promise<void>;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [selected, setSelected] = useState<string[]>(colors);
+  const [isSaving, setIsSaving] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setSelected(colors); }, [colors]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        handleSave();
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [isOpen, selected]);
+
+  const handleSave = async () => {
+    setIsOpen(false);
+    const sortedNew = [...selected].sort();
+    const sortedOld = [...colors].sort();
+    if (JSON.stringify(sortedNew) === JSON.stringify(sortedOld)) return;
+
+    setIsSaving(true);
+    try {
+      await onSave(selected);
+    } catch {
+      setSelected(colors);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const toggle = (color: string) => {
+    setSelected((prev) =>
+      prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color]
+    );
+  };
+
+  // Show up to 3 color circles + "+N" overflow
+  const displayColors = selected.slice(0, 3);
+  const overflow = selected.length - 3;
+
+  return (
+    <div ref={containerRef} className="relative">
+      {/* Display */}
+      <button
+        type="button"
+        onClick={() => !isSaving && setIsOpen(!isOpen)}
+        className="flex items-center gap-1 px-2 py-1 rounded-lg border border-transparent hover:border-gray-200 hover:bg-gray-50 transition-all min-h-[28px] w-full"
+      >
+        {displayColors.length > 0 ? (
+          <>
+            {displayColors.map((c) => {
+              const opt = findColorOption(c);
+              if (!opt) return null;
+              return (
+                <span
+                  key={c}
+                  className={`w-5 h-5 rounded-full flex-shrink-0 ${opt.border ? 'border border-gray-300' : ''}`}
+                  style={getColorStyle(opt.hex)}
+                  title={opt.label}
+                />
+              );
+            })}
+            {overflow > 0 && (
+              <span className="text-xs text-gray-400 ml-0.5">+{overflow}</span>
+            )}
+          </>
+        ) : (
+          <span className="text-sm text-gray-400">—</span>
+        )}
+        {isSaving && (
+          <div className="w-3 h-3 border-2 border-primary-500 border-t-transparent rounded-full animate-spin ml-1" />
+        )}
+      </button>
+
+      {/* Dropdown */}
+      {isOpen && (
+        <div className="absolute z-30 top-full left-0 mt-1 w-[220px] bg-white border border-gray-200 rounded-xl shadow-lg p-2">
+          <div className="text-xs text-gray-500 mb-1.5 px-1">Выберите цвета:</div>
+          <div className="grid grid-cols-3 gap-1 max-h-[200px] overflow-y-auto">
+            {COLOR_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => toggle(opt.value)}
+                className={`flex items-center gap-1.5 px-1.5 py-1 rounded-lg text-xs transition-colors ${
+                  selected.includes(opt.value)
+                    ? 'bg-primary-50 ring-1 ring-primary-300'
+                    : 'hover:bg-gray-50'
+                }`}
+              >
+                <span
+                  className={`w-4 h-4 rounded-full flex-shrink-0 ${opt.border ? 'border border-gray-300' : ''}`}
+                  style={getColorStyle(opt.hex)}
+                />
+                <span className="truncate">{opt.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between">
+            <button
+              type="button"
+              onClick={() => setSelected([])}
+              className="text-xs text-gray-400 hover:text-gray-600"
+            >
+              Очистить
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="px-3 py-1 text-xs bg-primary-500 text-white rounded-lg hover:bg-primary-600"
+            >
+              Готово
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Toggle Switch with loading ───────────────────────────────────────────────
 function ToggleSwitch({
   checked,
   onChange,
@@ -48,39 +196,151 @@ function ToggleSwitch({
   onChange: (val: boolean) => void;
   disabled?: boolean;
 }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleToggle = async () => {
+    if (disabled || loading) return;
+    setLoading(true);
+    try {
+      await onChange(!checked);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
-      onClick={() => !disabled && onChange(!checked)}
+      onClick={handleToggle}
       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
         checked ? 'bg-primary-500' : 'bg-gray-300'
-      } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+      } ${disabled || loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
       <span
         className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${
           checked ? 'translate-x-[18px]' : 'translate-x-[3px]'
         }`}
       />
+      {loading && (
+        <span className="absolute inset-0 flex items-center justify-center">
+          <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+        </span>
+      )}
     </button>
   );
 }
 
-// ── Status Badge ─────────────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: string }) {
-  const config: Record<string, { label: string; cls: string }> = {
-    active: { label: 'Активен', cls: 'bg-green-100 text-green-700' },
-    ambiguous: { label: 'Модерация', cls: 'bg-yellow-100 text-yellow-700' },
-    rejected: { label: 'Отклонён', cls: 'bg-red-100 text-red-700' },
-    hidden: { label: 'Скрыто', cls: 'bg-gray-100 text-gray-500' },
-    deleted: { label: 'Удалён', cls: 'bg-red-50 text-red-400' },
+// ── Clickable Status Badge with dropdown ─────────────────────────────────────
+const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
+  active: { label: 'Активен', cls: 'bg-green-100 text-green-700' },
+  ambiguous: { label: 'Модерация', cls: 'bg-yellow-100 text-yellow-700' },
+  rejected: { label: 'Отклонён', cls: 'bg-red-100 text-red-700' },
+  hidden: { label: 'Скрыто', cls: 'bg-gray-100 text-gray-500' },
+  deleted: { label: 'Удалён', cls: 'bg-red-50 text-red-400' },
+};
+
+// Allowed transitions per status
+const STATUS_TRANSITIONS: Record<string, { target: string; label: string; icon: string }[]> = {
+  active: [
+    { target: 'hidden', label: 'Скрыть', icon: 'eye-off' },
+  ],
+  hidden: [
+    { target: 'active', label: 'Восстановить', icon: 'eye' },
+  ],
+  ambiguous: [
+    { target: 'active', label: 'Подтвердить', icon: 'check' },
+    { target: 'hidden', label: 'Скрыть', icon: 'eye-off' },
+  ],
+  rejected: [
+    { target: 'active', label: 'Восстановить', icon: 'eye' },
+  ],
+};
+
+function StatusDropdown({
+  status,
+  onHide,
+  onRestore,
+}: {
+  status: string;
+  onHide: () => void;
+  onRestore: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [isOpen]);
+
+  const cfg = STATUS_CONFIG[status] || { label: status, cls: 'bg-gray-100 text-gray-600' };
+  const transitions = STATUS_TRANSITIONS[status] || [];
+
+  const handleAction = (target: string) => {
+    setIsOpen(false);
+    if (target === 'hidden') {
+      onHide();
+    } else if (target === 'active') {
+      onRestore();
+    }
   };
-  const c = config[status] || { label: status, cls: 'bg-gray-100 text-gray-600' };
+
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${c.cls}`}>
-      {c.label}
-    </span>
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => transitions.length > 0 && setIsOpen(!isOpen)}
+        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-all ${cfg.cls} ${
+          transitions.length > 0 ? 'cursor-pointer hover:ring-1 hover:ring-gray-300' : 'cursor-default'
+        }`}
+      >
+        {cfg.label}
+        {transitions.length > 0 && (
+          <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        )}
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-30 top-full left-0 mt-1 min-w-[140px] bg-white border border-gray-200 rounded-xl shadow-lg py-1">
+          {transitions.map((t) => (
+            <button
+              key={t.target}
+              type="button"
+              onClick={() => handleAction(t.target)}
+              className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+            >
+              {t.icon === 'eye-off' && (
+                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                </svg>
+              )}
+              {t.icon === 'eye' && (
+                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              )}
+              {t.icon === 'check' && (
+                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -101,7 +361,7 @@ interface AssortmentTableProps {
 
 type ItemUpdateValue = string | number | string[] | null;
 
-// ── Sortable header helper ───────────────────────────────────────────────────
+// ── Sortable header ──────────────────────────────────────────────────────────
 function SortHeader({
   label,
   field,
@@ -173,20 +433,15 @@ function FlatVariantRow({
         ? 'bg-white'
         : 'bg-gray-50/50';
 
-  // Build display name: "Тип субтип · Сорт"
   const typeName = variant.flower_type
     ? `${variant.flower_type}${variant.subtype ? ` ${variant.subtype.toLowerCase()}` : ''}`
     : variant.raw_name || '—';
-
-  // Color display
-  const primaryColor = variant.colors?.[0]?.toLowerCase();
-  const colorInfo = primaryColor ? COLOR_MAP[primaryColor] : null;
 
   return (
     <tr className={`border-b border-gray-100 hover:bg-primary-50/30 transition-colors ${rowBg}`}>
       {/* Checkbox */}
       {onToggleSelect && (
-        <td className="w-10 px-3 py-3 text-center">
+        <td className="w-10 px-3 py-2.5 text-center">
           <input
             type="checkbox"
             checked={isSelected || false}
@@ -196,8 +451,8 @@ function FlatVariantRow({
         </td>
       )}
 
-      {/* Название (merged: image + type + subtype) */}
-      <td className="px-3 py-3">
+      {/* Название */}
+      <td className="px-3 py-2.5">
         <div className="flex items-center gap-3">
           <img
             src={variant.photo_url ? resolvePhotoUrl(variant.photo_url) : getFlowerImage(variant.flower_type)}
@@ -209,10 +464,9 @@ function FlatVariantRow({
             }}
           />
           <div className="min-w-0">
-            <div className="font-medium text-gray-900 truncate" title={variant.raw_name}>
+            <div className="font-medium text-gray-900 truncate text-sm" title={variant.raw_name}>
               {typeName}
             </div>
-            {/* AI badge */}
             {variant.has_pending_suggestions && (
               <button
                 onClick={onAIClick}
@@ -229,33 +483,26 @@ function FlatVariantRow({
         </div>
       </td>
 
-      {/* Сорт — editable */}
-      <td className="px-3 py-3">
+      {/* Сорт */}
+      <td className="px-3 py-2.5">
         <EditableCell
           value={variant.variety || ''}
           type="text"
           placeholder="—"
           onSave={async (val) => onUpdateItem(variant.item_id, 'variety', val)}
-          className="text-gray-700 truncate"
         />
       </td>
 
-      {/* Цвет — circle + text */}
-      <td className="px-3 py-3">
-        {primaryColor ? (
-          <div className="flex items-center gap-2">
-            <span
-              className={`w-5 h-5 rounded-full flex-shrink-0 ${colorInfo?.bg || 'bg-gray-300'} ${colorInfo?.extra || ''}`}
-            />
-            <span className="text-sm text-gray-700 capitalize truncate">{primaryColor}</span>
-          </div>
-        ) : (
-          <span className="text-gray-400 text-sm">—</span>
-        )}
+      {/* Цвет — inline picker */}
+      <td className="px-3 py-2.5">
+        <InlineColorPicker
+          colors={variant.colors || []}
+          onSave={async (colors) => onUpdateItem(variant.item_id, 'colors', colors)}
+        />
       </td>
 
-      {/* Длина — editable */}
-      <td className="px-3 py-3">
+      {/* Длина */}
+      <td className="px-3 py-2.5">
         <EditableCell
           value={variant.length_cm}
           type="number"
@@ -265,31 +512,30 @@ function FlatVariantRow({
         />
       </td>
 
-      {/* Цена — editable */}
-      <td className="px-3 py-3">
+      {/* Цена */}
+      <td className="px-3 py-2.5">
         <EditableCell
           value={variant.price ? parseFloat(variant.price) : null}
           type="number"
           placeholder="—"
           suffix=" ₽"
           onSave={async (val) => onUpdateVariant(variant.variant_id, 'price_min', val)}
-          className="font-semibold text-gray-900"
+          className="font-semibold"
         />
       </td>
 
-      {/* Упак. — just pack_qty number, editable */}
-      <td className="px-3 py-3 text-center">
+      {/* Упак. */}
+      <td className="px-3 py-2.5 text-center">
         <EditableCell
           value={variant.pack_qty}
           type="number"
           placeholder="—"
           onSave={async (val) => onUpdateVariant(variant.variant_id, 'pack_qty', val)}
-          className="text-gray-700"
         />
       </td>
 
-      {/* Наличие — toggle switch */}
-      <td className="px-3 py-3 text-center">
+      {/* Наличие — toggle */}
+      <td className="px-3 py-2.5 text-center">
         <ToggleSwitch
           checked={(variant.stock ?? 0) > 0}
           onChange={async (val) => {
@@ -298,15 +544,18 @@ function FlatVariantRow({
         />
       </td>
 
-      {/* Статус — badge */}
-      <td className="px-3 py-3">
-        <StatusBadge status={variant.item_status} />
+      {/* Статус — clickable dropdown */}
+      <td className="px-3 py-2.5">
+        <StatusDropdown
+          status={variant.item_status}
+          onHide={() => onHideItem(variant.item_id)}
+          onRestore={() => onRestoreItem(variant.item_id)}
+        />
       </td>
 
       {/* Действия — edit + delete */}
-      <td className="px-3 py-3">
+      <td className="px-3 py-2.5">
         <div className="flex items-center gap-1">
-          {/* View/Edit */}
           <button
             onClick={() => onViewDetails?.(variant)}
             className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
@@ -316,32 +565,6 @@ function FlatVariantRow({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
           </button>
-
-          {/* Hide / Restore */}
-          {variant.item_status === 'active' ? (
-            <button
-              onClick={() => onHideItem(variant.item_id)}
-              className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-              title="Скрыть"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
-              </svg>
-            </button>
-          ) : variant.item_status === 'hidden' ? (
-            <button
-              onClick={() => onRestoreItem(variant.item_id)}
-              className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-              title="Восстановить"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </button>
-          ) : null}
-
-          {/* Delete */}
           <button
             onClick={() => {
               if (confirm('Удалить этот вариант?')) {
@@ -446,7 +669,6 @@ export default function AssortmentTable({
     }
   };
 
-  // Total column span for AI expansion row
   const colSpan = (hasSelection ? 1 : 0) + 9;
 
   if (isLoading) {
@@ -483,10 +705,21 @@ export default function AssortmentTable({
     <>
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full table-fixed">
+            <colgroup>
+              {hasSelection && <col style={{ width: '40px' }} />}
+              <col style={{ width: '20%' }} /> {/* Название */}
+              <col style={{ width: '11%' }} /> {/* Сорт */}
+              <col style={{ width: '12%' }} /> {/* Цвет */}
+              <col style={{ width: '9%' }} />  {/* Длина */}
+              <col style={{ width: '10%' }} /> {/* Цена */}
+              <col style={{ width: '8%' }} />  {/* Упак */}
+              <col style={{ width: '8%' }} />  {/* Наличие */}
+              <col style={{ width: '11%' }} /> {/* Статус */}
+              <col style={{ width: '9%' }} />  {/* Действия */}
+            </colgroup>
             <thead>
               <tr className="text-left text-xs text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                {/* Checkbox */}
                 {hasSelection && (
                   <th className="w-10 px-3 py-3 text-center">
                     <input
@@ -501,8 +734,7 @@ export default function AssortmentTable({
                     />
                   </th>
                 )}
-
-                <SortHeader label="Название" field="raw_name" sort={sort} onSort={onSortChange} className="min-w-[200px]" />
+                <SortHeader label="Название" field="raw_name" sort={sort} onSort={onSortChange} />
                 <th className="px-3 py-3 font-medium">Сорт</th>
                 <th className="px-3 py-3 font-medium">Цвет</th>
                 <SortHeader label="Длина" field="length_cm" sort={sort} onSort={onSortChange} />
@@ -515,7 +747,7 @@ export default function AssortmentTable({
             </thead>
             <tbody>
               {items.map((variant, idx) => (
-                <>{/* Fragment for variant row + optional AI row */}
+                <>
                   <FlatVariantRow
                     key={variant.variant_id}
                     variant={variant}
@@ -547,13 +779,12 @@ export default function AssortmentTable({
           </table>
         </div>
 
-        {/* Table footer */}
+        {/* Footer */}
         <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-500">
           Показано {items.length} позиций
         </div>
       </div>
 
-      {/* Product details modal */}
       {viewingVariant && (
         <ProductDetailModal
           isOpen={!!viewingVariant}

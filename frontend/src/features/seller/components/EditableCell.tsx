@@ -19,23 +19,20 @@ export default function EditableCell({
   className = '',
   disabled = false,
 }: EditableCellProps) {
-  const [isEditing, setIsEditing] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const [editValue, setEditValue] = useState<string>(value?.toString() ?? '');
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Sync external value changes
   useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
+    if (!isFocused) {
+      setEditValue(value?.toString() ?? '');
     }
-  }, [isEditing]);
+  }, [value, isFocused]);
 
-  useEffect(() => {
-    setEditValue(value?.toString() ?? '');
-  }, [value]);
-
+  // Clear save status after delay
   useEffect(() => {
     if (saveStatus !== 'idle') {
       const timer = setTimeout(() => setSaveStatus('idle'), 1500);
@@ -43,16 +40,18 @@ export default function EditableCell({
     }
   }, [saveStatus]);
 
-  const handleClick = () => {
-    if (!disabled && !isEditing) {
-      setIsEditing(true);
-    }
+  const handleFocus = () => {
+    if (disabled) return;
+    setIsFocused(true);
+    // Select all text on focus
+    setTimeout(() => inputRef.current?.select(), 0);
   };
 
   const handleSave = async () => {
+    setIsFocused(false);
+
     if (editValue === (value?.toString() ?? '')) {
-      setIsEditing(false);
-      return;
+      return; // No change
     }
 
     setIsSaving(true);
@@ -66,10 +65,8 @@ export default function EditableCell({
       } else {
         saveValue = editValue || null;
       }
-
       await onSave(saveValue);
       setSaveStatus('success');
-      setIsEditing(false);
     } catch {
       setSaveStatus('error');
       setEditValue(value?.toString() ?? '');
@@ -81,67 +78,58 @@ export default function EditableCell({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleSave();
+      inputRef.current?.blur(); // triggers handleSave via onBlur
     } else if (e.key === 'Escape') {
       setEditValue(value?.toString() ?? '');
-      setIsEditing(false);
+      setIsFocused(false);
+      inputRef.current?.blur();
     }
   };
 
-  const handleBlur = () => {
-    handleSave();
-  };
+  const isEmpty = value === null || value === undefined || value === '';
 
-  const displayValue = value !== null && value !== undefined ? `${value}${suffix}` : placeholder;
-
-  if (isEditing) {
-    return (
-      <div className="relative">
-        <input
-          ref={inputRef}
-          type={type}
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={handleBlur}
-          disabled={isSaving}
-          className={`w-full px-2 py-1 text-sm border border-primary-500 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 ${
-            isSaving ? 'bg-gray-100' : 'bg-white'
-          } ${className}`}
-          min={type === 'number' ? 0 : undefined}
-          step={type === 'number' ? 'any' : undefined}
-        />
-        {isSaving && (
-          <div className="absolute right-2 top-1/2 -translate-y-1/2">
-            <div className="w-3 h-3 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
-      </div>
-    );
-  }
+  // Status ring color
+  const ringClass = saveStatus === 'success'
+    ? 'ring-1 ring-green-400'
+    : saveStatus === 'error'
+      ? 'ring-1 ring-red-400'
+      : isFocused
+        ? 'ring-1 ring-primary-400 border-primary-400'
+        : '';
 
   return (
-    <div
-      onClick={handleClick}
-      className={`px-2 py-1 rounded cursor-pointer transition-all group relative ${
-        disabled ? 'cursor-default' : 'hover:bg-gray-100'
-      } ${className}`}
-    >
-      <span className={value === null || value === undefined ? 'text-gray-400' : ''}>
-        {displayValue}
-      </span>
-
-      {!disabled && (
-        <span className="ml-1 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">
-          ✎
+    <div className={`relative ${className}`}>
+      <input
+        ref={inputRef}
+        type={type}
+        value={isFocused ? editValue : (isEmpty ? '' : (value?.toString() ?? ''))}
+        placeholder={isFocused ? '' : placeholder}
+        onChange={(e) => setEditValue(e.target.value)}
+        onFocus={handleFocus}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        disabled={disabled || isSaving}
+        min={type === 'number' ? 0 : undefined}
+        step={type === 'number' ? 'any' : undefined}
+        className={`w-full px-2 py-1 text-sm bg-transparent border border-transparent rounded-lg
+          transition-all outline-none
+          ${!disabled && !isSaving ? 'hover:border-gray-200 hover:bg-gray-50' : ''}
+          ${ringClass}
+          ${isSaving ? 'opacity-60' : ''}
+          ${isEmpty && !isFocused ? 'text-gray-400' : 'text-gray-900'}
+        `}
+      />
+      {/* Suffix display (only when not focused and has value) */}
+      {!isFocused && !isEmpty && suffix && (
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
+          {suffix.trim()}
         </span>
       )}
-
-      {saveStatus === 'success' && (
-        <span className="absolute -right-1 -top-1 text-green-500 text-xs">✓</span>
-      )}
-      {saveStatus === 'error' && (
-        <span className="absolute -right-1 -top-1 text-red-500 text-xs">✗</span>
+      {/* Saving spinner */}
+      {isSaving && (
+        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+          <div className="w-3 h-3 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+        </div>
       )}
     </div>
   );
