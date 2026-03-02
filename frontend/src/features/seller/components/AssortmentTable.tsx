@@ -423,7 +423,7 @@ function SortHeader({
   const dir = active ? sort?.direction : null;
   return (
     <th
-      className={`px-3 py-3 font-medium text-left cursor-pointer select-none hover:text-gray-900 transition-colors ${className}`}
+      className={`px-3 py-2 font-semibold text-left cursor-pointer select-none hover:text-gray-900 transition-colors ${className}`}
       onClick={() => onSort?.(field)}
     >
       <span className="inline-flex items-center gap-1">
@@ -486,7 +486,7 @@ function FlatVariantRow({
     <tr className={`border-b border-gray-100 hover:bg-primary-50/30 transition-colors ${rowBg} ${isHidden ? '[&>td]:text-gray-400' : ''}`}>
       {/* Checkbox */}
       {onToggleSelect && (
-        <td className="w-10 px-3 py-2.5 text-center">
+        <td className="w-10 px-3 py-2 text-center">
           <input
             type="checkbox"
             checked={isSelected || false}
@@ -497,12 +497,12 @@ function FlatVariantRow({
       )}
 
       {/* Название */}
-      <td className="px-3 py-2.5">
-        <div className="flex items-center gap-3">
+      <td className="px-3 py-2">
+        <div className="flex items-center gap-2">
           <img
             src={variant.photo_url ? resolvePhotoUrl(variant.photo_url) : getFlowerImage(variant.flower_type)}
             alt=""
-            className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-gray-100"
+            className="w-8 h-8 rounded-lg object-cover flex-shrink-0 bg-gray-100"
             loading="lazy"
             onError={(e) => {
               (e.target as HTMLImageElement).src = getDefaultFlowerImage();
@@ -529,7 +529,7 @@ function FlatVariantRow({
       </td>
 
       {/* Сорт */}
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2">
         <EditableCell
           value={variant.variety || ''}
           type="text"
@@ -539,7 +539,7 @@ function FlatVariantRow({
       </td>
 
       {/* Цвет — inline picker */}
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2">
         <InlineColorPicker
           colors={variant.colors || []}
           onSave={async (colors) => onUpdateItem(variant.item_id, 'colors', colors)}
@@ -547,7 +547,7 @@ function FlatVariantRow({
       </td>
 
       {/* Длина */}
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2">
         <EditableCell
           value={variant.length_cm}
           type="number"
@@ -558,7 +558,7 @@ function FlatVariantRow({
       </td>
 
       {/* Цена */}
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2">
         <EditableCell
           value={variant.price ? parseFloat(variant.price) : null}
           type="number"
@@ -570,7 +570,7 @@ function FlatVariantRow({
       </td>
 
       {/* Упак. */}
-      <td className="px-3 py-2.5 text-center">
+      <td className="px-3 py-2 text-center">
         <EditableCell
           value={variant.pack_qty}
           type="number"
@@ -580,7 +580,7 @@ function FlatVariantRow({
       </td>
 
       {/* Наличие — toggle */}
-      <td className="px-3 py-2.5 text-center">
+      <td className="px-3 py-2 text-center">
         <ToggleSwitch
           checked={(variant.stock ?? 0) > 0}
           onChange={async (val) => {
@@ -590,7 +590,7 @@ function FlatVariantRow({
       </td>
 
       {/* Статус — clickable dropdown */}
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2">
         <StatusDropdown
           status={variant.item_status}
           onHide={() => onHideItem(variant.item_id)}
@@ -599,7 +599,7 @@ function FlatVariantRow({
       </td>
 
       {/* Действия — edit + delete */}
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2">
         <div className="flex items-center gap-1">
           <button
             onClick={() => onViewDetails?.(variant)}
@@ -750,23 +750,11 @@ export default function AssortmentTable({
     <>
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full table-fixed">
-            <colgroup>
-              {hasSelection && <col style={{ width: '40px' }} />}
-              <col style={{ width: '20%' }} /> {/* Название */}
-              <col style={{ width: '11%' }} /> {/* Сорт */}
-              <col style={{ width: '12%' }} /> {/* Цвет */}
-              <col style={{ width: '9%' }} />  {/* Длина */}
-              <col style={{ width: '10%' }} /> {/* Цена */}
-              <col style={{ width: '8%' }} />  {/* Упак */}
-              <col style={{ width: '8%' }} />  {/* Наличие */}
-              <col style={{ width: '11%' }} /> {/* Статус */}
-              <col style={{ width: '9%' }} />  {/* Действия */}
-            </colgroup>
+          <table className="w-full min-w-[900px]">
             <thead>
               <tr className="text-left text-xs text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
                 {hasSelection && (
-                  <th className="w-10 px-3 py-3 text-center">
+                  <th className="w-10 px-3 py-2 text-center">
                     <input
                       type="checkbox"
                       checked={allSelected}
@@ -780,14 +768,14 @@ export default function AssortmentTable({
                   </th>
                 )}
                 <SortHeader label="Название" field="raw_name" sort={sort} onSort={onSortChange} />
-                <th className="px-3 py-3 font-medium">Сорт</th>
-                <th className="px-3 py-3 font-medium">Цвет</th>
+                <th className="px-3 py-2 font-semibold">Сорт</th>
+                <th className="px-3 py-2 font-semibold">Цвет</th>
                 <SortHeader label="Длина" field="length_cm" sort={sort} onSort={onSortChange} />
                 <SortHeader label="Цена ₽" field="price" sort={sort} onSort={onSortChange} />
-                <th className="px-3 py-3 font-medium text-center">Упак.</th>
-                <th className="px-3 py-3 font-medium text-center">Наличие</th>
-                <th className="px-3 py-3 font-medium">Статус</th>
-                <th className="px-3 py-3 font-medium">Действия</th>
+                <th className="px-3 py-2 font-semibold text-center">Упак.</th>
+                <th className="px-3 py-2 font-semibold text-center">Наличие</th>
+                <th className="px-3 py-2 font-semibold">Статус</th>
+                <th className="px-3 py-2 font-semibold w-20">Действия</th>
               </tr>
             </thead>
             <tbody>
