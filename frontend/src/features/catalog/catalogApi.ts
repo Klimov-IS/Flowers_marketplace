@@ -1,8 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { OffersResponse, ProductFilters } from '../../types/product';
 
-// In development, Vite proxy handles /offers, /orders, /admin routes
-// In production, set VITE_API_BASE_URL to the actual API URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 export const catalogApi = createApi({
@@ -29,6 +27,7 @@ export const catalogApi = createApi({
           filters.colors.forEach((c) => params.append('colors', c));
         }
         if (filters.in_stock !== undefined) params.append('in_stock', String(filters.in_stock));
+        if (filters.sort_by) params.append('sort_by', filters.sort_by);
         if (filters.limit) params.append('limit', String(filters.limit));
         if (filters.offset) params.append('offset', String(filters.offset));
 

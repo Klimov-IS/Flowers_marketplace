@@ -52,6 +52,7 @@ export interface ProductFilters {
   origin_country?: string[];
   colors?: string[];
   in_stock?: boolean;
+  sort_by?: string;
   limit?: number;
   offset?: number;
 }

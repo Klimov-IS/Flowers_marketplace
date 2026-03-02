@@ -101,6 +101,7 @@ async def list_offers(
     origin_country: list[str] | None = Query(None, description="Filter by origin countries"),
     colors: list[str] | None = Query(None, description="Filter by colors"),
     in_stock: bool | None = Query(None, description="Filter by in stock (stock_qty > 0)"),
+    sort_by: str | None = Query(None, description="Sort: price_asc, price_desc, newest"),
     is_active: bool = Query(True, description="Filter by active status"),
     limit: int = Query(100, ge=1, le=500, description="Max results"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
@@ -214,10 +215,14 @@ async def list_offers(
     total = total_result.scalar() or 0
 
     # Order and paginate
-    query = query.order_by(
-        Offer.published_at.desc(),
-        Offer.price_min.asc(),
-    )
+    if sort_by == "price_asc":
+        query = query.order_by(Offer.price_min.asc(), Offer.published_at.desc())
+    elif sort_by == "price_desc":
+        query = query.order_by(Offer.price_min.desc(), Offer.published_at.desc())
+    elif sort_by == "newest":
+        query = query.order_by(Offer.published_at.desc())
+    else:
+        query = query.order_by(Offer.published_at.desc(), Offer.price_min.asc())
     query = query.limit(limit).offset(offset)
 
     # Execute query

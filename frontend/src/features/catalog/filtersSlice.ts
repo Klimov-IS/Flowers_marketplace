@@ -3,7 +3,7 @@ import type { PayloadAction } from '@reduxjs/toolkit';
 import type { ProductFilters } from '../../types/product';
 
 interface FiltersState extends ProductFilters {
-  sortBy: 'price_asc' | 'price_desc' | 'name';
+  sortBy: string;
 }
 
 const initialState: FiltersState = {
@@ -18,9 +18,10 @@ const initialState: FiltersState = {
   origin_country: undefined,
   colors: undefined,
   in_stock: undefined,
+  sort_by: undefined,
   limit: 24,
   offset: 0,
-  sortBy: 'price_asc',
+  sortBy: 'default',
 };
 
 const filtersSlice = createSlice({
@@ -29,7 +30,7 @@ const filtersSlice = createSlice({
   reducers: {
     setSearchQuery: (state, action: PayloadAction<string>) => {
       state.q = action.payload;
-      state.offset = 0; // Reset pagination
+      state.offset = 0;
     },
     setProductType: (state, action: PayloadAction<string | undefined>) => {
       state.product_type = action.payload;
@@ -71,11 +72,9 @@ const filtersSlice = createSlice({
       state.supplier_id = action.payload;
       state.offset = 0;
     },
-    setSortBy: (
-      state,
-      action: PayloadAction<'price_asc' | 'price_desc' | 'name'>
-    ) => {
+    setSortBy: (state, action: PayloadAction<string>) => {
       state.sortBy = action.payload;
+      state.sort_by = action.payload === 'default' ? undefined : action.payload;
       state.offset = 0;
     },
     setPage: (state, action: PayloadAction<number>) => {
@@ -93,8 +92,9 @@ const filtersSlice = createSlice({
       state.origin_country = undefined;
       state.colors = undefined;
       state.in_stock = undefined;
+      state.sort_by = undefined;
       state.offset = 0;
-      state.sortBy = 'price_asc';
+      state.sortBy = 'default';
     },
   },
 });

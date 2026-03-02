@@ -6,14 +6,14 @@ import {
   useDeleteOfferCandidateMutation,
   useHideSupplierItemMutation,
   useRestoreSupplierItemMutation,
-  useDuplicateSupplierItemMutation,
 } from '../supplierApi';
 import { useToast } from '../../../components/ui/Toast';
 import EditableCell from './EditableCell';
-import EditableSelect from './EditableSelect';
-import EditableColorSelect from './EditableColorSelect';
 import { getFlowerImage, getDefaultFlowerImage } from '../../../utils/flowerImages';
-import FilterableHeader from './FilterableHeader';
+import type { FilterValue } from './ColumnFilter';
+import type { ColumnFilters } from './FilterBar';
+import AISuggestionRow from './AISuggestionRow';
+import ProductDetailModal from './ProductDetailModal';
 
 function resolvePhotoUrl(url: string): string {
   const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
@@ -22,83 +22,171 @@ function resolvePhotoUrl(url: string): string {
   }
   return url;
 }
-import type { FilterValue } from './ColumnFilter';
-import type { ColumnFilters } from './FilterBar';
-import AISuggestionRow from './AISuggestionRow';
-import ProductDetailModal from './ProductDetailModal';
 
+// ── Color display map ────────────────────────────────────────────────────────
+const COLOR_MAP: Record<string, { bg: string; extra?: string }> = {
+  'красный': { bg: 'bg-red-500' },
+  'белый': { bg: 'bg-white', extra: 'border border-gray-300' },
+  'розовый': { bg: 'bg-pink-400' },
+  'жёлтый': { bg: 'bg-yellow-400' },
+  'желтый': { bg: 'bg-yellow-400' },
+  'оранжевый': { bg: 'bg-orange-500' },
+  'фиолетовый': { bg: 'bg-purple-500' },
+  'синий': { bg: 'bg-blue-500' },
+  'зелёный': { bg: 'bg-green-500' },
+  'зеленый': { bg: 'bg-green-500' },
+  'микс': { bg: 'bg-gradient-to-br from-red-400 via-yellow-300 to-pink-400' },
+};
+
+// ── Toggle Switch ────────────────────────────────────────────────────────────
+function ToggleSwitch({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (val: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => !disabled && onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+        checked ? 'bg-primary-500' : 'bg-gray-300'
+      } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+    >
+      <span
+        className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? 'translate-x-[18px]' : 'translate-x-[3px]'
+        }`}
+      />
+    </button>
+  );
+}
+
+// ── Status Badge ─────────────────────────────────────────────────────────────
+function StatusBadge({ status }: { status: string }) {
+  const config: Record<string, { label: string; cls: string }> = {
+    active: { label: 'Активен', cls: 'bg-green-100 text-green-700' },
+    ambiguous: { label: 'Модерация', cls: 'bg-yellow-100 text-yellow-700' },
+    rejected: { label: 'Отклонён', cls: 'bg-red-100 text-red-700' },
+    hidden: { label: 'Скрыто', cls: 'bg-gray-100 text-gray-500' },
+    deleted: { label: 'Удалён', cls: 'bg-red-50 text-red-400' },
+  };
+  const c = config[status] || { label: status, cls: 'bg-gray-100 text-gray-600' };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${c.cls}`}>
+      {c.label}
+    </span>
+  );
+}
+
+// ── Types ────────────────────────────────────────────────────────────────────
 interface AssortmentTableProps {
   items: FlatOfferVariant[];
   isLoading?: boolean;
-  // Selection props
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
-  // Filter props
   filters?: ColumnFilters;
   onFilterChange?: (key: keyof ColumnFilters, value: FilterValue | null) => void;
-  // Sort props
   sort?: SortState;
   onSortChange?: (field: string) => void;
-  // AI suggestion expansion
   expandedAIItemId?: string | null;
   onToggleAIExpand?: (itemId: string) => void;
-  // Empty state action
   onUploadClick?: () => void;
 }
 
-const PACK_TYPE_OPTIONS = [
-  { value: null, label: '—' },
-  { value: 'бак', label: 'Бак' },
-  { value: 'упак', label: 'Упаковка' },
-  { value: 'шт', label: 'Штука' },
-];
-
-const COUNTRY_OPTIONS = [
-  { value: null, label: '—' },
-  { value: 'Эквадор', label: 'Эквадор' },
-  { value: 'Колумбия', label: 'Колумбия' },
-  { value: 'Нидерланды', label: 'Нидерланды' },
-  { value: 'Кения', label: 'Кения' },
-  { value: 'Израиль', label: 'Израиль' },
-  { value: 'Россия', label: 'Россия' },
-  { value: 'Эфиопия', label: 'Эфиопия' },
-  { value: 'Италия', label: 'Италия' },
-];
-
-// Value type for item updates (supports strings, numbers, and arrays)
 type ItemUpdateValue = string | number | string[] | null;
 
-// Single flat row (1 variant = 1 row)
+// ── Sortable header helper ───────────────────────────────────────────────────
+function SortHeader({
+  label,
+  field,
+  sort,
+  onSort,
+  className = '',
+}: {
+  label: string;
+  field: string;
+  sort?: SortState;
+  onSort?: (field: string) => void;
+  className?: string;
+}) {
+  const active = sort?.field === field;
+  const dir = active ? sort?.direction : null;
+  return (
+    <th
+      className={`px-3 py-3 font-medium text-left cursor-pointer select-none hover:text-gray-900 transition-colors ${className}`}
+      onClick={() => onSort?.(field)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <svg className={`w-3.5 h-3.5 ${active ? 'text-primary-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {dir === 'asc' ? (
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+          ) : dir === 'desc' ? (
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          ) : (
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4M8 15l4 4 4-4" />
+          )}
+        </svg>
+      </span>
+    </th>
+  );
+}
+
+// ── Single Row ───────────────────────────────────────────────────────────────
 function FlatVariantRow({
   variant,
+  index,
   onViewDetails,
   onUpdateItem,
   onUpdateVariant,
   onDeleteVariant,
   onHideItem,
   onRestoreItem,
-  onDuplicateItem,
   isSelected,
   onToggleSelect,
   onAIClick,
 }: {
   variant: FlatOfferVariant;
+  index: number;
   onViewDetails?: (variant: FlatOfferVariant) => void;
   onUpdateItem: (itemId: string, field: string, value: ItemUpdateValue) => Promise<void>;
   onUpdateVariant: (variantId: string, field: string, value: string | number | null) => Promise<void>;
   onDeleteVariant: (variantId: string) => void;
   onHideItem: (itemId: string) => void;
   onRestoreItem: (itemId: string) => void;
-  onDuplicateItem: (itemId: string) => void;
   isSelected?: boolean;
   onToggleSelect?: () => void;
   onAIClick?: () => void;
 }) {
+  const isEven = index % 2 === 0;
+  const rowBg = variant.item_status === 'hidden'
+    ? 'bg-gray-50 opacity-60'
+    : variant.has_pending_suggestions
+      ? 'bg-yellow-50'
+      : isEven
+        ? 'bg-white'
+        : 'bg-gray-50/50';
+
+  // Build display name: "Тип субтип · Сорт"
+  const typeName = variant.flower_type
+    ? `${variant.flower_type}${variant.subtype ? ` ${variant.subtype.toLowerCase()}` : ''}`
+    : variant.raw_name || '—';
+
+  // Color display
+  const primaryColor = variant.colors?.[0]?.toLowerCase();
+  const colorInfo = primaryColor ? COLOR_MAP[primaryColor] : null;
+
   return (
-    <tr className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${variant.item_status === 'hidden' ? 'opacity-50 bg-gray-50' : ''} ${variant.has_pending_suggestions ? 'bg-yellow-50' : ''}`}>
+    <tr className={`border-b border-gray-100 hover:bg-primary-50/30 transition-colors ${rowBg}`}>
       {/* Checkbox */}
       {onToggleSelect && (
-        <td className="w-10 px-2 py-3 text-center">
+        <td className="w-10 px-3 py-3 text-center">
           <input
             type="checkbox"
             checked={isSelected || false}
@@ -108,83 +196,65 @@ function FlatVariantRow({
         </td>
       )}
 
-      {/* Тип цветка */}
+      {/* Название (merged: image + type + subtype) */}
       <td className="px-3 py-3">
-        <div className="flex items-center gap-2">
-          {/* Thumbnail */}
+        <div className="flex items-center gap-3">
           <img
             src={variant.photo_url ? resolvePhotoUrl(variant.photo_url) : getFlowerImage(variant.flower_type)}
             alt=""
-            className="w-8 h-8 rounded object-cover flex-shrink-0 bg-gray-100"
+            className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-gray-100"
             loading="lazy"
             onError={(e) => {
               (e.target as HTMLImageElement).src = getDefaultFlowerImage();
             }}
           />
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <span
-              className="font-medium text-gray-900 truncate cursor-help"
-              title={variant.raw_name}
-            >
-              {variant.flower_type
-                ? `${variant.flower_type}${variant.subtype ? ` ${variant.subtype.toLowerCase()}` : ''}`
-                : '—'}
-            </span>
-            {/* Hidden badge */}
-            {variant.item_status === 'hidden' && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium bg-gray-200 text-gray-600 rounded w-fit">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
-                </svg>
-                Скрыто
-              </span>
-            )}
-            {/* Possible duplicate badge */}
-            {variant.possible_duplicate && (
-              <span
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded cursor-help w-fit"
-                title="Найдены другие позиции с таким же типом и сортом. Возможно, это дубликаты."
+          <div className="min-w-0">
+            <div className="font-medium text-gray-900 truncate" title={variant.raw_name}>
+              {typeName}
+            </div>
+            {/* AI badge */}
+            {variant.has_pending_suggestions && (
+              <button
+                onClick={onAIClick}
+                className="inline-flex items-center gap-1 mt-0.5 text-xs text-yellow-700 bg-yellow-100 px-1.5 py-0.5 rounded font-medium"
+                title="Есть предложения ИИ"
               >
                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                  <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
-                Дубль?
-              </span>
+                ИИ
+              </button>
             )}
           </div>
         </div>
       </td>
 
-      {/* Сорт - редактируемый */}
+      {/* Сорт — editable */}
       <td className="px-3 py-3">
         <EditableCell
           value={variant.variety || ''}
           type="text"
           placeholder="—"
           onSave={async (val) => onUpdateItem(variant.item_id, 'variety', val)}
-          className="text-gray-900 truncate"
+          className="text-gray-700 truncate"
         />
       </td>
 
-      {/* Страна - dropdown select */}
+      {/* Цвет — circle + text */}
       <td className="px-3 py-3">
-        <EditableSelect
-          value={variant.origin_country}
-          options={COUNTRY_OPTIONS}
-          onSave={async (val) => onUpdateItem(variant.item_id, 'origin_country', val)}
-        />
+        {primaryColor ? (
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-5 h-5 rounded-full flex-shrink-0 ${colorInfo?.bg || 'bg-gray-300'} ${colorInfo?.extra || ''}`}
+            />
+            <span className="text-sm text-gray-700 capitalize truncate">{primaryColor}</span>
+          </div>
+        ) : (
+          <span className="text-gray-400 text-sm">—</span>
+        )}
       </td>
 
-      {/* Цвета - editable */}
-      <td className="px-3 py-3">
-        <EditableColorSelect
-          value={variant.colors || []}
-          onSave={async (colors) => onUpdateItem(variant.item_id, 'colors', colors)}
-        />
-      </td>
-
-      {/* Размер - редактируемый */}
+      {/* Длина — editable */}
       <td className="px-3 py-3">
         <EditableCell
           value={variant.length_cm}
@@ -195,27 +265,7 @@ function FlatVariantRow({
         />
       </td>
 
-      {/* Упаковка - редактируемый */}
-      <td className="px-3 py-3">
-        <div className="flex items-center gap-1">
-          <EditableSelect
-            value={variant.pack_type}
-            options={PACK_TYPE_OPTIONS}
-            onSave={async (val) => onUpdateVariant(variant.variant_id, 'pack_type', val)}
-          />
-          {variant.pack_qty && (
-            <EditableCell
-              value={variant.pack_qty}
-              type="number"
-              placeholder=""
-              onSave={async (val) => onUpdateVariant(variant.variant_id, 'pack_qty', val)}
-              className="w-12 text-gray-500"
-            />
-          )}
-        </div>
-      </td>
-
-      {/* Цена - редактируемый */}
+      {/* Цена — editable */}
       <td className="px-3 py-3">
         <EditableCell
           value={variant.price ? parseFloat(variant.price) : null}
@@ -223,63 +273,65 @@ function FlatVariantRow({
           placeholder="—"
           suffix=" ₽"
           onSave={async (val) => onUpdateVariant(variant.variant_id, 'price_min', val)}
-          className="font-medium"
+          className="font-semibold text-gray-900"
         />
       </td>
 
-      {/* Остаток - редактируемый */}
-      <td className="px-3 py-3">
+      {/* Упак. — just pack_qty number, editable */}
+      <td className="px-3 py-3 text-center">
         <EditableCell
-          value={variant.stock}
+          value={variant.pack_qty}
           type="number"
           placeholder="—"
-          onSave={async (val) => onUpdateVariant(variant.variant_id, 'stock_qty', val)}
-          className="text-gray-900"
+          onSave={async (val) => onUpdateVariant(variant.variant_id, 'pack_qty', val)}
+          className="text-gray-700"
         />
       </td>
 
-      {/* Actions */}
-      <td className="px-3 py-3">
-        <div className="flex gap-1">
-          {/* AI suggestion warning */}
-          {variant.has_pending_suggestions && onAIClick && (
-            <button
-              onClick={onAIClick}
-              className="p-1.5 text-yellow-600 hover:text-yellow-800 hover:bg-yellow-100 rounded transition-colors"
-              title="Есть предложения для проверки"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </button>
-          )}
+      {/* Наличие — toggle switch */}
+      <td className="px-3 py-3 text-center">
+        <ToggleSwitch
+          checked={(variant.stock ?? 0) > 0}
+          onChange={async (val) => {
+            await onUpdateVariant(variant.variant_id, 'stock_qty', val ? 999 : 0);
+          }}
+        />
+      </td>
 
-          {/* View Details - card/info icon */}
+      {/* Статус — badge */}
+      <td className="px-3 py-3">
+        <StatusBadge status={variant.item_status} />
+      </td>
+
+      {/* Действия — edit + delete */}
+      <td className="px-3 py-3">
+        <div className="flex items-center gap-1">
+          {/* View/Edit */}
           <button
             onClick={() => onViewDetails?.(variant)}
-            className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
-            title="Карточка товара"
+            className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+            title="Редактировать"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
           </button>
 
-          {/* Hide / Restore item */}
+          {/* Hide / Restore */}
           {variant.item_status === 'active' ? (
             <button
               onClick={() => onHideItem(variant.item_id)}
-              className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors"
+              className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
               title="Скрыть"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
               </svg>
             </button>
-          ) : (
+          ) : variant.item_status === 'hidden' ? (
             <button
               onClick={() => onRestoreItem(variant.item_id)}
-              className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+              className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
               title="Восстановить"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -287,36 +339,20 @@ function FlatVariantRow({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
             </button>
-          )}
+          ) : null}
 
-          {/* Duplicate item */}
-          <button
-            onClick={() => onDuplicateItem(variant.item_id)}
-            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-            title="Дублировать"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-          </button>
-
-          {/* Delete variant */}
+          {/* Delete */}
           <button
             onClick={() => {
-              if (confirm('Удалить этот вариант? Это действие нельзя отменить.')) {
+              if (confirm('Удалить этот вариант?')) {
                 onDeleteVariant(variant.variant_id);
               }
             }}
-            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-            title="Удалить вариант"
+            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            title="Удалить"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
         </div>
@@ -325,36 +361,12 @@ function FlatVariantRow({
   );
 }
 
-// Filter options for headers
-const COUNTRY_FILTER_OPTIONS = [
-  { value: 'Эквадор', label: 'Эквадор' },
-  { value: 'Колумбия', label: 'Колумбия' },
-  { value: 'Нидерланды', label: 'Нидерланды' },
-  { value: 'Кения', label: 'Кения' },
-  { value: 'Израиль', label: 'Израиль' },
-  { value: 'Россия', label: 'Россия' },
-  { value: 'Эфиопия', label: 'Эфиопия' },
-  { value: 'Италия', label: 'Италия' },
-  { value: null, label: 'Не указана' },
-];
-
-const COLOR_FILTER_OPTIONS = [
-  { value: 'красный', label: 'Красный' },
-  { value: 'белый', label: 'Белый' },
-  { value: 'розовый', label: 'Розовый' },
-  { value: 'желтый', label: 'Желтый' },
-  { value: 'оранжевый', label: 'Оранжевый' },
-  { value: 'микс', label: 'Микс' },
-  { value: null, label: 'Не указан' },
-];
-
+// ── Main Table ───────────────────────────────────────────────────────────────
 export default function AssortmentTable({
   items,
   isLoading,
   selectedIds,
   onSelectionChange,
-  filters,
-  onFilterChange,
   sort,
   onSortChange,
   expandedAIItemId,
@@ -366,25 +378,20 @@ export default function AssortmentTable({
   const [deleteOfferCandidate] = useDeleteOfferCandidateMutation();
   const [hideSupplierItem] = useHideSupplierItemMutation();
   const [restoreSupplierItem] = useRestoreSupplierItemMutation();
-  const [duplicateSupplierItem] = useDuplicateSupplierItemMutation();
   const { showToast } = useToast();
 
-  // Internal state for details modal
   const [viewingVariant, setViewingVariant] = useState<FlatOfferVariant | null>(null);
 
   const hasSelection = !!selectedIds && !!onSelectionChange;
 
-  // Check if all items on current page are selected
   const allSelected = hasSelection && items.length > 0 && items.every((v) => selectedIds.has(v.variant_id));
   const someSelected = hasSelection && items.some((v) => selectedIds.has(v.variant_id)) && !allSelected;
 
   const handleSelectAll = () => {
     if (!onSelectionChange) return;
     if (allSelected) {
-      // Deselect all
       onSelectionChange(new Set());
     } else {
-      // Select all on current page
       onSelectionChange(new Set(items.map((v) => v.variant_id)));
     }
   };
@@ -400,21 +407,13 @@ export default function AssortmentTable({
     onSelectionChange(next);
   };
 
-  const handleUpdateItem = async (
-    itemId: string,
-    field: string,
-    value: ItemUpdateValue
-  ) => {
+  const handleUpdateItem = async (itemId: string, field: string, value: ItemUpdateValue) => {
     const data: Record<string, unknown> = {};
     data[field] = value;
     await updateSupplierItem({ id: itemId, data }).unwrap();
   };
 
-  const handleUpdateVariant = async (
-    variantId: string,
-    field: string,
-    value: string | number | null
-  ) => {
+  const handleUpdateVariant = async (variantId: string, field: string, value: string | number | null) => {
     const data: Record<string, unknown> = {};
     data[field] = value;
     await updateOfferCandidate({ id: variantId, data }).unwrap();
@@ -424,8 +423,7 @@ export default function AssortmentTable({
     try {
       await deleteOfferCandidate(variantId).unwrap();
       showToast('Вариант удалён', 'success');
-    } catch (error) {
-      console.error('Failed to delete variant:', error);
+    } catch {
       showToast('Ошибка при удалении', 'error');
     }
   };
@@ -433,9 +431,8 @@ export default function AssortmentTable({
   const handleHideItem = async (itemId: string) => {
     try {
       await hideSupplierItem(itemId).unwrap();
-      showToast('Позиция скрыта из витрины', 'success');
-    } catch (error) {
-      console.error('Failed to hide item:', error);
+      showToast('Позиция скрыта', 'success');
+    } catch {
       showToast('Ошибка при скрытии', 'error');
     }
   };
@@ -444,55 +441,33 @@ export default function AssortmentTable({
     try {
       await restoreSupplierItem(itemId).unwrap();
       showToast('Позиция восстановлена', 'success');
-    } catch (error) {
-      console.error('Failed to restore item:', error);
+    } catch {
       showToast('Ошибка при восстановлении', 'error');
     }
   };
 
-  const handleDuplicateItem = async (itemId: string) => {
-    try {
-      await duplicateSupplierItem(itemId).unwrap();
-      showToast('Позиция дублирована', 'success');
-    } catch (error) {
-      console.error('Failed to duplicate item:', error);
-      showToast('Ошибка при дублировании', 'error');
-    }
-  };
+  // Total column span for AI expansion row
+  const colSpan = (hasSelection ? 1 : 0) + 9;
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto" />
-        <p className="mt-4 text-gray-500">Загрузка ассортимента...</p>
+      <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mx-auto" />
+        <p className="mt-4 text-sm text-gray-500">Загрузка ассортимента...</p>
       </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-        <div className="text-gray-400 mb-3">
-          <svg
-            className="w-16 h-16 mx-auto"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-            />
-          </svg>
-        </div>
-        <p className="text-lg text-gray-600 mb-2">Ассортимент пуст</p>
-        <p className="text-gray-500 mb-4">Загрузите прайс-лист, чтобы добавить товары</p>
+      <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
+        <div className="text-5xl mb-3">📦</div>
+        <p className="text-lg text-gray-700 font-medium mb-1">Ассортимент пуст</p>
+        <p className="text-sm text-gray-500 mb-4">Загрузите прайс-лист, чтобы добавить товары</p>
         {onUploadClick && (
           <button
             onClick={onUploadClick}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors text-sm font-medium"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -506,127 +481,51 @@ export default function AssortmentTable({
 
   return (
     <>
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr className="text-left text-sm text-gray-600">
-              {/* Checkbox header */}
-              {hasSelection && (
-                <th className="w-10 px-2 py-3 text-center">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    ref={(el) => {
-                      if (el) el.indeterminate = someSelected;
-                    }}
-                    onChange={handleSelectAll}
-                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
-                    title={allSelected ? 'Снять выделение' : 'Выбрать все'}
-                  />
-                </th>
-              )}
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-left text-xs text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+                {/* Checkbox */}
+                {hasSelection && (
+                  <th className="w-10 px-3 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someSelected;
+                      }}
+                      onChange={handleSelectAll}
+                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                      title={allSelected ? 'Снять выделение' : 'Выбрать все'}
+                    />
+                  </th>
+                )}
 
-              {/* Тип цветка - sortable */}
-              <FilterableHeader
-                label="Тип"
-                sortField="raw_name"
-                currentSort={sort}
-                onSort={onSortChange}
-                width="14%"
-              />
-
-              {/* Сорт */}
-              <th className="px-3 py-3 font-medium" style={{ width: '10%' }}>
-                Сорт
-              </th>
-
-              {/* Страна - filter + sort */}
-              <FilterableHeader
-                label="Страна"
-                sortField="origin_country"
-                currentSort={sort}
-                onSort={onSortChange}
-                filterType="multiselect"
-                filterOptions={COUNTRY_FILTER_OPTIONS}
-                filterValue={filters?.origin_country}
-                onFilterChange={onFilterChange ? (v) => onFilterChange('origin_country', v) : undefined}
-                width="10%"
-              />
-
-              {/* Цвет - filter only (array, no sort) */}
-              <FilterableHeader
-                label="Цвет"
-                filterType="multiselect"
-                filterOptions={COLOR_FILTER_OPTIONS}
-                filterValue={filters?.colors}
-                onFilterChange={onFilterChange ? (v) => onFilterChange('colors', v) : undefined}
-                width="10%"
-              />
-
-              {/* Размер - filter + sort */}
-              <FilterableHeader
-                label="Размер"
-                sortField="length_cm"
-                currentSort={sort}
-                onSort={onSortChange}
-                filterType="range"
-                filterValue={filters?.length}
-                onFilterChange={onFilterChange ? (v) => onFilterChange('length', v) : undefined}
-                filterSuffix="см"
-                width="10%"
-              />
-
-              {/* Упаковка - no filter/sort */}
-              <th className="px-3 py-3 font-medium" style={{ width: '12%' }}>
-                Упаковка
-              </th>
-
-              {/* Цена - filter + sort */}
-              <FilterableHeader
-                label="Цена"
-                sortField="price"
-                currentSort={sort}
-                onSort={onSortChange}
-                filterType="range"
-                filterValue={filters?.price}
-                onFilterChange={onFilterChange ? (v) => onFilterChange('price', v) : undefined}
-                filterSuffix="р"
-                width="10%"
-              />
-
-              {/* Остаток - filter + sort */}
-              <FilterableHeader
-                label="Остаток"
-                sortField="stock"
-                currentSort={sort}
-                onSort={onSortChange}
-                filterType="range"
-                filterValue={filters?.stock}
-                onFilterChange={onFilterChange ? (v) => onFilterChange('stock', v) : undefined}
-                width="10%"
-              />
-
-              <th className="px-3 py-3 font-medium" style={{ width: '10%' }}>
-                Действия
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((variant) => {
-              // Total columns: checkbox(opt) + type + sort + country + color + size + pack + price + stock + actions = 9 or 10
-              const colSpan = hasSelection ? 10 : 9;
-              return (
-                <>{/* Fragment wrapping variant row + optional AI expand row */}
+                <SortHeader label="Название" field="raw_name" sort={sort} onSort={onSortChange} className="min-w-[200px]" />
+                <th className="px-3 py-3 font-medium">Сорт</th>
+                <th className="px-3 py-3 font-medium">Цвет</th>
+                <SortHeader label="Длина" field="length_cm" sort={sort} onSort={onSortChange} />
+                <SortHeader label="Цена ₽" field="price" sort={sort} onSort={onSortChange} />
+                <th className="px-3 py-3 font-medium text-center">Упак.</th>
+                <th className="px-3 py-3 font-medium text-center">Наличие</th>
+                <th className="px-3 py-3 font-medium">Статус</th>
+                <th className="px-3 py-3 font-medium">Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((variant, idx) => (
+                <>{/* Fragment for variant row + optional AI row */}
                   <FlatVariantRow
                     key={variant.variant_id}
                     variant={variant}
+                    index={idx}
                     onViewDetails={setViewingVariant}
                     onUpdateItem={handleUpdateItem}
                     onUpdateVariant={handleUpdateVariant}
                     onDeleteVariant={handleDeleteVariant}
                     onHideItem={handleHideItem}
                     onRestoreItem={handleRestoreItem}
-                    onDuplicateItem={handleDuplicateItem}
                     isSelected={selectedIds?.has(variant.variant_id)}
                     onToggleSelect={hasSelection ? () => handleToggleSelect(variant.variant_id) : undefined}
                     onAIClick={
@@ -643,10 +542,15 @@ export default function AssortmentTable({
                     />
                   )}
                 </>
-              );
-            })}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Table footer */}
+        <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-500">
+          Показано {items.length} позиций
+        </div>
       </div>
 
       {/* Product details modal */}

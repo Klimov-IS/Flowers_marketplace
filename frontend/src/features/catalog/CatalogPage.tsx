@@ -8,19 +8,128 @@ import {
   setOriginCountry,
   setColors,
   setInStock,
+  setLengthRange,
+  setSortBy,
   setPage,
   resetFilters,
 } from './filtersSlice';
 import { addToCart } from '../buyer/cartSlice';
 import { useDebounce } from '../../hooks/useDebounce';
-import Card from '../../components/ui/Card';
-import Input from '../../components/ui/Input';
-import Button from '../../components/ui/Button';
-import FilterSidebar from './components/FilterSidebar';
+import FilterSidebar, { MobileFilterDrawer } from './components/FilterSidebar';
 import { getFlowerImage, getDefaultFlowerImage } from '../../utils/flowerImages';
 import { formatTier } from '../../utils/catalogFormatters';
 import type { OffersResponse, ProductFilters } from '../../types/product';
 import type { AppDispatch } from '../../app/store';
+
+// ── Constants ───────────────────────────────────────────────────────────────
+
+const CATEGORIES = [
+  { label: 'Все', value: undefined },
+  { label: 'Розы', value: 'Роза' },
+  { label: 'Тюльпаны', value: 'Тюльпан' },
+  { label: 'Хризантемы', value: 'Хризантема' },
+  { label: 'Гвоздики', value: 'Гвоздика' },
+  { label: 'Герберы', value: 'Гербера' },
+  { label: 'Лилии', value: 'Лилия' },
+  { label: 'Гортензии', value: 'Гортензия' },
+  { label: 'Эустома', value: 'Эустома' },
+  { label: 'Зелень', value: 'Зелень' },
+];
+
+const SORT_OPTIONS = [
+  { value: 'default', label: 'По популярности' },
+  { value: 'price_asc', label: 'Цена: по возрастанию' },
+  { value: 'price_desc', label: 'Цена: по убыванию' },
+  { value: 'newest', label: 'Новинки' },
+];
+
+// ── SVG Icons ───────────────────────────────────────────────────────────────
+
+function SearchIcon() {
+  return (
+    <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+    </svg>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+    </svg>
+  );
+}
+
+function CartIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
+    </svg>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+function ResetIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+    </svg>
+  );
+}
+
+// ── Skeleton Loading ────────────────────────────────────────────────────────
+
+function SkeletonCard() {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div className="aspect-[4/5] bg-gray-200 animate-pulse" />
+      <div className="p-4 space-y-3">
+        <div className="h-4 bg-gray-200 rounded-lg animate-pulse w-3/4" />
+        <div className="h-3 bg-gray-200 rounded-lg animate-pulse w-1/2" />
+        <div className="h-7 bg-gray-200 rounded-lg animate-pulse w-1/3" />
+        <div className="h-3 bg-gray-200 rounded-lg animate-pulse w-1/4" />
+        <div className="h-8 bg-gray-200 rounded-lg animate-pulse w-full" />
+        <div className="h-10 bg-gray-200 rounded-xl animate-pulse w-full" />
+      </div>
+    </div>
+  );
+}
+
+function SkeletonGrid() {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <SkeletonCard key={i} />
+      ))}
+    </div>
+  );
+}
+
+// ── Pagination ──────────────────────────────────────────────────────────────
 
 function CatalogPagination({
   data,
@@ -48,25 +157,25 @@ function CatalogPagination({
   }
 
   return (
-    <div className="flex items-center justify-center gap-2 mt-8">
+    <div className="flex items-center justify-center gap-1.5 mt-10">
       <button
         onClick={() => dispatch(setPage(currentPage - 1))}
         disabled={currentPage === 0}
-        className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="px-3 py-2 text-sm border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
-        Назад
+        <ChevronLeftIcon />
       </button>
       {pages.map((item, idx) =>
         item === 'dots' ? (
-          <span key={`dots-${idx}`} className="px-2 text-gray-400">...</span>
+          <span key={`dots-${idx}`} className="px-1 text-gray-400">...</span>
         ) : (
           <button
             key={item}
             onClick={() => dispatch(setPage(item))}
-            className={`w-9 h-9 text-sm rounded-lg ${
+            className={`w-9 h-9 text-sm rounded-xl font-medium ${
               item === currentPage
-                ? 'bg-primary-600 text-white'
-                : 'border border-gray-300 hover:bg-gray-50'
+                ? 'bg-primary-500 text-white'
+                : 'border border-gray-200 hover:bg-gray-50 transition-colors'
             }`}
           >
             {item + 1}
@@ -76,13 +185,94 @@ function CatalogPagination({
       <button
         onClick={() => dispatch(setPage(currentPage + 1))}
         disabled={currentPage >= totalPages - 1}
-        className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="px-3 py-2 text-sm border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
-        Вперёд
+        <ChevronRightIcon />
       </button>
     </div>
   );
 }
+
+// ── Active Filter Chips ─────────────────────────────────────────────────────
+
+function ActiveFilterChips({
+  filters,
+  dispatch,
+}: {
+  filters: ProductFilters & { sortBy?: string };
+  dispatch: AppDispatch;
+}) {
+  const chips: { label: string; onRemove: () => void }[] = [];
+
+  if (filters.origin_country?.length) {
+    for (const c of filters.origin_country) {
+      chips.push({
+        label: c,
+        onRemove: () => {
+          const updated = filters.origin_country!.filter((x) => x !== c);
+          dispatch(setOriginCountry(updated.length > 0 ? updated : undefined));
+        },
+      });
+    }
+  }
+
+  if (filters.colors?.length) {
+    for (const c of filters.colors) {
+      chips.push({
+        label: c,
+        onRemove: () => {
+          const updated = filters.colors!.filter((x) => x !== c);
+          dispatch(setColors(updated.length > 0 ? updated : undefined));
+        },
+      });
+    }
+  }
+
+  if (filters.length_min !== undefined || filters.length_max !== undefined) {
+    const label = filters.length_min === filters.length_max
+      ? `${filters.length_min} см`
+      : filters.length_max === undefined
+        ? `${filters.length_min}+ см`
+        : `${filters.length_min}–${filters.length_max} см`;
+    chips.push({
+      label,
+      onRemove: () => dispatch(setLengthRange({ min: undefined, max: undefined })),
+    });
+  }
+
+  if (filters.in_stock) {
+    chips.push({
+      label: 'В наличии',
+      onRemove: () => dispatch(setInStock(undefined)),
+    });
+  }
+
+  if (chips.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2 mb-4">
+      {chips.map((chip, i) => (
+        <span
+          key={`${chip.label}-${i}`}
+          className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-medium"
+        >
+          {chip.label}
+          <button onClick={chip.onRemove} className="hover:text-primary-900 transition-colors">
+            <XIcon />
+          </button>
+        </span>
+      ))}
+      <button
+        onClick={() => dispatch(resetFilters())}
+        className="text-xs text-gray-500 hover:text-gray-700 font-medium px-2 transition-colors"
+      >
+        Сбросить все
+      </button>
+    </div>
+  );
+}
+
+// ── Main Page ───────────────────────────────────────────────────────────────
 
 export default function CatalogPage() {
   const dispatch = useAppDispatch();
@@ -90,25 +280,23 @@ export default function CatalogPage() {
   const [searchInput, setSearchInput] = useState(filters.q || '');
   const debouncedSearch = useDebounce(searchInput, 300);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
-  // Update search filter when debounced value changes
   useEffect(() => {
     dispatch(setSearchQuery(debouncedSearch));
   }, [debouncedSearch, dispatch]);
 
   const { data, isLoading, error } = useGetOffersQuery(filters);
 
+  // ── Cart handlers ───────────────────────────────────────────────────────
   const handleAddToCart = (offerId: string) => {
     const offer = data?.offers.find((o) => o.id === offerId);
     if (!offer) return;
 
     const qty = quantities[offerId] || 1;
-    // Если продажа упаковками, qty = кол-во упаковок, иначе = штуки
     const isPackSale = !!offer.pack_qty;
     const packQty = offer.pack_qty || 1;
     const actualQuantity = isPackSale ? qty * packQty : qty;
-
-    // Use display_title for clean name, fallback to sku.title
     const productName = offer.display_title || offer.sku.title;
 
     dispatch(
@@ -127,22 +315,15 @@ export default function CatalogPage() {
       })
     );
 
-    // Reset quantity after adding
     setQuantities((prev) => ({ ...prev, [offerId]: 1 }));
-
-    // Информативное сообщение
-    const unitLabel = isPackSale ? 'упак.' : 'шт';
-    const details = isPackSale ? `${qty} ${unitLabel} = ${actualQuantity} шт` : `${actualQuantity} шт`;
-    alert(`Добавлено в корзину: ${productName} (${details})`);
   };
 
   const getQuantity = (offerId: string) => quantities[offerId] || 1;
-
   const setQuantity = (offerId: string, qty: number) => {
     setQuantities((prev) => ({ ...prev, [offerId]: Math.max(1, qty) }));
   };
 
-  // Handler for FilterSidebar
+  // ── Filter handlers ─────────────────────────────────────────────────────
   const handleFilterChange = useCallback(
     (key: string, value: unknown) => {
       switch (key) {
@@ -158,6 +339,11 @@ export default function CatalogPage() {
         case 'in_stock':
           dispatch(setInStock(value as boolean | undefined));
           break;
+        case 'length_range': {
+          const range = value as { min?: number; max?: number };
+          dispatch(setLengthRange(range));
+          break;
+        }
       }
     },
     [dispatch]
@@ -168,188 +354,280 @@ export default function CatalogPage() {
     setSearchInput('');
   }, [dispatch]);
 
+  // Active filter count for mobile badge
+  const activeFilterCount =
+    (filters.origin_country?.length || 0) +
+    (filters.colors?.length || 0) +
+    (filters.length_min !== undefined ? 1 : 0) +
+    (filters.in_stock ? 1 : 0);
+
   return (
-    <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-r from-primary-600 to-purple-600 rounded-lg p-12 text-white mb-8">
-        <h1 className="text-4xl font-bold mb-4">
-          Цветочный маркет
-        </h1>
-        <p className="text-xl opacity-90">
-          Единая платформа для поставщиков и флористов
-        </p>
-      </div>
-
-      {/* Main Layout: Sidebar + Content */}
-      <div className="flex gap-6">
-        {/* Sidebar Filters */}
-        <FilterSidebar
-          filters={{
-            product_type: filters.product_type,
-            origin_country: filters.origin_country,
-            colors: filters.colors,
-            in_stock: filters.in_stock,
-          }}
-          onFilterChange={handleFilterChange}
-          onReset={handleResetFilters}
-        />
-
-        {/* Products Area */}
-        <div className="flex-1 min-w-0">
-          {/* Search Bar */}
-          <div className="mb-4">
-            <Input
-              type="search"
-              placeholder="Поиск по названию, сорту или поставщику..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full"
-            />
-          </div>
-
-          {/* Results Count */}
-          <div className="mb-4">
-            <p className="text-gray-600">
-              {isLoading ? 'Загрузка...' : `Найдено: ${data?.total || 0} товаров`}
-            </p>
-          </div>
-
-          {/* Loading State */}
-          {isLoading && (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+    <div className="bg-white min-h-screen">
+      {/* ── Sticky Sub-Header: Search + Category Pills ──────────────── */}
+      <div className="sticky top-16 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
+        {/* Search bar */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 relative">
+              <SearchIcon />
+              <input
+                type="search"
+                placeholder="Поиск по названию, сорту или поставщику..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-100 border border-transparent rounded-xl text-sm placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+              />
             </div>
-          )}
-
-          {/* Error State */}
-          {error && (
-            <Card className="p-6 text-center text-red-600">
-              Ошибка загрузки данных. Проверьте подключение к API.
-            </Card>
-          )}
-
-          {/* Empty State */}
-          {data && data.offers.length === 0 && (
-            <Card className="p-12 text-center text-gray-500">
-              <p className="text-lg">Товары не найдены</p>
-              <p className="mt-2">Попробуйте изменить фильтры или поисковый запрос</p>
-            </Card>
-          )}
-
-          {/* Products Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {data?.offers.map((offer) => {
-          const tierInfo = formatTier(offer.tier_min_qty, offer.tier_max_qty);
-
-          // Адаптивная логика: поштучно vs упаковками
-          const isPackSale = !!offer.pack_qty;
-          const packQty = offer.pack_qty || 1;
-          const pricePerUnit = Number(offer.price_min) || 0;
-          const packPrice = isPackSale ? pricePerUnit * packQty : null;
-          const unitLabel = isPackSale ? 'упак.' : 'шт';
-
-          // Расчёт итого
-          const quantity = getQuantity(offer.id);
-          const totalQty = isPackSale ? quantity * packQty : quantity;
-          const totalPrice = totalQty * pricePerUnit;
-
-          return (
-            <Card key={offer.id} className="p-4 flex flex-col h-full">
-              {/* Image Block */}
-              <div className="aspect-square bg-gray-100 rounded-lg mb-3 overflow-hidden flex items-end justify-center">
-                <img
-                  src={getFlowerImage(offer.sku.product_type)}
-                  alt={offer.display_title || offer.sku.title}
-                  className="max-w-full max-h-full object-contain"
-                  loading="lazy"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = getDefaultFlowerImage();
-                  }}
-                />
-              </div>
-
-              {/* Content Block - только название */}
-              <div className="flex-grow">
-                <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2 min-h-[3rem]">
-                  {offer.display_title || offer.sku.title}
-                </h3>
-              </div>
-
-              {/* Footer Block - pinned to bottom */}
-              <div className="mt-auto pt-3 border-t border-gray-100">
-                {/* Price Block - адаптивное отображение */}
-                <div className="mb-2">
-                  <div>
-                    <span className="text-2xl font-bold text-primary-600">
-                      {offer.price_min} ₽
-                    </span>
-                    <span className="text-sm text-gray-500"> / шт</span>
-                  </div>
-                  {/* Цена за упаковку с количеством */}
-                  {packPrice && (
-                    <p className="text-sm text-gray-600">
-                      = {packPrice.toLocaleString('ru-RU')} ₽ / упак. {packQty} шт
-                    </p>
-                  )}
-                  {/* Tiers (мин. заказ) */}
-                  {tierInfo && (
-                    <p className="text-xs text-green-600 mt-1">{tierInfo}</p>
-                  )}
-                </div>
-
-                {/* Supplier */}
-                <p className="text-xs text-gray-400 mb-2">{offer.supplier.name}</p>
-
-                {/* Quantity Controls с единицей измерения */}
-                <div className="flex items-center gap-2 mb-2">
-                  <button
-                    onClick={() => setQuantity(offer.id, getQuantity(offer.id) - 1)}
-                    className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700"
-                  >
-                    −
-                  </button>
-                  <input
-                    type="number"
-                    min="1"
-                    value={quantity}
-                    onChange={(e) => setQuantity(offer.id, parseInt(e.target.value) || 1)}
-                    className="w-16 text-center border border-gray-300 rounded px-2 py-1"
-                  />
-                  <button
-                    onClick={() => setQuantity(offer.id, getQuantity(offer.id) + 1)}
-                    className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700"
-                  >
-                    +
-                  </button>
-                  <span className="text-sm text-gray-600">{unitLabel}</span>
-                </div>
-
-                {/* Итого */}
-                <p className="text-sm text-gray-700 mb-3">
-                  {isPackSale ? (
-                    <>Итого: {totalQty} шт × {pricePerUnit} ₽ = <span className="font-semibold">{totalPrice.toLocaleString('ru-RU')} ₽</span></>
-                  ) : (
-                    <>Итого: <span className="font-semibold">{totalPrice.toLocaleString('ru-RU')} ₽</span></>
-                  )}
-                </p>
-
-                <Button
-                  className="w-full"
-                  size="sm"
-                  onClick={() => handleAddToCart(offer.id)}
-                >
-                  В корзину
-                </Button>
-              </div>
-            </Card>
-          );
-        })}
+            {/* Mobile filter button */}
+            <button
+              onClick={() => setMobileFiltersOpen(true)}
+              className="lg:hidden p-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors relative"
+            >
+              <FilterIcon />
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
           </div>
+        </div>
 
-          {/* Pagination */}
-          <CatalogPagination data={data} filters={filters} dispatch={dispatch} />
+        {/* Category pills */}
+        <div className="border-t border-gray-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex gap-2 py-2.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.label}
+                  onClick={() => dispatch(setProductType(cat.value))}
+                  className={`shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    filters.product_type === cat.value
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* ── Main Content ────────────────────────────────────────────── */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="flex gap-6">
+          {/* Sidebar (desktop) */}
+          <FilterSidebar
+            filters={{
+              product_type: filters.product_type,
+              origin_country: filters.origin_country,
+              colors: filters.colors,
+              in_stock: filters.in_stock,
+              length_min: filters.length_min,
+              length_max: filters.length_max,
+            }}
+            onFilterChange={handleFilterChange}
+            onReset={handleResetFilters}
+          />
+
+          {/* Products area */}
+          <div className="flex-1 min-w-0">
+            {/* Results bar */}
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm text-gray-500">
+                Найдено{' '}
+                <span className="font-semibold text-gray-900">{data?.total || 0}</span>{' '}
+                товаров
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500 hidden sm:inline">Сортировка:</span>
+                <select
+                  value={filters.sortBy}
+                  onChange={(e) => dispatch(setSortBy(e.target.value))}
+                  className="text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all cursor-pointer"
+                >
+                  {SORT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Active filter chips */}
+            <ActiveFilterChips filters={filters} dispatch={dispatch} />
+
+            {/* Loading state */}
+            {isLoading && <SkeletonGrid />}
+
+            {/* Error state */}
+            {error && (
+              <div className="bg-white rounded-2xl shadow-sm p-6 text-center text-red-600">
+                Ошибка загрузки данных. Проверьте подключение к API.
+              </div>
+            )}
+
+            {/* Empty state */}
+            {data && data.offers.length === 0 && !isLoading && (
+              <div className="bg-white rounded-2xl shadow-sm p-12 sm:p-16 text-center">
+                <div className="text-6xl mb-4">&#128270;</div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Ничего не найдено</h3>
+                <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
+                  Попробуйте изменить фильтры или поисковый запрос. Возможно, товар временно отсутствует.
+                </p>
+                <button
+                  onClick={handleResetFilters}
+                  className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 active:scale-[0.97] text-white font-medium px-6 py-2.5 rounded-xl text-sm transition-all duration-150"
+                >
+                  <ResetIcon />
+                  Сбросить фильтры
+                </button>
+              </div>
+            )}
+
+            {/* Products grid */}
+            {!isLoading && data && data.offers.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                {data.offers.map((offer) => {
+                  const tierInfo = formatTier(offer.tier_min_qty, offer.tier_max_qty);
+                  const isPackSale = !!offer.pack_qty;
+                  const packQty = offer.pack_qty || 1;
+                  const pricePerUnit = Number(offer.price_min) || 0;
+                  const packPrice = isPackSale ? pricePerUnit * packQty : null;
+                  const unitLabel = isPackSale ? 'упак.' : 'шт';
+                  const quantity = getQuantity(offer.id);
+                  const totalQty = isPackSale ? quantity * packQty : quantity;
+                  const totalPrice = totalQty * pricePerUnit;
+
+                  // Metadata line: "60 см · Эквадор"
+                  const metaParts: string[] = [];
+                  if (offer.length_cm) metaParts.push(`${offer.length_cm} см`);
+                  if (offer.origin_country) metaParts.push(offer.origin_country);
+                  const metaLine = metaParts.join(' · ');
+
+                  return (
+                    <div
+                      key={offer.id}
+                      className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden group flex flex-col"
+                    >
+                      {/* Image */}
+                      <div className="relative overflow-hidden">
+                        <div className="aspect-[4/5] bg-gray-100 overflow-hidden flex items-end justify-center">
+                          <img
+                            src={getFlowerImage(offer.sku.product_type)}
+                            alt={offer.display_title || offer.sku.title}
+                            className="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105"
+                            loading="lazy"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = getDefaultFlowerImage();
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="p-3 sm:p-4 flex flex-col flex-1">
+                        <h3 className="font-semibold text-gray-900 text-sm sm:text-base line-clamp-2 mb-1">
+                          {offer.display_title || offer.sku.title}
+                        </h3>
+                        {metaLine && (
+                          <p className="text-xs text-gray-500 mb-3">{metaLine}</p>
+                        )}
+
+                        <div className="mt-auto">
+                          {/* Price block */}
+                          <div className="mb-2">
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-xl sm:text-2xl font-bold text-primary-600">
+                                {pricePerUnit} &#8381;
+                              </span>
+                              <span className="text-xs text-gray-400">/ шт</span>
+                            </div>
+                            {packPrice && (
+                              <p className="text-xs text-gray-500">
+                                = {packPrice.toLocaleString('ru-RU')} &#8381; / упак. {packQty} шт
+                              </p>
+                            )}
+                            {tierInfo && (
+                              <p className="text-xs text-primary-600 font-medium mt-0.5">{tierInfo}</p>
+                            )}
+                          </div>
+
+                          {/* Supplier */}
+                          <p className="text-[11px] text-gray-400 mb-2">{offer.supplier.name}</p>
+
+                          {/* Quantity controls */}
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <button
+                              onClick={() => setQuantity(offer.id, getQuantity(offer.id) - 1)}
+                              className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors text-sm font-medium"
+                            >
+                              &minus;
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              value={quantity}
+                              onChange={(e) => setQuantity(offer.id, parseInt(e.target.value) || 1)}
+                              className="w-12 text-center border border-gray-200 rounded-lg py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                            />
+                            <button
+                              onClick={() => setQuantity(offer.id, getQuantity(offer.id) + 1)}
+                              className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors text-sm font-medium"
+                            >
+                              +
+                            </button>
+                            <span className="text-xs text-gray-500">{unitLabel}</span>
+                          </div>
+
+                          {/* Total */}
+                          <p className="text-xs text-gray-600 mb-2.5">
+                            {isPackSale ? (
+                              <>Итого: {totalQty} шт &times; {pricePerUnit} &#8381; = <span className="font-semibold text-gray-900">{totalPrice.toLocaleString('ru-RU')} &#8381;</span></>
+                            ) : (
+                              <>Итого: <span className="font-semibold text-gray-900">{totalPrice.toLocaleString('ru-RU')} &#8381;</span></>
+                            )}
+                          </p>
+
+                          {/* Add to cart */}
+                          <button
+                            onClick={() => handleAddToCart(offer.id)}
+                            className="w-full bg-primary-500 hover:bg-primary-600 active:scale-[0.97] text-white font-medium py-2.5 rounded-xl text-sm transition-all duration-150 flex items-center justify-center gap-2"
+                          >
+                            <CartIcon />
+                            В корзину
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Pagination */}
+            <CatalogPagination data={data} filters={filters} dispatch={dispatch} />
+          </div>
+        </div>
+      </main>
+
+      {/* ── Mobile Filter Drawer ────────────────────────────────────── */}
+      <MobileFilterDrawer
+        open={mobileFiltersOpen}
+        onClose={() => setMobileFiltersOpen(false)}
+        filters={{
+          product_type: filters.product_type,
+          origin_country: filters.origin_country,
+          colors: filters.colors,
+          in_stock: filters.in_stock,
+          length_min: filters.length_min,
+          length_max: filters.length_max,
+        }}
+        onFilterChange={handleFilterChange}
+        onReset={handleResetFilters}
+        totalCount={data?.total || 0}
+      />
     </div>
   );
 }
