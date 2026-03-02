@@ -570,7 +570,7 @@ function FlatVariantRow({
       </td>
 
       {/* Упак. */}
-      <td className="px-3 py-2 text-center">
+      <td className="px-2 py-2 text-center">
         <EditableCell
           value={variant.pack_qty}
           type="number"
@@ -599,8 +599,8 @@ function FlatVariantRow({
       </td>
 
       {/* Действия — edit + delete */}
-      <td className="px-3 py-2">
-        <div className="flex items-center gap-1">
+      <td className="px-2 py-2">
+        <div className="flex items-center justify-center gap-0.5">
           <button
             onClick={() => onViewDetails?.(variant)}
             className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
@@ -750,7 +750,19 @@ export default function AssortmentTable({
     <>
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px]">
+          <table className="w-full min-w-[900px] table-fixed">
+            <colgroup>
+              {hasSelection && <col className="w-10" />}
+              <col style={{ width: '26%' }} /> {/* Название — самый широкий */}
+              <col style={{ width: '14%' }} /> {/* Сорт */}
+              <col style={{ width: '9%' }} />  {/* Цвет */}
+              <col style={{ width: '7%' }} />  {/* Длина */}
+              <col style={{ width: '8%' }} />  {/* Цена */}
+              <col style={{ width: '6%' }} />  {/* Упак */}
+              <col style={{ width: '8%' }} />  {/* Наличие */}
+              <col style={{ width: '10%' }} /> {/* Статус */}
+              <col style={{ width: '7%' }} />  {/* Действия */}
+            </colgroup>
             <thead>
               <tr className="text-left text-xs text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
                 {hasSelection && (
@@ -772,10 +784,10 @@ export default function AssortmentTable({
                 <th className="px-3 py-2 font-semibold">Цвет</th>
                 <SortHeader label="Длина" field="length_cm" sort={sort} onSort={onSortChange} />
                 <SortHeader label="Цена ₽" field="price" sort={sort} onSort={onSortChange} />
-                <th className="px-3 py-2 font-semibold text-center">Упак.</th>
-                <th className="px-3 py-2 font-semibold text-center">Наличие</th>
+                <th className="px-2 py-2 font-semibold text-center">Упак.</th>
+                <th className="px-2 py-2 font-semibold text-center">Наличие</th>
                 <th className="px-3 py-2 font-semibold">Статус</th>
-                <th className="px-3 py-2 font-semibold w-20">Действия</th>
+                <th className="px-2 py-2 font-semibold text-center">Действия</th>
               </tr>
             </thead>
             <tbody>
