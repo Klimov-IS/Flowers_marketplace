@@ -65,19 +65,26 @@ function InlineColorPicker({
   const [isOpen, setIsOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>(colors);
   const [isSaving, setIsSaving] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => { setSelected(colors); }, [colors]);
 
   useEffect(() => {
     if (!isOpen) return;
     const handleClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        handleSave();
-      }
+      if (btnRef.current?.contains(e.target as Node)) return;
+      const menu = document.getElementById('color-picker-menu');
+      if (menu?.contains(e.target as Node)) return;
+      handleSave();
     };
+    const handleScroll = () => setIsOpen(false);
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
   }, [isOpen, selected]);
 
   const handleSave = async () => {
@@ -96,22 +103,31 @@ function InlineColorPicker({
     }
   };
 
+  const handleOpen = () => {
+    if (isSaving) return;
+    if (isOpen) { handleSave(); return; }
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect) {
+      setMenuPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setIsOpen(true);
+  };
+
   const toggle = (color: string) => {
     setSelected((prev) =>
       prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color]
     );
   };
 
-  // Show up to 3 color circles + "+N" overflow
   const displayColors = selected.slice(0, 3);
   const overflow = selected.length - 3;
 
   return (
-    <div ref={containerRef} className="relative">
-      {/* Display */}
+    <>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => !isSaving && setIsOpen(!isOpen)}
+        onClick={handleOpen}
         className="flex items-center gap-1 px-2 py-1 rounded-lg border border-transparent hover:border-gray-200 hover:bg-gray-50 transition-all min-h-[28px] w-full"
       >
         {displayColors.length > 0 ? (
@@ -140,9 +156,12 @@ function InlineColorPicker({
         )}
       </button>
 
-      {/* Dropdown */}
       {isOpen && (
-        <div className="absolute z-30 top-full left-0 mt-1 w-[220px] bg-white border border-gray-200 rounded-xl shadow-lg p-2">
+        <div
+          id="color-picker-menu"
+          className="fixed z-[9999] w-[220px] bg-white border border-gray-200 rounded-xl shadow-lg p-2"
+          style={{ top: menuPos.top, left: menuPos.left }}
+        >
           <div className="text-xs text-gray-500 mb-1.5 px-1">Выберите цвета:</div>
           <div className="grid grid-cols-3 gap-1 max-h-[200px] overflow-y-auto">
             {COLOR_OPTIONS.map((opt) => (
@@ -182,7 +201,7 @@ function InlineColorPicker({
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -268,21 +287,41 @@ function StatusDropdown({
   onRestore: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     const handleClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (btnRef.current && !btnRef.current.contains(e.target as Node)) {
+        // Check if click is inside the fixed menu
+        const menu = document.getElementById('status-dropdown-menu');
+        if (menu && menu.contains(e.target as Node)) return;
         setIsOpen(false);
       }
     };
+    const handleScroll = () => setIsOpen(false);
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
   }, [isOpen]);
 
   const cfg = STATUS_CONFIG[status] || { label: status, cls: 'bg-gray-100 text-gray-600' };
   const transitions = STATUS_TRANSITIONS[status] || [];
+
+  const handleOpen = () => {
+    if (transitions.length === 0) return;
+    if (isOpen) { setIsOpen(false); return; }
+    // Calculate position from button's bounding rect — escapes overflow-hidden
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect) {
+      setMenuPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setIsOpen(true);
+  };
 
   const handleAction = (target: string) => {
     setIsOpen(false);
@@ -294,10 +333,11 @@ function StatusDropdown({
   };
 
   return (
-    <div ref={containerRef} className="relative">
+    <>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => transitions.length > 0 && setIsOpen(!isOpen)}
+        onClick={handleOpen}
         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-all ${cfg.cls} ${
           transitions.length > 0 ? 'cursor-pointer hover:ring-1 hover:ring-gray-300' : 'cursor-default'
         }`}
@@ -311,27 +351,31 @@ function StatusDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute z-30 top-full left-0 mt-1 min-w-[140px] bg-white border border-gray-200 rounded-xl shadow-lg py-1">
+        <div
+          id="status-dropdown-menu"
+          className="fixed z-[9999] min-w-[150px] bg-white border border-gray-200 rounded-xl shadow-lg py-1"
+          style={{ top: menuPos.top, left: menuPos.left }}
+        >
           {transitions.map((t) => (
             <button
               key={t.target}
               type="button"
               onClick={() => handleAction(t.target)}
-              className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
               {t.icon === 'eye-off' && (
-                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
                 </svg>
               )}
               {t.icon === 'eye' && (
-                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                 </svg>
               )}
               {t.icon === 'check' && (
-                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               )}
@@ -340,7 +384,7 @@ function StatusDropdown({
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -425,8 +469,9 @@ function FlatVariantRow({
   onAIClick?: () => void;
 }) {
   const isEven = index % 2 === 0;
-  const rowBg = variant.item_status === 'hidden'
-    ? 'bg-gray-50 opacity-60'
+  const isHidden = variant.item_status === 'hidden';
+  const rowBg = isHidden
+    ? 'bg-gray-50'
     : variant.has_pending_suggestions
       ? 'bg-yellow-50'
       : isEven
@@ -438,7 +483,7 @@ function FlatVariantRow({
     : variant.raw_name || '—';
 
   return (
-    <tr className={`border-b border-gray-100 hover:bg-primary-50/30 transition-colors ${rowBg}`}>
+    <tr className={`border-b border-gray-100 hover:bg-primary-50/30 transition-colors ${rowBg} ${isHidden ? '[&>td]:text-gray-400' : ''}`}>
       {/* Checkbox */}
       {onToggleSelect && (
         <td className="w-10 px-3 py-2.5 text-center">
