@@ -142,7 +142,7 @@ async def create_order(
             buyer_id=order_data.buyer_id,
             items=items_data,
             delivery_address=order_data.delivery_address,
-            delivery_date=str(order_data.delivery_date) if order_data.delivery_date else None,
+            delivery_date=order_data.delivery_date,
             delivery_type=order_data.delivery_type,
             notes=order_data.notes,
         )

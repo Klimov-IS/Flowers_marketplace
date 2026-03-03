@@ -1,7 +1,7 @@
 """Order service - handle order creation and validation."""
 import structlog
 import sqlalchemy
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Dict, List
 from uuid import UUID
@@ -33,7 +33,7 @@ class OrderService:
         buyer_id: UUID,
         items: List[Dict],
         delivery_address: str | None = None,
-        delivery_date: str | None = None,
+        delivery_date: date | None = None,
         delivery_type: str | None = None,
         notes: str | None = None,
     ) -> Order:
