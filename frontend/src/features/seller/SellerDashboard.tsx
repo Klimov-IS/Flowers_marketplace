@@ -130,7 +130,11 @@ export default function SellerDashboard() {
         });
         if (!res.ok) return;
         const data = await res.json();
-        if (data && data.id) dispatch(setUser(data));
+        if (data && data.id) {
+          // Map backend role ('supplier') to frontend role ('seller'), same as login flow
+          if (data.role === 'supplier') data.role = 'seller';
+          dispatch(setUser(data));
+        }
       } catch { /* ignore network errors */ }
     };
     document.addEventListener('visibilitychange', onVisible);

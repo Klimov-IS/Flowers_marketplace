@@ -203,6 +203,8 @@ export default function ProductDetailModal({
 
   const allVariants = variantsData?.items || [];
   const itemData = allVariants.length > 0 ? allVariants[0] : variant;
+  // Use fresh variant data from refetched query instead of stale prop
+  const currentVariant = allVariants.find(v => v.variant_id === variant.variant_id) || variant;
 
   const handleUpdateItem = async (field: string, value: ItemUpdateValue) => {
     try {
@@ -411,40 +413,40 @@ export default function ProductDetailModal({
           <div>
             <label className="block text-xs text-gray-500 mb-1">Длина</label>
             <EditableCell
-              value={variant.length_cm}
+              value={currentVariant.length_cm}
               type="number"
               placeholder="—"
               suffix=" см"
-              onSave={async (val) => handleUpdateVariant(variant.variant_id, 'length_cm', val)}
+              onSave={async (val) => handleUpdateVariant(currentVariant.variant_id, 'length_cm', val)}
               className="text-sm font-medium"
             />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Цена</label>
             <EditableCell
-              value={variant.price ? parseFloat(variant.price) : null}
+              value={currentVariant.price ? parseFloat(currentVariant.price) : null}
               type="number"
               placeholder="—"
               suffix=" ₽"
-              onSave={async (val) => handleUpdateVariant(variant.variant_id, 'price_min', val)}
+              onSave={async (val) => handleUpdateVariant(currentVariant.variant_id, 'price_min', val)}
               className="text-sm font-semibold"
             />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Упаковка</label>
             <EditableSelect
-              value={variant.pack_type}
+              value={currentVariant.pack_type}
               options={PACK_TYPE_OPTIONS}
-              onSave={async (val) => handleUpdateVariant(variant.variant_id, 'pack_type', val)}
+              onSave={async (val) => handleUpdateVariant(currentVariant.variant_id, 'pack_type', val)}
             />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Кол-во в уп.</label>
             <EditableCell
-              value={variant.pack_qty}
+              value={currentVariant.pack_qty}
               type="number"
               placeholder="—"
-              onSave={async (val) => handleUpdateVariant(variant.variant_id, 'pack_qty', val)}
+              onSave={async (val) => handleUpdateVariant(currentVariant.variant_id, 'pack_qty', val)}
               className="text-sm font-medium"
             />
           </div>
@@ -453,13 +455,13 @@ export default function ProductDetailModal({
         {/* Stock toggle */}
         <div className="flex items-center gap-3 mt-4 px-1">
           <ToggleSwitch
-            checked={(variant.stock ?? 0) > 0}
+            checked={(currentVariant.stock ?? 0) > 0}
             onChange={async (val) => {
-              await handleUpdateVariant(variant.variant_id, 'stock_qty', val ? 999 : 0);
+              await handleUpdateVariant(currentVariant.variant_id, 'stock_qty', val ? 999 : 0);
             }}
           />
           <span className="text-sm text-gray-700">
-            {(variant.stock ?? 0) > 0 ? 'Есть в наличии' : 'Нет в наличии'}
+            {(currentVariant.stock ?? 0) > 0 ? 'Есть в наличии' : 'Нет в наличии'}
           </span>
         </div>
       </div>
