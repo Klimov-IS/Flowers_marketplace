@@ -20,10 +20,13 @@ import { getFlowerImage, getDefaultFlowerImage } from '../../../utils/flowerImag
  */
 function resolvePhotoUrl(url: string): string {
   const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+  let resolved = url;
   if (basePath && url.startsWith('/uploads')) {
-    return basePath + url;
+    resolved = basePath + url;
   }
-  return url;
+  // Cache-bust to force browser reload after photo re-upload
+  const sep = resolved.includes('?') ? '&' : '?';
+  return `${resolved}${sep}v=${Date.now()}`;
 }
 
 interface ProductDetailModalProps {

@@ -2,7 +2,12 @@ import { useState, useEffect } from 'react';
 import {
   useGetFlatItemsQuery,
   useGetAssortmentMetricsQuery,
+  useBulkDeleteItemsMutation,
+  useBulkHideItemsMutation,
+  useBulkRestoreItemsMutation,
 } from '../supplierApi';
+import { useToast } from '../../../components/ui/Toast';
+import ConfirmModal from '../../../components/ui/ConfirmModal';
 import { useDebounce } from '../../../hooks/useDebounce';
 import AssortmentTable from './AssortmentTable';
 import { initialFilters, filtersToParams } from './FilterBar';
@@ -37,6 +42,12 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [expandedAIItemId, setExpandedAIItemId] = useState<string | null>(null);
+  const [bulkConfirm, setBulkConfirm] = useState<{ action: 'delete' | 'hide' | 'restore'; } | null>(null);
+
+  const [bulkDelete, { isLoading: isBulkDeleting }] = useBulkDeleteItemsMutation();
+  const [bulkHide, { isLoading: isBulkHiding }] = useBulkHideItemsMutation();
+  const [bulkRestore, { isLoading: isBulkRestoring }] = useBulkRestoreItemsMutation();
+  const { showToast } = useToast();
 
   const debouncedSearch = useDebounce(searchQuery, 300);
 
@@ -87,6 +98,31 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
       if (prev.direction === 'asc') return { field, direction: 'desc' };
       return { field: null, direction: null };
     });
+  };
+
+  const handleBulkAction = async () => {
+    if (!bulkConfirm || selectedIds.size === 0) return;
+    // The selectedIds are variant_ids; bulk endpoints need item_ids
+    // Get unique item_ids from the selected variants
+    const selectedItemIds = [...new Set(
+      items.filter((v) => selectedIds.has(v.variant_id)).map((v) => v.item_id)
+    )];
+    try {
+      if (bulkConfirm.action === 'delete') {
+        const result = await bulkDelete(selectedItemIds).unwrap();
+        showToast(`Удалено: ${result.affected_count} позиций`, 'success');
+      } else if (bulkConfirm.action === 'hide') {
+        const result = await bulkHide(selectedItemIds).unwrap();
+        showToast(`Скрыто: ${result.affected_count} позиций`, 'success');
+      } else if (bulkConfirm.action === 'restore') {
+        const result = await bulkRestore(selectedItemIds).unwrap();
+        showToast(`Опубликовано: ${result.affected_count} позиций`, 'success');
+      }
+      setSelectedIds(new Set());
+    } catch {
+      showToast('Ошибка при выполнении действия', 'error');
+    }
+    setBulkConfirm(null);
   };
 
   const hasActiveFilters = searchQuery || statusFilter !== 'all' || sort.field !== null ||
@@ -171,13 +207,22 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
             Выбрано: {selectedIds.size}
           </span>
           <div className="h-4 w-px bg-primary-200" />
-          <button className="text-primary-600 hover:text-primary-800 font-medium transition-colors">
+          <button
+            onClick={() => setBulkConfirm({ action: 'restore' })}
+            className="text-primary-600 hover:text-primary-800 font-medium transition-colors"
+          >
             Опубликовать
           </button>
-          <button className="text-primary-600 hover:text-primary-800 font-medium transition-colors">
+          <button
+            onClick={() => setBulkConfirm({ action: 'hide' })}
+            className="text-primary-600 hover:text-primary-800 font-medium transition-colors"
+          >
             Скрыть
           </button>
-          <button className="text-red-500 hover:text-red-700 font-medium transition-colors">
+          <button
+            onClick={() => setBulkConfirm({ action: 'delete' })}
+            className="text-red-500 hover:text-red-700 font-medium transition-colors"
+          >
             Удалить
           </button>
         </div>
@@ -266,6 +311,24 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         supplierId={supplierId}
+      />
+      <ConfirmModal
+        isOpen={!!bulkConfirm}
+        onClose={() => setBulkConfirm(null)}
+        onConfirm={handleBulkAction}
+        isLoading={isBulkDeleting || isBulkHiding || isBulkRestoring}
+        title={
+          bulkConfirm?.action === 'delete' ? 'Удалить выбранные?' :
+          bulkConfirm?.action === 'hide' ? 'Скрыть выбранные?' :
+          'Опубликовать выбранные?'
+        }
+        message={`Это действие будет применено к ${selectedIds.size} выбранным позициям.`}
+        confirmLabel={
+          bulkConfirm?.action === 'delete' ? 'Удалить' :
+          bulkConfirm?.action === 'hide' ? 'Скрыть' :
+          'Опубликовать'
+        }
+        variant={bulkConfirm?.action === 'delete' ? 'danger' : 'primary'}
       />
     </div>
   );

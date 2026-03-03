@@ -6,6 +6,7 @@ import {
   useDeleteOfferCandidateMutation,
   useHideSupplierItemMutation,
   useRestoreSupplierItemMutation,
+  useDuplicateSupplierItemMutation,
 } from '../supplierApi';
 import { useToast } from '../../../components/ui/Toast';
 import EditableCell from './EditableCell';
@@ -17,10 +18,13 @@ import ProductDetailModal from './ProductDetailModal';
 
 function resolvePhotoUrl(url: string): string {
   const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+  let resolved = url;
   if (basePath && url.startsWith('/uploads')) {
-    return basePath + url;
+    resolved = basePath + url;
   }
-  return url;
+  // Cache-bust to force browser reload after photo re-upload
+  const sep = resolved.includes('?') ? '&' : '?';
+  return `${resolved}${sep}v=${Date.now()}`;
 }
 
 // ── Color options (shared with EditableColorSelect) ──────────────────────────
@@ -452,6 +456,7 @@ function FlatVariantRow({
   onDeleteVariant,
   onHideItem,
   onRestoreItem,
+  onDuplicateItem,
   isSelected,
   onToggleSelect,
   onAIClick,
@@ -464,6 +469,7 @@ function FlatVariantRow({
   onDeleteVariant: (variantId: string) => void;
   onHideItem: (itemId: string) => void;
   onRestoreItem: (itemId: string) => void;
+  onDuplicateItem: (itemId: string) => void;
   isSelected?: boolean;
   onToggleSelect?: () => void;
   onAIClick?: () => void;
@@ -598,7 +604,7 @@ function FlatVariantRow({
         />
       </td>
 
-      {/* Действия — edit + delete */}
+      {/* Действия — edit + duplicate + delete */}
       <td className="px-2 py-2">
         <div className="flex items-center justify-center gap-0.5">
           <button
@@ -611,11 +617,16 @@ function FlatVariantRow({
             </svg>
           </button>
           <button
-            onClick={() => {
-              if (confirm('Удалить этот вариант?')) {
-                onDeleteVariant(variant.variant_id);
-              }
-            }}
+            onClick={() => onDuplicateItem(variant.item_id)}
+            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            title="Дублировать"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => onDeleteVariant(variant.variant_id)}
             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="Удалить"
           >
@@ -646,6 +657,7 @@ export default function AssortmentTable({
   const [deleteOfferCandidate] = useDeleteOfferCandidateMutation();
   const [hideSupplierItem] = useHideSupplierItemMutation();
   const [restoreSupplierItem] = useRestoreSupplierItemMutation();
+  const [duplicateSupplierItem] = useDuplicateSupplierItemMutation();
   const { showToast } = useToast();
 
   const [viewingVariant, setViewingVariant] = useState<FlatOfferVariant | null>(null);
@@ -711,6 +723,15 @@ export default function AssortmentTable({
       showToast('Позиция восстановлена', 'success');
     } catch {
       showToast('Ошибка при восстановлении', 'error');
+    }
+  };
+
+  const handleDuplicateItem = async (itemId: string) => {
+    try {
+      await duplicateSupplierItem(itemId).unwrap();
+      showToast('Карточка дублирована', 'success');
+    } catch {
+      showToast('Ошибка при дублировании', 'error');
     }
   };
 
@@ -803,6 +824,7 @@ export default function AssortmentTable({
                     onDeleteVariant={handleDeleteVariant}
                     onHideItem={handleHideItem}
                     onRestoreItem={handleRestoreItem}
+                    onDuplicateItem={handleDuplicateItem}
                     isSelected={selectedIds?.has(variant.variant_id)}
                     onToggleSelect={hasSelection ? () => handleToggleSelect(variant.variant_id) : undefined}
                     onAIClick={
