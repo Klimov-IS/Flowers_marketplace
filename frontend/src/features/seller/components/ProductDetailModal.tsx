@@ -8,23 +8,21 @@ import {
   useUpdateSupplierItemMutation,
   useUpdateOfferCandidateMutation,
   useUploadItemPhotoMutation,
+  useHideSupplierItemMutation,
+  useRestoreSupplierItemMutation,
+  useDuplicateSupplierItemMutation,
 } from '../supplierApi';
 import { useAppSelector } from '../../../hooks/useAppSelector';
+import { useToast } from '../../../components/ui/Toast';
 import type { FlatOfferVariant } from '../../../types/supplierItem';
 import { getFlowerImage, getDefaultFlowerImage } from '../../../utils/flowerImages';
 
-/**
- * Resolve a photo URL by prepending the Vite base path.
- * In dev: BASE_URL = "/" → "/uploads/photos/xxx.jpg"
- * In prod: BASE_URL = "/flower/" → "/flower/uploads/photos/xxx.jpg"
- */
 function resolvePhotoUrl(url: string): string {
   const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
   let resolved = url;
   if (basePath && url.startsWith('/uploads')) {
     resolved = basePath + url;
   }
-  // Cache-bust to force browser reload after photo re-upload
   const sep = resolved.includes('?') ? '&' : '?';
   return `${resolved}${sep}v=${Date.now()}`;
 }
@@ -32,7 +30,6 @@ function resolvePhotoUrl(url: string): string {
 interface ProductDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
-  /** The variant that was clicked to open the modal */
   variant: FlatOfferVariant;
 }
 
@@ -57,6 +54,123 @@ const PACK_TYPE_OPTIONS = [
 
 type ItemUpdateValue = string | number | string[] | null;
 
+// ── Toggle Switch ─────────────────────────────────────────────────────────────
+function ToggleSwitch({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (val: boolean) => void;
+  disabled?: boolean;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  const handleToggle = async () => {
+    if (disabled || loading) return;
+    setLoading(true);
+    try {
+      await onChange(!checked);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={handleToggle}
+      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+        checked ? 'bg-primary-500' : 'bg-gray-300'
+      } ${disabled || loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+    >
+      <span
+        className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? 'translate-x-[18px]' : 'translate-x-[3px]'
+        }`}
+      />
+      {loading && (
+        <span className="absolute inset-0 flex items-center justify-center">
+          <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ── Status Badge ──────────────────────────────────────────────────────────────
+const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
+  active: { label: 'Активен', cls: 'bg-green-100 text-green-700' },
+  ambiguous: { label: 'Модерация', cls: 'bg-yellow-100 text-yellow-700' },
+  hidden: { label: 'Скрыто', cls: 'bg-gray-100 text-gray-500' },
+};
+
+function StatusBadge({
+  status,
+  onHide,
+  onRestore,
+}: {
+  status: string;
+  onHide: () => void;
+  onRestore: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const cfg = STATUS_CONFIG[status] || { label: status, cls: 'bg-gray-100 text-gray-600' };
+  const canToggle = status === 'active' || status === 'hidden' || status === 'ambiguous';
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => canToggle && setIsOpen(!isOpen)}
+        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${cfg.cls} ${
+          canToggle ? 'cursor-pointer hover:ring-1 hover:ring-gray-300' : 'cursor-default'
+        }`}
+      >
+        {cfg.label}
+        {canToggle && (
+          <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        )}
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-1 z-50 min-w-[150px] bg-white border border-gray-200 rounded-xl shadow-lg py-1">
+          {status === 'active' && (
+            <button
+              type="button"
+              onClick={() => { setIsOpen(false); onHide(); }}
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+              </svg>
+              Скрыть
+            </button>
+          )}
+          {(status === 'hidden' || status === 'ambiguous') && (
+            <button
+              type="button"
+              onClick={() => { setIsOpen(false); onRestore(); }}
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              Восстановить
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Modal ────────────────────────────────────────────────────────────────
 export default function ProductDetailModal({
   isOpen,
   onClose,
@@ -66,8 +180,8 @@ export default function ProductDetailModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const { showToast } = useToast();
 
-  // Fetch all variants of this item
   const { data: variantsData } = useGetFlatItemsQuery(
     {
       supplier_id: user?.id || '',
@@ -81,9 +195,11 @@ export default function ProductDetailModal({
   const [updateSupplierItem] = useUpdateSupplierItemMutation();
   const [updateOfferCandidate] = useUpdateOfferCandidateMutation();
   const [uploadPhoto, { isLoading: isUploading }] = useUploadItemPhotoMutation();
+  const [hideSupplierItem] = useHideSupplierItemMutation();
+  const [restoreSupplierItem] = useRestoreSupplierItemMutation();
+  const [duplicateSupplierItem] = useDuplicateSupplierItemMutation();
 
   const allVariants = variantsData?.items || [];
-  // Use first variant data as item-level data (it's duplicated across all variants)
   const itemData = allVariants.length > 0 ? allVariants[0] : variant;
 
   const handleUpdateItem = async (field: string, value: ItemUpdateValue) => {
@@ -105,10 +221,8 @@ export default function ProductDetailModal({
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploadStatus('idle');
 
-    // Show preview immediately
     const reader = new FileReader();
     reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
     reader.readAsDataURL(file);
@@ -117,56 +231,81 @@ export default function ProductDetailModal({
       await uploadPhoto({ itemId: variant.item_id, file }).unwrap();
       setUploadStatus('success');
       setTimeout(() => setUploadStatus('idle'), 2000);
-    } catch (error) {
-      console.error('Failed to upload photo:', error);
+    } catch {
       setPhotoPreview(null);
       setUploadStatus('error');
       setTimeout(() => setUploadStatus('idle'), 3000);
     }
 
-    // Reset input so the same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Determine the photo to show: preview (data URL) > saved photo_url > type fallback
+  const handleHide = async () => {
+    try {
+      await hideSupplierItem(variant.item_id).unwrap();
+      showToast('Позиция скрыта', 'success');
+    } catch {
+      showToast('Ошибка при скрытии', 'error');
+    }
+  };
+
+  const handleRestore = async () => {
+    try {
+      await restoreSupplierItem(variant.item_id).unwrap();
+      showToast('Позиция восстановлена', 'success');
+    } catch {
+      showToast('Ошибка при восстановлении', 'error');
+    }
+  };
+
+  const handleDuplicate = async () => {
+    try {
+      await duplicateSupplierItem(variant.item_id).unwrap();
+      showToast('Карточка дублирована', 'success');
+      onClose();
+    } catch {
+      showToast('Ошибка при дублировании', 'error');
+    }
+  };
+
   const savedPhotoUrl = itemData.photo_url ? resolvePhotoUrl(itemData.photo_url) : null;
   const photoUrl = photoPreview || savedPhotoUrl;
   const fallbackImage = getFlowerImage(itemData.flower_type);
 
+  const title = itemData.flower_type
+    ? `${itemData.flower_type}${itemData.subtype ? ` ${itemData.subtype.toLowerCase()}` : ''}`
+    : itemData.raw_name;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="xl">
-      <div className="flex items-start justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">
-          {itemData.flower_type
-            ? `${itemData.flower_type}${itemData.subtype ? ` ${itemData.subtype.toLowerCase()}` : ''}`
-            : itemData.raw_name}
-        </h3>
-        <button
-          onClick={onClose}
-          className="p-1 text-gray-400 hover:text-gray-600 rounded"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+    <Modal isOpen={isOpen} onClose={onClose} size="xl" title={title}>
+      {/* Header row: status badge */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          ID: <span className="font-mono text-xs">{variant.item_id.slice(0, 8)}</span>
+        </div>
+        <StatusBadge
+          status={itemData.item_status}
+          onHide={handleHide}
+          onRestore={handleRestore}
+        />
       </div>
 
+      {/* Photo + fields row */}
       <div className="flex gap-6">
-        {/* Left: Photo */}
-        <div className="flex-shrink-0 w-48">
+        {/* Photo */}
+        <div className="flex-shrink-0">
           <div
-            className="relative group w-48 h-48 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer"
+            className="relative group w-60 h-60 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer"
             onClick={() => fileInputRef.current?.click()}
           >
             <img
               src={photoUrl || fallbackImage}
-              alt={itemData.flower_type || 'Фото товара'}
+              alt={title}
               className="w-full h-full object-cover"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = getDefaultFlowerImage();
               }}
             />
-            {/* Upload overlay */}
             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               {isUploading ? (
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
@@ -176,7 +315,7 @@ export default function ProductDetailModal({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  <span className="text-xs">Загрузить фото</span>
+                  <span className="text-xs font-medium">Загрузить фото</span>
                 </div>
               )}
             </div>
@@ -188,7 +327,6 @@ export default function ProductDetailModal({
               onChange={handlePhotoUpload}
             />
           </div>
-          {/* Upload status feedback */}
           {uploadStatus === 'success' && (
             <p className="text-xs text-green-600 mt-2 text-center flex items-center justify-center gap-1">
               <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
@@ -198,186 +336,195 @@ export default function ProductDetailModal({
             </p>
           )}
           {uploadStatus === 'error' && (
-            <p className="text-xs text-red-600 mt-2 text-center">
-              Ошибка загрузки
-            </p>
-          )}
-          {uploadStatus === 'idle' && !photoUrl && (
-            <p className="text-xs text-gray-400 mt-2 text-center">
-              Нажмите чтобы загрузить фото
-            </p>
+            <p className="text-xs text-red-600 mt-2 text-center">Ошибка загрузки</p>
           )}
         </div>
 
-        {/* Right: Item-level fields */}
-        <div className="flex-1 min-w-0">
-          <div className="grid grid-cols-2 gap-4">
-            {/* Сорт */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Сорт</label>
-              <EditableCell
-                value={itemData.variety || ''}
-                type="text"
-                placeholder="Не указан"
-                onSave={async (val) => handleUpdateItem('variety', val)}
-                className="text-sm font-medium text-gray-900"
-              />
-            </div>
-
-            {/* Страна */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Страна</label>
-              <EditableSelect
-                value={itemData.origin_country}
-                options={COUNTRY_OPTIONS}
-                onSave={async (val) => handleUpdateItem('origin_country', val)}
-              />
-            </div>
-
-            {/* Цвета */}
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Цвета</label>
-              <EditableColorSelect
-                value={itemData.colors || []}
-                onSave={async (colors) => handleUpdateItem('colors', colors)}
-              />
-            </div>
-
-            {/* Raw name */}
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Исходное название</label>
-              <p className="text-xs font-mono text-gray-500 bg-gray-50 px-2 py-1.5 rounded truncate" title={itemData.raw_name}>
-                {itemData.raw_name}
-              </p>
-            </div>
+        {/* Fields */}
+        <div className="flex-1 min-w-0 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Сорт</label>
+            <EditableCell
+              value={itemData.variety || ''}
+              type="text"
+              placeholder="Не указан"
+              onSave={async (val) => handleUpdateItem('variety', val)}
+              className="text-sm font-medium text-gray-900"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Страна</label>
+            <EditableSelect
+              value={itemData.origin_country}
+              options={COUNTRY_OPTIONS}
+              onSave={async (val) => handleUpdateItem('origin_country', val)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Цвета</label>
+            <EditableColorSelect
+              value={itemData.colors || []}
+              onSave={async (colors) => handleUpdateItem('colors', colors)}
+            />
           </div>
         </div>
       </div>
 
-      {/* Variants table */}
+      {/* Characteristics section */}
       <div className="mt-6">
-        <h4 className="text-sm font-medium text-gray-700 mb-3">
-          Варианты ({allVariants.length})
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+          Характеристики
         </h4>
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr className="text-left text-xs text-gray-500">
-                <th className="px-3 py-2 font-medium">Размер</th>
-                <th className="px-3 py-2 font-medium">Упаковка</th>
-                <th className="px-3 py-2 font-medium">Кол-во</th>
-                <th className="px-3 py-2 font-medium">Цена</th>
-                <th className="px-3 py-2 font-medium">Остаток</th>
-                <th className="px-3 py-2 font-medium">Валидация</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allVariants.map((v) => (
-                <tr
-                  key={v.variant_id}
-                  className={`border-b border-gray-100 hover:bg-gray-50 ${
-                    v.variant_id === variant.variant_id ? 'bg-primary-50/50' : ''
-                  }`}
-                >
-                  <td className="px-3 py-2">
-                    <EditableCell
-                      value={v.length_cm}
-                      type="number"
-                      placeholder="—"
-                      suffix=" см"
-                      onSave={async (val) => handleUpdateVariant(v.variant_id, 'length_cm', val)}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <EditableSelect
-                      value={v.pack_type}
-                      options={PACK_TYPE_OPTIONS}
-                      onSave={async (val) => handleUpdateVariant(v.variant_id, 'pack_type', val)}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <EditableCell
-                      value={v.pack_qty}
-                      type="number"
-                      placeholder="—"
-                      onSave={async (val) => handleUpdateVariant(v.variant_id, 'pack_qty', val)}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <EditableCell
-                      value={v.price ? parseFloat(v.price) : null}
-                      type="number"
-                      placeholder="—"
-                      suffix=" ₽"
-                      onSave={async (val) => handleUpdateVariant(v.variant_id, 'price_min', val)}
-                      className="font-medium"
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <EditableCell
-                      value={v.stock}
-                      type="number"
-                      placeholder="—"
-                      onSave={async (val) => handleUpdateVariant(v.variant_id, 'stock_qty', val)}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <ValidationBadge status={v.validation} />
-                  </td>
-                </tr>
-              ))}
-              {allVariants.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-3 py-4 text-center text-gray-400 text-sm">
-                    Загрузка вариантов...
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-gray-50 rounded-xl p-4">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Длина</label>
+            <EditableCell
+              value={variant.length_cm}
+              type="number"
+              placeholder="—"
+              suffix=" см"
+              onSave={async (val) => handleUpdateVariant(variant.variant_id, 'length_cm', val)}
+              className="text-sm font-medium"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Цена</label>
+            <EditableCell
+              value={variant.price ? parseFloat(variant.price) : null}
+              type="number"
+              placeholder="—"
+              suffix=" ₽"
+              onSave={async (val) => handleUpdateVariant(variant.variant_id, 'price_min', val)}
+              className="text-sm font-semibold"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Упаковка</label>
+            <EditableSelect
+              value={variant.pack_type}
+              options={PACK_TYPE_OPTIONS}
+              onSave={async (val) => handleUpdateVariant(variant.variant_id, 'pack_type', val)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Кол-во в уп.</label>
+            <EditableCell
+              value={variant.pack_qty}
+              type="number"
+              placeholder="—"
+              onSave={async (val) => handleUpdateVariant(variant.variant_id, 'pack_qty', val)}
+              className="text-sm font-medium"
+            />
+          </div>
+        </div>
+
+        {/* Stock toggle */}
+        <div className="flex items-center gap-3 mt-4 px-1">
+          <ToggleSwitch
+            checked={(variant.stock ?? 0) > 0}
+            onChange={async (val) => {
+              await handleUpdateVariant(variant.variant_id, 'stock_qty', val ? 999 : 0);
+            }}
+          />
+          <span className="text-sm text-gray-700">
+            {(variant.stock ?? 0) > 0 ? 'Есть в наличии' : 'Нет в наличии'}
+          </span>
         </div>
       </div>
 
+      {/* Variants table (only if multiple) */}
+      {allVariants.length > 1 && (
+        <div className="mt-6">
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+            Все варианты ({allVariants.length})
+          </h4>
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr className="text-left text-xs text-gray-500">
+                  <th className="px-3 py-2 font-medium">Размер</th>
+                  <th className="px-3 py-2 font-medium">Упаковка</th>
+                  <th className="px-3 py-2 font-medium">Кол-во</th>
+                  <th className="px-3 py-2 font-medium">Цена</th>
+                  <th className="px-3 py-2 font-medium text-center">Наличие</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allVariants.map((v) => (
+                  <tr
+                    key={v.variant_id}
+                    className={`border-b border-gray-100 hover:bg-gray-50 ${
+                      v.variant_id === variant.variant_id ? 'bg-primary-50/50' : ''
+                    }`}
+                  >
+                    <td className="px-3 py-2">
+                      <EditableCell
+                        value={v.length_cm}
+                        type="number"
+                        placeholder="—"
+                        suffix=" см"
+                        onSave={async (val) => handleUpdateVariant(v.variant_id, 'length_cm', val)}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <EditableSelect
+                        value={v.pack_type}
+                        options={PACK_TYPE_OPTIONS}
+                        onSave={async (val) => handleUpdateVariant(v.variant_id, 'pack_type', val)}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <EditableCell
+                        value={v.pack_qty}
+                        type="number"
+                        placeholder="—"
+                        onSave={async (val) => handleUpdateVariant(v.variant_id, 'pack_qty', val)}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <EditableCell
+                        value={v.price ? parseFloat(v.price) : null}
+                        type="number"
+                        placeholder="—"
+                        suffix=" ₽"
+                        onSave={async (val) => handleUpdateVariant(v.variant_id, 'price_min', val)}
+                        className="font-medium"
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <ToggleSwitch
+                        checked={(v.stock ?? 0) > 0}
+                        onChange={async (val) => {
+                          await handleUpdateVariant(v.variant_id, 'stock_qty', val ? 999 : 0);
+                        }}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
-      <div className="mt-4 flex justify-end">
+      <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-100">
         <button
           onClick={onClose}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
         >
           Закрыть
         </button>
+        <button
+          onClick={handleDuplicate}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-700 bg-primary-50 border border-primary-200 rounded-xl hover:bg-primary-100 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          Дублировать
+        </button>
       </div>
     </Modal>
-  );
-}
-
-function ValidationBadge({ status }: { status: string }) {
-  if (status === 'ok') {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-1.5 py-0.5 rounded">
-        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-        </svg>
-        OK
-      </span>
-    );
-  }
-  if (status === 'warn') {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-yellow-700 bg-yellow-50 px-1.5 py-0.5 rounded">
-        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-        </svg>
-        Внимание
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 text-xs text-red-700 bg-red-50 px-1.5 py-0.5 rounded">
-      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-      </svg>
-      Ошибка
-    </span>
   );
 }
