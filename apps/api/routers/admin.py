@@ -2250,6 +2250,9 @@ async def create_supplier_item(
 
     # Create one offer candidate (variant)
     new_variant_id = uuid4()
+    availability = "in_stock" if data.stock_qty and data.stock_qty > 0 else "unknown"
+    price_decimal = Decimal(str(data.price))
+
     new_variant = OfferCandidate(
         id=new_variant_id,
         supplier_item_id=new_item_id,
@@ -2258,13 +2261,67 @@ async def create_supplier_item(
         pack_type=data.pack_type,
         pack_qty=data.pack_qty,
         price_type="fixed",
-        price_min=Decimal(str(data.price)),
+        price_min=price_decimal,
         currency="RUB",
-        availability="in_stock" if data.stock_qty and data.stock_qty > 0 else "unknown",
+        availability=availability,
         stock_qty=data.stock_qty,
         validation="ok",
     )
     db.add(new_variant)
+
+    # Auto-publish: create NormalizedSKU + SKUMapping + Offer so item appears in catalog
+    from apps.api.models.normalized import NormalizedSKU, SKUMapping, Offer
+
+    # Build display title
+    title_parts = [data.raw_name]
+    if data.variety:
+        title_parts.append(data.variety)
+    if data.color:
+        title_parts.append(data.color)
+    if data.length_cm:
+        title_parts.append(f"{data.length_cm}см")
+    display_title = " ".join(title_parts)
+
+    sku_id = uuid4()
+    new_sku = NormalizedSKU(
+        id=sku_id,
+        product_type=data.raw_name,
+        variety=data.variety,
+        color=data.color,
+        title=display_title,
+        meta={},
+    )
+    db.add(new_sku)
+
+    mapping_id = uuid4()
+    new_mapping = SKUMapping(
+        id=mapping_id,
+        supplier_item_id=new_item_id,
+        normalized_sku_id=sku_id,
+        method="manual",
+        confidence=Decimal("1.000"),
+        status="confirmed",
+    )
+    db.add(new_mapping)
+
+    offer_id = uuid4()
+    new_offer = Offer(
+        id=offer_id,
+        supplier_id=data.supplier_id,
+        normalized_sku_id=sku_id,
+        source_import_batch_id=None,
+        display_title=display_title,
+        length_cm=data.length_cm,
+        pack_type=data.pack_type,
+        pack_qty=data.pack_qty,
+        price_type="fixed",
+        price_min=price_decimal,
+        currency="RUB",
+        availability=availability,
+        stock_qty=data.stock_qty,
+        is_active=True,
+    )
+    db.add(new_offer)
 
     await db.commit()
 
@@ -2273,6 +2330,7 @@ async def create_supplier_item(
         item_id=str(new_item_id),
         supplier_id=str(data.supplier_id),
         raw_name=data.raw_name,
+        offer_id=str(offer_id),
     )
 
     return CreateItemResponse(
