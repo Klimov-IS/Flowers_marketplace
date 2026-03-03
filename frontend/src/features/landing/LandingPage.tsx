@@ -87,7 +87,7 @@ function LandingHeader({ onMenuOpen }: { onMenuOpen: () => void }) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
               </svg>
             </div>
-            <span className="text-xl font-bold text-gray-900">Цветочный<span className="text-primary-600"> маркет</span></span>
+            <span className="text-xl font-bold text-gray-900">Вцвет<span className="text-primary-600"> маркет</span></span>
           </a>
 
           {/* Desktop Nav */}
@@ -454,7 +454,7 @@ function LandingFooter() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                 </svg>
               </div>
-              <span className="text-white font-bold">Цветочный маркет</span>
+              <span className="text-white font-bold">Вцвет маркет</span>
             </div>
             <p className="text-sm leading-relaxed">B2B-платформа для оптовой торговли цветами. Все поставщики города в одном месте.</p>
           </div>
@@ -483,7 +483,7 @@ function LandingFooter() {
           </div>
         </div>
         <div className="border-t border-gray-800 pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <p className="text-xs text-gray-500">&copy; 2026 Цветочный маркет. Все права защищены.</p>
+          <p className="text-xs text-gray-500">&copy; 2026 Вцвет маркет. Все права защищены.</p>
           <div className="flex gap-6">
             <a href="#" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Политика конфиденциальности</a>
             <a href="#" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Условия использования</a>

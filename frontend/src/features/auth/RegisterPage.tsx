@@ -146,7 +146,7 @@ export default function RegisterPage() {
           </svg>
         </div>
         <span className="text-xl font-bold text-gray-900">
-          Цветочный<span className="text-primary-600"> маркет</span>
+          Вцвет<span className="text-primary-600"> маркет</span>
         </span>
       </Link>
 
