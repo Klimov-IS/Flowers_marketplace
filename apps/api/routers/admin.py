@@ -745,9 +745,9 @@ async def get_flat_items(
     where_clauses = ["si.supplier_id = :supplier_id"]
     params = {"supplier_id": supplier_id}
 
-    # Only show offer_candidates from the latest import batch
+    # Only show offer_candidates from the latest import batch OR manually created (import_batch_id IS NULL)
     if latest_batch_id:
-        where_clauses.append("oc.import_batch_id = :latest_batch_id")
+        where_clauses.append("(oc.import_batch_id = :latest_batch_id OR oc.import_batch_id IS NULL)")
         params["latest_batch_id"] = latest_batch_id
 
     # Status filter
@@ -1019,7 +1019,7 @@ async def get_assortment_metrics(
         FROM offer_candidates oc
         JOIN supplier_items si ON oc.supplier_item_id = si.id
         WHERE si.supplier_id = :supplier_id
-          AND oc.import_batch_id = :latest_batch_id
+          AND (oc.import_batch_id = :latest_batch_id OR oc.import_batch_id IS NULL)
           AND si.status = ANY(:status_list)
     """)
 
