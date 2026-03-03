@@ -60,6 +60,7 @@ export default function LoginPage() {
             phone: user.phone || undefined,
             role: user.role === 'supplier' ? 'seller' : 'buyer',
             city_name: user.city_name || undefined,
+            has_telegram: user.has_telegram || false,
           },
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token,

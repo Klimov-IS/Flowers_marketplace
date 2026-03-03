@@ -50,6 +50,7 @@ export interface UserResponse {
   contact_person?: string | null;
   working_hours_from?: string | null;
   working_hours_to?: string | null;
+  has_telegram?: boolean;
 }
 
 // ── Password Reset ──

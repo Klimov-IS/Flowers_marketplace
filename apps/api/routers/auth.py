@@ -370,6 +370,16 @@ async def get_current_user_info(
         )
         user = result.scalar_one_or_none()
         if user:
+            # Check telegram link
+            tg_result = await db.execute(
+                select(func.count()).select_from(TelegramLink).where(
+                    TelegramLink.role == "supplier",
+                    TelegramLink.entity_id == user.id,
+                    TelegramLink.is_active == True,
+                )
+            )
+            has_telegram = (tg_result.scalar() or 0) > 0
+
             contacts = user.contacts or {}
             return UserResponse(
                 id=str(user.id),
@@ -387,6 +397,7 @@ async def get_current_user_info(
                 contact_person=contacts.get("contact_person"),
                 working_hours_from=contacts.get("working_hours_from"),
                 working_hours_to=contacts.get("working_hours_to"),
+                has_telegram=has_telegram,
             )
 
     raise HTTPException(
@@ -395,7 +406,7 @@ async def get_current_user_info(
     )
 
 
-def _build_supplier_response(user) -> UserResponse:
+def _build_supplier_response(user, has_telegram: bool = False) -> UserResponse:
     """Build UserResponse for a supplier."""
     contacts = user.contacts or {}
     return UserResponse(
@@ -412,6 +423,7 @@ def _build_supplier_response(user) -> UserResponse:
         min_order_amount=float(user.min_order_amount) if user.min_order_amount else None,
         avatar_url=user.avatar_url,
         contact_person=contacts.get("contact_person"),
+        has_telegram=has_telegram,
         working_hours_from=contacts.get("working_hours_from"),
         working_hours_to=contacts.get("working_hours_to"),
     )

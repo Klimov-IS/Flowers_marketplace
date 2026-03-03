@@ -69,6 +69,7 @@ class UserResponse(BaseModel):
     contact_person: str | None = None
     working_hours_from: str | None = None
     working_hours_to: str | None = None
+    has_telegram: bool = False
 
 
 class UpdateProfileRequest(BaseModel):
