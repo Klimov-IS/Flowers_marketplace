@@ -36,6 +36,8 @@ class Order(Base, UUIDMixin, TimestampMixin):
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     assembled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    shipped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivery_type: Mapped[str | None] = mapped_column(String(20), nullable=True, server_default="delivery")
 
     # Relationships
     buyer: Mapped["Buyer"] = relationship("Buyer", back_populates="orders")

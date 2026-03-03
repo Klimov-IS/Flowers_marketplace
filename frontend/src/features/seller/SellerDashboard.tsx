@@ -10,6 +10,7 @@ import {
   useConfirmOrderMutation,
   useRejectOrderMutation,
   useAssembleOrderMutation,
+  useShipOrderMutation,
 } from './supplierApi';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -70,11 +71,17 @@ const XCircleSvg = (
     <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
+const TruckSvg = (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+  </svg>
+);
 
 const statusConfig: Record<string, { icon: React.ReactNode; iconBg: string; badgeBg: string; borderColor: string; label: string; dimCard?: boolean }> = {
   pending:   { icon: ClockSvg,   iconBg: 'bg-amber-50 text-amber-600',     badgeBg: 'bg-amber-100 text-amber-700',       borderColor: 'border-l-amber-400',   label: 'Новый' },
   confirmed: { icon: CheckSvg,   iconBg: 'bg-primary-50 text-primary-600', badgeBg: 'bg-primary-100 text-primary-700',   borderColor: 'border-l-primary-400', label: 'Подтверждён' },
   assembled: { icon: PackageSvg, iconBg: 'bg-sky-50 text-sky-600',         badgeBg: 'bg-sky-100 text-sky-700',           borderColor: 'border-l-sky-400',     label: 'Собран' },
+  shipped:   { icon: TruckSvg,   iconBg: 'bg-emerald-50 text-emerald-600', badgeBg: 'bg-emerald-100 text-emerald-700',   borderColor: 'border-l-emerald-400', label: 'Отправлен' },
   rejected:  { icon: XCircleSvg, iconBg: 'bg-red-50 text-red-600',         badgeBg: 'bg-red-100 text-red-700',           borderColor: 'border-l-red-400',     label: 'Отклонён' },
   cancelled: { icon: XCircleSvg, iconBg: 'bg-gray-100 text-gray-400',      badgeBg: 'bg-gray-100 text-gray-500',         borderColor: 'border-l-gray-300',    label: 'Отменён', dimCard: true },
 };
@@ -215,6 +222,7 @@ export default function SellerDashboard() {
   const [confirmOrder, { isLoading: isConfirming }] = useConfirmOrderMutation();
   const [rejectOrder] = useRejectOrderMutation();
   const [assembleOrder, { isLoading: isAssembling }] = useAssembleOrderMutation();
+  const [shipOrder, { isLoading: isShipping }] = useShipOrderMutation();
 
   const handleConfirm = async (orderId: string) => {
     if (!user) return;
@@ -244,6 +252,16 @@ export default function SellerDashboard() {
       showToast('Заказ собран', 'success');
     } catch {
       showToast('Ошибка при сборке заказа', 'error');
+    }
+  };
+
+  const handleShip = async (orderId: string) => {
+    if (!user) return;
+    try {
+      await shipOrder({ supplier_id: user.id, order_id: orderId }).unwrap();
+      showToast('Заказ отправлен', 'success');
+    } catch {
+      showToast('Ошибка при отправке заказа', 'error');
     }
   };
 
@@ -354,7 +372,7 @@ export default function SellerDashboard() {
         <div>
           {/* Stats Pills */}
           {orderMetrics && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <p className="text-sm text-gray-500">Новые</p>
                 <p className="text-2xl font-bold text-amber-600">{orderMetrics.pending}</p>
@@ -366,6 +384,10 @@ export default function SellerDashboard() {
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <p className="text-sm text-gray-500">Собранные</p>
                 <p className="text-2xl font-bold text-sky-600">{orderMetrics.assembled}</p>
+              </div>
+              <div className="bg-white rounded-2xl p-4 shadow-sm">
+                <p className="text-sm text-gray-500">Отправленные</p>
+                <p className="text-2xl font-bold text-emerald-600">{orderMetrics.shipped}</p>
               </div>
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <p className="text-sm text-gray-500">За месяц</p>
@@ -383,6 +405,7 @@ export default function SellerDashboard() {
               { value: 'pending', label: 'Новые' },
               { value: 'confirmed', label: 'Подтверждённые' },
               { value: 'assembled', label: 'Собранные' },
+              { value: 'shipped', label: 'Отправленные' },
               { value: 'rejected', label: 'Отклонённые' },
             ].map((filter) => (
               <button
@@ -508,7 +531,17 @@ export default function SellerDashboard() {
 
                         {order.status === 'assembled' && (
                           <div className="mt-3 text-sm text-sky-700">
-                            Ожидает самовывоза покупателем
+                            {order.delivery_type === 'pickup'
+                              ? 'Ожидает самовывоза покупателем'
+                              : 'Готов к отправке'}
+                          </div>
+                        )}
+
+                        {order.status === 'shipped' && (
+                          <div className="mt-3 text-sm text-emerald-700">
+                            {order.delivery_type === 'pickup'
+                              ? 'Передан покупателю'
+                              : 'Заказ отправлен покупателю'}
                           </div>
                         )}
 
@@ -543,6 +576,22 @@ export default function SellerDashboard() {
                                 className="inline-flex items-center px-4 py-1.5 text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 rounded-xl transition-colors disabled:opacity-50"
                               >
                                 Собран
+                              </button>
+                              {order.buyer?.phone && (
+                                <a href={`tel:${order.buyer.phone}`} className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50">
+                                  Связаться
+                                </a>
+                              )}
+                            </>
+                          )}
+                          {order.status === 'assembled' && (
+                            <>
+                              <button
+                                onClick={() => handleShip(order.id)}
+                                disabled={isShipping}
+                                className="inline-flex items-center px-4 py-1.5 text-sm font-medium text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-colors disabled:opacity-50"
+                              >
+                                Отправить
                               </button>
                               {order.buyer?.phone && (
                                 <a href={`tel:${order.buyer.phone}`} className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50">

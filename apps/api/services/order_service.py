@@ -34,6 +34,7 @@ class OrderService:
         items: List[Dict],
         delivery_address: str | None = None,
         delivery_date: str | None = None,
+        delivery_type: str | None = None,
         notes: str | None = None,
     ) -> Order:
         """
@@ -165,6 +166,7 @@ class OrderService:
                 "quantity": quantity,
                 "unit_price": unit_price,
                 "total_price": total_price,
+                "notes": item.get("notes"),
             })
 
         log.debug("order.total_calculated", total_amount=str(total_amount))
@@ -178,6 +180,7 @@ class OrderService:
             currency=offers[0].currency,  # All from same supplier, use first
             delivery_address=delivery_address,
             delivery_date=delivery_date,
+            delivery_type=delivery_type or "delivery",
             notes=notes,
         )
         self.db.add(order)
@@ -195,7 +198,7 @@ class OrderService:
                 quantity=item_data["quantity"],
                 unit_price=item_data["unit_price"],
                 total_price=item_data["total_price"],
-                notes=item.get("notes"),
+                notes=item_data.get("notes"),
             )
             self.db.add(order_item)
 
@@ -359,6 +362,46 @@ class OrderService:
 
         return order
 
+    async def ship_order(
+        self,
+        order_id: UUID,
+        supplier_id: UUID,
+    ) -> Order:
+        """
+        Mark order as shipped (supplier action).
+
+        Validation:
+        1. Order exists and belongs to supplier
+        2. Order status is 'assembled'
+        """
+        log = logger.bind(order_id=str(order_id), supplier_id=str(supplier_id))
+        log.info("order.ship.start")
+
+        result = await self.db.execute(
+            select(Order).where(Order.id == order_id)
+        )
+        order = result.scalar_one_or_none()
+
+        if not order:
+            log.warning("order.not_found")
+            raise ValueError(f"Order not found: {order_id}")
+
+        if order.supplier_id != supplier_id:
+            log.warning("order.wrong_supplier", actual=str(order.supplier_id))
+            raise ValueError(f"Order does not belong to supplier {supplier_id}")
+
+        if order.status != "assembled":
+            log.warning("order.not_assembled", status=order.status)
+            raise ValueError(f"Order cannot be shipped, current status: {order.status}")
+
+        order.status = "shipped"
+        order.shipped_at = datetime.utcnow()
+
+        await self.db.flush()
+        log.info("order.ship.complete", shipped_at=order.shipped_at)
+
+        return order
+
     async def get_order_metrics(self, supplier_id: UUID | None = None) -> Dict:
         """
         Get order statistics.
@@ -392,8 +435,11 @@ class OrderService:
                 cast(Order.status == literal_column("'cancelled'"), Integer)
             ).label("cancelled"),
             func.sum(
+                cast(Order.status == literal_column("'shipped'"), Integer)
+            ).label("shipped"),
+            func.sum(
                 case(
-                    (Order.status.in_(["confirmed", "assembled"]), Order.total_amount),
+                    (Order.status.in_(["confirmed", "assembled", "shipped"]), Order.total_amount),
                     else_=0
                 )
             ).label("revenue"),
@@ -412,6 +458,7 @@ class OrderService:
             "assembled": row.assembled or 0,
             "rejected": row.rejected or 0,
             "cancelled": row.cancelled or 0,
+            "shipped": row.shipped or 0,
             "total_revenue": row.revenue or Decimal("0"),
         }
 

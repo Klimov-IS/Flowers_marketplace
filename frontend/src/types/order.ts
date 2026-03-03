@@ -21,9 +21,10 @@ export interface Order {
   id: string;
   buyer_id: string;
   supplier_id: string;
-  status: 'pending' | 'confirmed' | 'assembled' | 'rejected' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'assembled' | 'shipped' | 'rejected' | 'cancelled';
   total_amount: string;
   currency: string;
+  delivery_type?: 'pickup' | 'delivery';
   delivery_address: string;
   delivery_date?: string;
   notes?: string;
@@ -32,6 +33,7 @@ export interface Order {
   rejected_at?: string;
   rejection_reason?: string;
   assembled_at?: string;
+  shipped_at?: string;
   buyer?: Buyer;
   supplier?: Supplier;
   items: OrderItem[];
@@ -52,7 +54,8 @@ export interface CreateOrderRequest {
     quantity: number;
     notes?: string;
   }[];
-  delivery_address: string;
+  delivery_type?: 'pickup' | 'delivery';
+  delivery_address?: string;
   delivery_date?: string;
   notes?: string;
 }
@@ -62,6 +65,7 @@ export interface OrderMetrics {
   pending: number;
   confirmed: number;
   assembled: number;
+  shipped: number;
   rejected: number;
   cancelled: number;
   total_revenue: string;

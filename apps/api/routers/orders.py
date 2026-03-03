@@ -32,6 +32,7 @@ class OrderCreate(BaseModel):
 
     buyer_id: UUID  # MVP: No auth, pass buyer_id explicitly
     items: List[OrderItemCreate]
+    delivery_type: str | None = None  # 'pickup' or 'delivery'
     delivery_address: str | None = None
     delivery_date: date | None = None
     notes: str | None = None
@@ -82,6 +83,7 @@ class OrderResponse(BaseModel):
     status: str
     total_amount: Decimal
     currency: str
+    delivery_type: str | None = None
     delivery_address: str | None
     delivery_date: date | None
     notes: str | None
@@ -89,6 +91,8 @@ class OrderResponse(BaseModel):
     confirmed_at: str | None
     rejected_at: str | None
     rejection_reason: str | None
+    assembled_at: str | None = None
+    shipped_at: str | None = None
     items: List[OrderItemResponse]
     buyer: BuyerBrief
     supplier: SupplierBrief
@@ -139,6 +143,7 @@ async def create_order(
             items=items_data,
             delivery_address=order_data.delivery_address,
             delivery_date=str(order_data.delivery_date) if order_data.delivery_date else None,
+            delivery_type=order_data.delivery_type,
             notes=order_data.notes,
         )
 

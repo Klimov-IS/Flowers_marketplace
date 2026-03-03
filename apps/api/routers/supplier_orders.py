@@ -37,15 +37,22 @@ class OrderAssemble(BaseModel):
     order_id: UUID
 
 
+class OrderShip(BaseModel):
+    """Schema for shipping an order."""
+
+    order_id: UUID
+
+
 class OrderActionResponse(BaseModel):
     """Schema for order action response."""
 
     order_id: UUID
     status: str
-    confirmed_at: str | None
-    rejected_at: str | None
-    rejection_reason: str | None
+    confirmed_at: str | None = None
+    rejected_at: str | None = None
+    rejection_reason: str | None = None
     assembled_at: str | None = None
+    shipped_at: str | None = None
 
     class Config:
         from_attributes = True
@@ -58,13 +65,14 @@ class OrderMetricsResponse(BaseModel):
     pending: int
     confirmed: int
     assembled: int = 0
+    shipped: int = 0
     rejected: int
     cancelled: int
     total_revenue: Decimal
 
 
 # Endpoints
-@router.get("", response_model=List[dict])
+@router.get("")
 async def list_supplier_orders(
     supplier_id: UUID,
     status: str | None = None,
@@ -124,6 +132,8 @@ async def list_supplier_orders(
             "rejected_at": str(order.rejected_at) if order.rejected_at else None,
             "rejection_reason": order.rejection_reason,
             "assembled_at": str(order.assembled_at) if order.assembled_at else None,
+            "shipped_at": str(order.shipped_at) if order.shipped_at else None,
+            "delivery_type": order.delivery_type,
             "buyer": {
                 "id": order.buyer.id,
                 "name": order.buyer.name,
@@ -222,6 +232,35 @@ async def assemble_order(
 
     except ValueError as e:
         logger.warning("order_assemble_failed", error=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/ship", response_model=OrderActionResponse)
+async def ship_order(
+    supplier_id: UUID,
+    action_data: OrderShip,
+    db: AsyncSession = Depends(get_db),
+) -> Order:
+    """Mark order as shipped (supplier action)."""
+    order_service = OrderService(db)
+
+    try:
+        order = await order_service.ship_order(
+            order_id=action_data.order_id,
+            supplier_id=supplier_id,
+        )
+        await db.commit()
+        await db.refresh(order)
+
+        logger.info(
+            "order_shipped",
+            order_id=str(order.id),
+            supplier_id=str(supplier_id),
+        )
+        return order
+
+    except ValueError as e:
+        logger.warning("order_ship_failed", error=str(e))
         raise HTTPException(status_code=400, detail=str(e))
 
 
