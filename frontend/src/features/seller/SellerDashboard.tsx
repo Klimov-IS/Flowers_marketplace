@@ -315,7 +315,7 @@ export default function SellerDashboard() {
     localStorage.setItem('tg_banner_dismissed', '1');
   };
 
-  const telegramBotUrl = import.meta.env.VITE_TELEGRAM_BOT_URL || 'https://t.me/vcvet_bot';
+  const telegramBotUrl = import.meta.env.VITE_TELEGRAM_BOT_URL || 'https://t.me/V_cvet_market_bot';
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
