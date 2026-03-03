@@ -1,9 +1,10 @@
 """Supplier order management endpoints."""
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,16 +46,17 @@ class OrderShip(BaseModel):
 class OrderActionResponse(BaseModel):
     """Schema for order action response."""
 
-    order_id: UUID
+    order_id: UUID = Field(validation_alias="id")
     status: str
-    confirmed_at: str | None = None
-    rejected_at: str | None = None
+    confirmed_at: datetime | None = None
+    rejected_at: datetime | None = None
     rejection_reason: str | None = None
-    assembled_at: str | None = None
-    shipped_at: str | None = None
+    assembled_at: datetime | None = None
+    shipped_at: datetime | None = None
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class OrderMetricsResponse(BaseModel):
@@ -124,14 +126,14 @@ async def list_supplier_orders(
             "total_amount": order.total_amount,
             "currency": order.currency,
             "delivery_address": order.delivery_address,
-            "delivery_date": str(order.delivery_date) if order.delivery_date else None,
+            "delivery_date": order.delivery_date.isoformat() if order.delivery_date else None,
             "notes": order.notes,
-            "created_at": str(order.created_at),
-            "confirmed_at": str(order.confirmed_at) if order.confirmed_at else None,
-            "rejected_at": str(order.rejected_at) if order.rejected_at else None,
+            "created_at": order.created_at.isoformat(),
+            "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
+            "rejected_at": order.rejected_at.isoformat() if order.rejected_at else None,
             "rejection_reason": order.rejection_reason,
-            "assembled_at": str(order.assembled_at) if order.assembled_at else None,
-            "shipped_at": str(order.shipped_at) if order.shipped_at else None,
+            "assembled_at": order.assembled_at.isoformat() if order.assembled_at else None,
+            "shipped_at": order.shipped_at.isoformat() if order.shipped_at else None,
             "delivery_type": order.delivery_type,
             "buyer": {
                 "id": order.buyer.id,

@@ -1,7 +1,7 @@
 """Order service - handle order creation and validation."""
 import structlog
 import sqlalchemy
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Dict, List
 from uuid import UUID
@@ -258,7 +258,7 @@ class OrderService:
 
         # Update status
         order.status = "confirmed"
-        order.confirmed_at = datetime.utcnow()
+        order.confirmed_at = datetime.now(timezone.utc)
 
         await self.db.flush()
         log.info("order.confirm.complete", confirmed_at=order.confirmed_at)
@@ -314,7 +314,7 @@ class OrderService:
 
         # Update status
         order.status = "rejected"
-        order.rejected_at = datetime.utcnow()
+        order.rejected_at = datetime.now(timezone.utc)
         order.rejection_reason = reason
 
         await self.db.flush()
@@ -355,7 +355,7 @@ class OrderService:
             raise ValueError(f"Order cannot be assembled, current status: {order.status}")
 
         order.status = "assembled"
-        order.assembled_at = datetime.utcnow()
+        order.assembled_at = datetime.now(timezone.utc)
 
         await self.db.flush()
         log.info("order.assemble.complete", assembled_at=order.assembled_at)
@@ -395,7 +395,7 @@ class OrderService:
             raise ValueError(f"Order cannot be shipped, current status: {order.status}")
 
         order.status = "shipped"
-        order.shipped_at = datetime.utcnow()
+        order.shipped_at = datetime.now(timezone.utc)
 
         await self.db.flush()
         log.info("order.ship.complete", shipped_at=order.shipped_at)

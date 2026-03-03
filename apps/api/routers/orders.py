@@ -1,11 +1,11 @@
 """Order endpoints (retail - buyer side)."""
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,6 +36,13 @@ class OrderCreate(BaseModel):
     delivery_address: str | None = None
     delivery_date: date | None = None
     notes: str | None = None
+
+    @field_validator("delivery_date", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v):
+        if v == "":
+            return None
+        return v
 
 
 class OrderItemResponse(BaseModel):
@@ -87,12 +94,12 @@ class OrderResponse(BaseModel):
     delivery_address: str | None
     delivery_date: date | None
     notes: str | None
-    created_at: str
-    confirmed_at: str | None
-    rejected_at: str | None
+    created_at: datetime
+    confirmed_at: datetime | None
+    rejected_at: datetime | None
     rejection_reason: str | None
-    assembled_at: str | None = None
-    shipped_at: str | None = None
+    assembled_at: datetime | None = None
+    shipped_at: datetime | None = None
     items: List[OrderItemResponse]
     buyer: BuyerBrief
     supplier: SupplierBrief

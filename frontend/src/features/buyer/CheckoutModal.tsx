@@ -66,8 +66,8 @@ export default function CheckoutModal({
         })),
         delivery_type: deliveryType,
         delivery_address: deliveryType === 'delivery' ? data.delivery_address : undefined,
-        delivery_date: data.delivery_date,
-        notes: data.notes,
+        delivery_date: data.delivery_date || undefined,
+        notes: data.notes || undefined,
       }).unwrap();
 
       dispatch(clearSupplierCart(supplierId));
