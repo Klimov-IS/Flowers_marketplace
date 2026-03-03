@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Dict, List
 from uuid import UUID
 
-from sqlalchemy import select, func, case, cast, Integer, literal_column
+from sqlalchemy import select, func, case, cast, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.models import (
@@ -415,27 +415,26 @@ class OrderService:
         log = logger.bind(supplier_id=str(supplier_id) if supplier_id else "all")
         log.info("order.metrics.start")
 
-        # Build base query
-        # Use literal_column for ENUM comparison in PostgreSQL
+        # Build base query — status is now VARCHAR, direct comparison works
         query = select(
             func.count(Order.id).label("total"),
             func.sum(
-                cast(Order.status == literal_column("'pending'"), Integer)
+                cast(Order.status == "pending", Integer)
             ).label("pending"),
             func.sum(
-                cast(Order.status == literal_column("'confirmed'"), Integer)
+                cast(Order.status == "confirmed", Integer)
             ).label("confirmed"),
             func.sum(
-                cast(Order.status == literal_column("'assembled'"), Integer)
+                cast(Order.status == "assembled", Integer)
             ).label("assembled"),
             func.sum(
-                cast(Order.status == literal_column("'rejected'"), Integer)
+                cast(Order.status == "rejected", Integer)
             ).label("rejected"),
             func.sum(
-                cast(Order.status == literal_column("'cancelled'"), Integer)
+                cast(Order.status == "cancelled", Integer)
             ).label("cancelled"),
             func.sum(
-                cast(Order.status == literal_column("'shipped'"), Integer)
+                cast(Order.status == "shipped", Integer)
             ).label("shipped"),
             func.sum(
                 case(
