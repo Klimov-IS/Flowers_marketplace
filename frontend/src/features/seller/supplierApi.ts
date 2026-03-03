@@ -132,7 +132,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 export const supplierApi = createApi({
   reducerPath: 'supplierApi',
   baseQuery: fetchBaseQuery({ baseUrl: API_BASE_URL }),
-  tagTypes: ['SupplierOrders', 'ImportBatches', 'NormalizationTasks', 'SupplierItems', 'AISuggestions'],
+  tagTypes: ['SupplierOrders', 'OrderMetrics', 'ImportBatches', 'NormalizationTasks', 'SupplierItems', 'AISuggestions'],
   endpoints: (builder) => ({
     // Supplier Items (Assortment)
     getSupplierItems: builder.query<SupplierItemsResponse, SupplierItemsParams>({
@@ -302,7 +302,7 @@ export const supplierApi = createApi({
         method: 'POST',
         body: { order_id },
       }),
-      invalidatesTags: ['SupplierOrders'],
+      invalidatesTags: ['SupplierOrders', 'OrderMetrics'],
     }),
 
     rejectOrder: builder.mutation<
@@ -319,7 +319,7 @@ export const supplierApi = createApi({
         method: 'POST',
         body: { order_id, reason },
       }),
-      invalidatesTags: ['SupplierOrders'],
+      invalidatesTags: ['SupplierOrders', 'OrderMetrics'],
     }),
 
     assembleOrder: builder.mutation<
@@ -331,7 +331,7 @@ export const supplierApi = createApi({
         method: 'POST',
         body: { order_id },
       }),
-      invalidatesTags: ['SupplierOrders'],
+      invalidatesTags: ['SupplierOrders', 'OrderMetrics'],
     }),
 
     shipOrder: builder.mutation<
@@ -343,11 +343,12 @@ export const supplierApi = createApi({
         method: 'POST',
         body: { order_id },
       }),
-      invalidatesTags: ['SupplierOrders'],
+      invalidatesTags: ['SupplierOrders', 'OrderMetrics'],
     }),
 
     getOrderMetrics: builder.query<OrderMetrics, string>({
       query: (supplier_id) => `/admin/suppliers/${supplier_id}/orders/metrics`,
+      providesTags: ['OrderMetrics'],
     }),
 
     uploadPriceList: builder.mutation<
