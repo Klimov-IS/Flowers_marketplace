@@ -51,6 +51,7 @@ class OrderItemResponse(BaseModel):
     id: UUID
     offer_id: UUID
     normalized_sku_id: UUID
+    product_name: str | None = None
     quantity: int
     unit_price: Decimal
     total_price: Decimal
@@ -117,6 +118,13 @@ class OrderListResponse(BaseModel):
     orders: List[OrderResponse]
 
 
+async def _enrich_order_items(db: AsyncSession, order: Order) -> None:
+    """Load offer relationship for each item and set product_name."""
+    for item in order.items:
+        await db.refresh(item, ["offer"])
+        item.product_name = item.offer.display_title if item.offer and item.offer.display_title else None
+
+
 # Endpoints
 @router.post("", response_model=OrderResponse, status_code=201)
 async def create_order(
@@ -156,6 +164,7 @@ async def create_order(
 
         await db.commit()
         await db.refresh(order, ["items", "buyer", "supplier"])
+        await _enrich_order_items(db, order)
 
         logger.info(
             "order_created",
@@ -221,6 +230,7 @@ async def list_orders(
     # Load relationships
     for order in orders:
         await db.refresh(order, ["items", "buyer", "supplier"])
+        await _enrich_order_items(db, order)
 
     return OrderListResponse(
         total=total,
@@ -258,6 +268,7 @@ async def get_order(
 
     # Load relationships
     await db.refresh(order, ["items", "buyer", "supplier"])
+    await _enrich_order_items(db, order)
 
     return order
 

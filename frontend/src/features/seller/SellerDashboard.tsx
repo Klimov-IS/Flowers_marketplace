@@ -530,7 +530,7 @@ export default function SellerDashboard() {
                               {order.items.map((item) => (
                                 <div key={item.id} className="flex justify-between text-sm">
                                   <span className="text-gray-600">
-                                    Позиция #{item.offer_id.slice(0, 8)} — {item.quantity} шт × {parseFloat(item.unit_price).toLocaleString()} ₽
+                                    {item.product_name || `#${item.offer_id.slice(0, 8)}`} — {item.quantity} шт × {parseFloat(item.unit_price).toLocaleString()} ₽
                                   </span>
                                   <span className="font-medium text-gray-900">
                                     {parseFloat(item.total_price).toLocaleString()} ₽

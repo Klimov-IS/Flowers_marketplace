@@ -104,15 +104,21 @@ async def list_supplier_orders(
     # Load relationships
     for order in orders:
         await db.refresh(order, ["items", "buyer"])
+        for item in order.items:
+            await db.refresh(item, ["offer"])
 
     # Convert to dict for response (include items for expandable details)
     response = []
     for order in orders:
         order_items = []
         for item in order.items:
+            product_name = None
+            if item.offer and item.offer.display_title:
+                product_name = item.offer.display_title
             order_items.append({
                 "id": str(item.id),
                 "offer_id": str(item.offer_id),
+                "product_name": product_name,
                 "quantity": item.quantity,
                 "unit_price": str(item.unit_price),
                 "total_price": str(item.total_price),

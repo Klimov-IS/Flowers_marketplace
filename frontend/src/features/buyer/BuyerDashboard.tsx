@@ -438,7 +438,7 @@ export default function BuyerDashboard() {
                         <div className="space-y-2">
                           {order.items.map((item) => (
                             <div key={item.id} className="flex justify-between text-sm">
-                              <span className="text-gray-600">Позиция #{item.offer_id.slice(0, 8)}</span>
+                              <span className="text-gray-600">{item.product_name || `#${item.offer_id.slice(0, 8)}`}</span>
                               <span className="text-gray-900">
                                 {item.quantity} шт — {parseFloat(item.total_price || '0').toLocaleString()} ₽
                               </span>

@@ -11,6 +11,7 @@ export interface OrderItem {
   id: string;
   offer_id: string;
   normalized_sku_id: string;
+  product_name?: string;
   quantity: number;
   unit_price: string;
   total_price: string;
