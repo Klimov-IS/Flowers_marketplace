@@ -30,6 +30,7 @@ class SupplierInfo(BaseModel):
 
     id: UUID
     name: str
+    warehouse_address: str | None = None
 
     class Config:
         from_attributes = True
@@ -272,6 +273,7 @@ async def list_offers(
                 supplier=SupplierInfo(
                     id=offer.supplier.id,
                     name=offer.supplier.name,
+                    warehouse_address=offer.supplier.warehouse_address,
                 ),
                 sku=SKUInfo(
                     id=offer.normalized_sku.id,

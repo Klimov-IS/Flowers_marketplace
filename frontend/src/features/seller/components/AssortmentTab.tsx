@@ -10,6 +10,7 @@ import type { ColumnFilters } from './FilterBar';
 import type { FilterValue } from './ColumnFilter';
 import type { SortState } from '../../../types/supplierItem';
 import UploadModal from './UploadModal';
+import CreateItemModal from './CreateItemModal';
 
 type StatusFilter = 'all' | 'published' | 'needs_review' | 'errors';
 
@@ -34,6 +35,7 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [expandedAIItemId, setExpandedAIItemId] = useState<string | null>(null);
 
   const debouncedSearch = useDebounce(searchQuery, 300);
@@ -139,16 +141,27 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
           )}
         </div>
 
-        {/* Upload button */}
-        <button
-          onClick={() => setIsUploadModalOpen(true)}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors font-medium"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-          </svg>
-          Загрузить прайс
-        </button>
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm border border-primary-600 text-primary-600 rounded-xl hover:bg-primary-50 transition-colors font-medium"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Добавить товар
+          </button>
+          <button
+            onClick={() => setIsUploadModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors font-medium"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Загрузить прайс
+          </button>
+        </div>
       </div>
 
       {/* ── Bulk Actions Bar ──────────────────────────────────────────────── */}
@@ -244,10 +257,15 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
         </div>
       )}
 
-      {/* ── Modal ─────────────────────────────────────────────────────────── */}
+      {/* ── Modals ────────────────────────────────────────────────────────── */}
       <UploadModal
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
+      />
+      <CreateItemModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        supplierId={supplierId}
       />
     </div>
   );

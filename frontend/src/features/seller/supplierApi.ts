@@ -514,6 +514,28 @@ export const supplierApi = createApi({
       invalidatesTags: ['SupplierItems'],
     }),
 
+    createSupplierItem: builder.mutation<
+      { item_id: string; variant_id: string; message: string },
+      {
+        supplier_id: string;
+        raw_name: string;
+        variety?: string;
+        price: number;
+        length_cm?: number;
+        color?: string;
+        pack_type?: string;
+        pack_qty?: number;
+        stock_qty?: number;
+      }
+    >({
+      query: (body) => ({
+        url: `/admin/supplier-items`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['SupplierItems'],
+    }),
+
     duplicateSupplierItem: builder.mutation<
       { original_id: string; new_item_id: string; new_variant_ids: string[]; message: string },
       string
@@ -599,6 +621,7 @@ export const {
   useAcceptAISuggestionMutation,
   useRejectAISuggestionMutation,
   // Item actions
+  useCreateSupplierItemMutation,
   useDeleteSupplierItemMutation,
   useHideSupplierItemMutation,
   useRestoreSupplierItemMutation,

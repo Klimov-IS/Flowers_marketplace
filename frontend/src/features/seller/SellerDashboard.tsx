@@ -494,6 +494,10 @@ export default function SellerDashboard() {
                           </div>
                         )}
 
+                        <p className="text-sm text-gray-600 mb-1">
+                          <span className="font-medium">Получение:</span>{' '}
+                          {order.delivery_type === 'pickup' ? 'Самовывоз' : 'Доставка'}
+                        </p>
                         {order.delivery_address && (
                           <p className="text-sm text-gray-600 mb-1">
                             <span className="font-medium">Адрес:</span> {order.delivery_address}
@@ -501,7 +505,7 @@ export default function SellerDashboard() {
                         )}
                         {order.delivery_date && (
                           <p className="text-sm text-gray-600 mb-1">
-                            <span className="font-medium">Дата доставки:</span>{' '}
+                            <span className="font-medium">Дата:</span>{' '}
                             {new Date(order.delivery_date).toLocaleDateString('ru-RU')}
                           </p>
                         )}

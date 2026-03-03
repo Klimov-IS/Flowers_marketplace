@@ -117,7 +117,7 @@ class OfferCandidate(Base, UUIDMixin):
     )
 
     supplier_item_id: Mapped[UUID] = mapped_column(nullable=False, index=True)
-    import_batch_id: Mapped[UUID] = mapped_column(nullable=False, index=True)
+    import_batch_id: Mapped[UUID | None] = mapped_column(nullable=True, index=True)
     raw_row_id: Mapped[UUID | None] = mapped_column(nullable=True)
 
     # Product attributes

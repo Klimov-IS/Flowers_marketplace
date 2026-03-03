@@ -2183,6 +2183,105 @@ async def restore_supplier_item(
     )
 
 
+class CreateItemRequest(BaseModel):
+    """Schema for creating a supplier item manually."""
+
+    supplier_id: UUID
+    raw_name: str
+    variety: str | None = None
+    price: float
+    length_cm: int | None = None
+    color: str | None = None
+    pack_type: str | None = None
+    pack_qty: int | None = None
+    stock_qty: int | None = None
+
+
+class CreateItemResponse(BaseModel):
+    """Response from creating a supplier item."""
+
+    item_id: UUID
+    variant_id: UUID
+    message: str
+
+
+@router.post("/supplier-items", response_model=CreateItemResponse)
+async def create_supplier_item(
+    data: CreateItemRequest,
+    db: AsyncSession = Depends(get_db),
+) -> CreateItemResponse:
+    """
+    Create a new supplier item manually (not via import).
+
+    Creates a SupplierItem + one OfferCandidate with the given attributes.
+    """
+    from uuid import uuid4
+    from decimal import Decimal
+
+    # Validate supplier exists
+    result = await db.execute(
+        select(Supplier).where(Supplier.id == data.supplier_id)
+    )
+    supplier = result.scalar_one_or_none()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    # Build attributes
+    attributes: dict = {}
+    if data.variety:
+        attributes["variety"] = data.variety
+    if data.color:
+        attributes["colors"] = [data.color]
+
+    # Create supplier item
+    new_item_id = uuid4()
+    stable_key = f"manual_{uuid4().hex[:16]}"
+
+    new_item = SupplierItem(
+        id=new_item_id,
+        supplier_id=data.supplier_id,
+        stable_key=stable_key,
+        raw_name=data.raw_name,
+        name_norm=data.raw_name,
+        attributes=attributes,
+        status="active",
+    )
+    db.add(new_item)
+
+    # Create one offer candidate (variant)
+    new_variant_id = uuid4()
+    new_variant = OfferCandidate(
+        id=new_variant_id,
+        supplier_item_id=new_item_id,
+        import_batch_id=None,  # Manual creation
+        length_cm=data.length_cm,
+        pack_type=data.pack_type,
+        pack_qty=data.pack_qty,
+        price_type="fixed",
+        price_min=Decimal(str(data.price)),
+        currency="RUB",
+        availability="in_stock" if data.stock_qty and data.stock_qty > 0 else "unknown",
+        stock_qty=data.stock_qty,
+        validation="ok",
+    )
+    db.add(new_variant)
+
+    await db.commit()
+
+    logger.info(
+        "supplier_item_created_manually",
+        item_id=str(new_item_id),
+        supplier_id=str(data.supplier_id),
+        raw_name=data.raw_name,
+    )
+
+    return CreateItemResponse(
+        item_id=new_item_id,
+        variant_id=new_variant_id,
+        message="Item created successfully",
+    )
+
+
 class DuplicateItemResponse(BaseModel):
     """Response from duplicating a supplier item."""
 

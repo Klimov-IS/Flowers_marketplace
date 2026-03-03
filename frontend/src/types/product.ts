@@ -1,6 +1,7 @@
 export interface Supplier {
   id: string;
   name: string;
+  warehouse_address?: string | null;
 }
 
 export interface NormalizedSKU {

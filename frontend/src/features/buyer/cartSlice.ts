@@ -14,6 +14,7 @@ export interface CartItem {
 export interface SupplierCart {
   supplier_id: string;
   supplier_name: string;
+  warehouse_address?: string;
   items: CartItem[];
 }
 
@@ -44,10 +45,11 @@ const cartSlice = createSlice({
       action: PayloadAction<{
         supplier_id: string;
         supplier_name: string;
+        warehouse_address?: string;
         item: CartItem;
       }>
     ) => {
-      const { supplier_id, supplier_name, item } = action.payload;
+      const { supplier_id, supplier_name, warehouse_address, item } = action.payload;
 
       let supplierGroup = state.suppliers.find(
         (s) => s.supplier_id === supplier_id
@@ -57,6 +59,7 @@ const cartSlice = createSlice({
         supplierGroup = {
           supplier_id,
           supplier_name,
+          warehouse_address,
           items: [],
         };
         state.suppliers.push(supplierGroup);

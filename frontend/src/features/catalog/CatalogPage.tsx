@@ -303,6 +303,7 @@ export default function CatalogPage() {
       addToCart({
         supplier_id: offer.supplier.id,
         supplier_name: offer.supplier.name,
+        warehouse_address: offer.supplier.warehouse_address || undefined,
         item: {
           product_id: offer.sku.id,
           offer_id: offer.id,

@@ -395,11 +395,12 @@ export default function BuyerDashboard() {
                           ))}
                         </div>
 
-                        {order.delivery_address && (
-                          <p className="text-xs text-gray-500 mt-3 pt-2 border-t border-gray-200">
-                            Доставка: {order.delivery_address}
+                        <div className="mt-3 pt-2 border-t border-gray-200 space-y-1">
+                          <p className="text-xs text-gray-500">
+                            {order.delivery_type === 'pickup' ? 'Самовывоз' : 'Доставка'}
+                            {order.delivery_address && `: ${order.delivery_address}`}
                           </p>
-                        )}
+                        </div>
 
                         {order.rejection_reason && (
                           <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
