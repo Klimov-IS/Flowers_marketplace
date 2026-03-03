@@ -372,13 +372,15 @@ async def get_current_user_info(
         if user:
             # Check telegram link
             tg_result = await db.execute(
-                select(func.count()).select_from(TelegramLink).where(
+                select(TelegramLink).where(
                     TelegramLink.role == "supplier",
                     TelegramLink.entity_id == user.id,
                     TelegramLink.is_active == True,
-                )
+                ).limit(1)
             )
-            has_telegram = (tg_result.scalar() or 0) > 0
+            tg_link = tg_result.scalar_one_or_none()
+            has_telegram = tg_link is not None
+            telegram_username = tg_link.username if tg_link else None
 
             contacts = user.contacts or {}
             return UserResponse(
@@ -398,6 +400,7 @@ async def get_current_user_info(
                 working_hours_from=contacts.get("working_hours_from"),
                 working_hours_to=contacts.get("working_hours_to"),
                 has_telegram=has_telegram,
+                telegram_username=telegram_username,
             )
 
     raise HTTPException(
@@ -406,7 +409,9 @@ async def get_current_user_info(
     )
 
 
-def _build_supplier_response(user, has_telegram: bool = False) -> UserResponse:
+def _build_supplier_response(
+    user, has_telegram: bool = False, telegram_username: str | None = None
+) -> UserResponse:
     """Build UserResponse for a supplier."""
     contacts = user.contacts or {}
     return UserResponse(
@@ -424,6 +429,7 @@ def _build_supplier_response(user, has_telegram: bool = False) -> UserResponse:
         avatar_url=user.avatar_url,
         contact_person=contacts.get("contact_person"),
         has_telegram=has_telegram,
+        telegram_username=telegram_username,
         working_hours_from=contacts.get("working_hours_from"),
         working_hours_to=contacts.get("working_hours_to"),
     )
@@ -530,7 +536,21 @@ async def update_profile(
         )
         user = result.scalar_one()
 
-        return _build_supplier_response(user)
+        # Fetch telegram link info
+        tg_result = await db.execute(
+            select(TelegramLink).where(
+                TelegramLink.role == "supplier",
+                TelegramLink.entity_id == user.id,
+                TelegramLink.is_active == True,
+            ).limit(1)
+        )
+        tg_link = tg_result.scalar_one_or_none()
+
+        return _build_supplier_response(
+            user,
+            has_telegram=tg_link is not None,
+            telegram_username=tg_link.username if tg_link else None,
+        )
 
     raise HTTPException(status_code=400, detail="Invalid role")
 

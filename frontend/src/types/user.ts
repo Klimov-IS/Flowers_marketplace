@@ -17,6 +17,7 @@ export interface User {
   working_hours_from?: string;
   working_hours_to?: string;
   has_telegram?: boolean;
+  telegram_username?: string;
 }
 
 // AuthState is now defined in authSlice.ts
