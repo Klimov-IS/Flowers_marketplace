@@ -1,4 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { catalogApi } from '../catalog/catalogApi';
 import type { Order, OrderMetrics } from '../../types/order';
 import type {
   SupplierItem,
@@ -491,6 +492,10 @@ export const supplierApi = createApi({
         method: 'DELETE',
       }),
       invalidatesTags: ['SupplierItems'],
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        await queryFulfilled;
+        dispatch(catalogApi.util.invalidateTags(['Offers']));
+      },
     }),
 
     hideSupplierItem: builder.mutation<
@@ -502,6 +507,10 @@ export const supplierApi = createApi({
         method: 'POST',
       }),
       invalidatesTags: ['SupplierItems'],
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        await queryFulfilled;
+        dispatch(catalogApi.util.invalidateTags(['Offers']));
+      },
     }),
 
     restoreSupplierItem: builder.mutation<
@@ -513,6 +522,10 @@ export const supplierApi = createApi({
         method: 'POST',
       }),
       invalidatesTags: ['SupplierItems'],
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        await queryFulfilled;
+        dispatch(catalogApi.util.invalidateTags(['Offers']));
+      },
     }),
 
     createSupplierItem: builder.mutation<
@@ -535,6 +548,10 @@ export const supplierApi = createApi({
         body,
       }),
       invalidatesTags: ['SupplierItems'],
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        await queryFulfilled;
+        dispatch(catalogApi.util.invalidateTags(['Offers']));
+      },
     }),
 
     duplicateSupplierItem: builder.mutation<
@@ -546,6 +563,10 @@ export const supplierApi = createApi({
         method: 'POST',
       }),
       invalidatesTags: ['SupplierItems'],
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        await queryFulfilled;
+        dispatch(catalogApi.util.invalidateTags(['Offers']));
+      },
     }),
 
     // Bulk actions
