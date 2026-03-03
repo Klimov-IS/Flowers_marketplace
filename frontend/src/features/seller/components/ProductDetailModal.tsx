@@ -61,7 +61,7 @@ function ToggleSwitch({
   disabled,
 }: {
   checked: boolean;
-  onChange: (val: boolean) => void;
+  onChange: (val: boolean) => Promise<void>;
   disabled?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
@@ -71,6 +71,8 @@ function ToggleSwitch({
     setLoading(true);
     try {
       await onChange(!checked);
+    } catch (err) {
+      console.error('Toggle failed:', err);
     } finally {
       setLoading(false);
     }
@@ -203,9 +205,15 @@ export default function ProductDetailModal({
   const itemData = allVariants.length > 0 ? allVariants[0] : variant;
 
   const handleUpdateItem = async (field: string, value: ItemUpdateValue) => {
-    const data: Record<string, unknown> = {};
-    data[field] = value;
-    await updateSupplierItem({ id: variant.item_id, data }).unwrap();
+    try {
+      const data: Record<string, unknown> = {};
+      data[field] = value;
+      await updateSupplierItem({ id: variant.item_id, data }).unwrap();
+    } catch (err) {
+      console.error('Failed to update item:', field, value, err);
+      showToast('Ошибка сохранения', 'error');
+      throw err;
+    }
   };
 
   const handleUpdateVariant = async (
@@ -213,9 +221,15 @@ export default function ProductDetailModal({
     field: string,
     value: string | number | null
   ) => {
-    const data: Record<string, unknown> = {};
-    data[field] = value;
-    await updateOfferCandidate({ id: variantId, data }).unwrap();
+    try {
+      const data: Record<string, unknown> = {};
+      data[field] = value;
+      await updateOfferCandidate({ id: variantId, data }).unwrap();
+    } catch (err) {
+      console.error('Failed to update variant:', variantId, field, value, err);
+      showToast('Ошибка сохранения', 'error');
+      throw err;
+    }
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -223,17 +237,22 @@ export default function ProductDetailModal({
     if (!file) return;
     setUploadStatus('idle');
 
+    // Show local preview immediately
     const reader = new FileReader();
     reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
     reader.readAsDataURL(file);
 
     try {
-      await uploadPhoto({ itemId: variant.item_id, file }).unwrap();
+      const result = await uploadPhoto({ itemId: variant.item_id, file }).unwrap();
+      console.log('Photo uploaded:', result);
       setUploadStatus('success');
+      showToast('Фото обновлено', 'success');
       setTimeout(() => setUploadStatus('idle'), 2000);
-    } catch {
+    } catch (err) {
+      console.error('Photo upload failed:', err);
       setPhotoPreview(null);
       setUploadStatus('error');
+      showToast('Ошибка загрузки фото', 'error');
       setTimeout(() => setUploadStatus('idle'), 3000);
     }
 
@@ -272,16 +291,29 @@ export default function ProductDetailModal({
   const photoUrl = photoPreview || savedPhotoUrl;
   const fallbackImage = getFlowerImage(itemData.flower_type);
 
-  const title = itemData.flower_type
-    ? `${itemData.flower_type}${itemData.subtype ? ` ${itemData.subtype.toLowerCase()}` : ''}`
-    : itemData.raw_name;
-
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="xl" title={title}>
-      {/* Header row: status badge */}
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          ID: <span className="font-mono text-xs">{variant.item_id.slice(0, 8)}</span>
+    <Modal isOpen={isOpen} onClose={onClose} size="xl">
+      {/* Header: name + status badge */}
+      <div className="flex items-start justify-between gap-4 mb-5">
+        <div className="flex-1 min-w-0">
+          <EditableCell
+            value={itemData.raw_name}
+            type="text"
+            placeholder="Название товара"
+            onSave={async (val) => {
+              if (val) await handleUpdateItem('raw_name', val as string);
+            }}
+            className="text-lg font-semibold text-gray-900"
+          />
+          <div className="flex items-center gap-2 text-xs text-gray-400 mt-1 px-2">
+            <span className="font-mono">{variant.item_id.slice(0, 8)}</span>
+            {itemData.flower_type && (
+              <>
+                <span>&middot;</span>
+                <span>{itemData.flower_type}{itemData.subtype ? ` ${itemData.subtype.toLowerCase()}` : ''}</span>
+              </>
+            )}
+          </div>
         </div>
         <StatusBadge
           status={itemData.item_status}
@@ -300,7 +332,7 @@ export default function ProductDetailModal({
           >
             <img
               src={photoUrl || fallbackImage}
-              alt={title}
+              alt={itemData.raw_name}
               className="w-full h-full object-cover"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = getDefaultFlowerImage();
