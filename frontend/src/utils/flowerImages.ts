@@ -54,9 +54,9 @@ const ENGLISH_TO_RUSSIAN: Record<string, string> = {
   'eustoma': 'Эустома (Лизиантус)',
 };
 
-// Base path includes /flower prefix for production nginx routing
-const BASE_PATH = '/flower/images/flowers';
-const DEFAULT_IMAGE = `${BASE_PATH}/default.jpg.png`;
+// Use Vite BASE_URL for correct path in both dev and production
+const BASE_PATH = `${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/images/flowers`;
+const DEFAULT_IMAGE = `${BASE_PATH}/default.webp`;
 
 /**
  * Get flower image URL by flower type name.
@@ -68,13 +68,13 @@ export function getFlowerImage(flowerType: string | undefined | null): string {
 
   // Try direct Russian name match
   if (AVAILABLE_IMAGES.has(flowerType)) {
-    return `${BASE_PATH}/${encodeURIComponent(flowerType)}.png`;
+    return `${BASE_PATH}/${encodeURIComponent(flowerType)}.webp`;
   }
 
   // Try English → Russian mapping
   const russianName = ENGLISH_TO_RUSSIAN[flowerType.toLowerCase()];
   if (russianName && AVAILABLE_IMAGES.has(russianName)) {
-    return `${BASE_PATH}/${encodeURIComponent(russianName)}.png`;
+    return `${BASE_PATH}/${encodeURIComponent(russianName)}.webp`;
   }
 
   return DEFAULT_IMAGE;

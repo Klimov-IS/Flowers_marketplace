@@ -1071,19 +1071,21 @@ async def upload_item_photo(
 
     import os
     import uuid as uuid_module
+    import io
+    from PIL import Image
 
     # Determine upload directory
     upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "uploads", "photos")
     os.makedirs(upload_dir, exist_ok=True)
 
-    # Generate unique filename
-    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg"
-    filename = f"{uuid_module.uuid4().hex}.{ext}"
-    filepath = os.path.join(upload_dir, filename)
+    # Optimize image: resize to max 800px and convert to WebP
+    img = Image.open(io.BytesIO(contents))
+    img = img.convert("RGB")
+    img.thumbnail((800, 800), Image.LANCZOS)
 
-    # Write file
-    with open(filepath, "wb") as f:
-        f.write(contents)
+    filename = f"{uuid_module.uuid4().hex}.webp"
+    filepath = os.path.join(upload_dir, filename)
+    img.save(filepath, "WEBP", quality=85)
 
     # Update item photo_url
     photo_url = f"/uploads/photos/{filename}"
