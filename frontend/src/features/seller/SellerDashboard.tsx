@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAppSelector } from '../../hooks/useAppSelector';
 import { useAppDispatch } from '../../hooks/useAppDispatch';
 import { setUser } from '../auth/authSlice';
-import { useUpdateProfileMutation, useGetCurrentUserQuery } from '../auth/authApi';
+import { useUpdateProfileMutation } from '../auth/authApi';
 import {
   useGetSupplierOrdersQuery,
   useGetOrderMetricsQuery,
@@ -118,20 +118,24 @@ export default function SellerDashboard() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // Refetch /me on window focus (e.g. after linking Telegram bot)
-  const { refetch: refetchMe } = useGetCurrentUserQuery(undefined, {
-    skip: !user,
-  });
   useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') {
-        refetchMe().then((res) => {
-          if (res.data) dispatch(setUser(res.data as any));
+    const onVisible = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const token = localStorage.getItem('access_token');
+        if (!token) return;
+        const apiBase = import.meta.env.VITE_API_BASE_URL || '';
+        const res = await fetch(`${apiBase}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
         });
-      }
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.id) dispatch(setUser(data));
+      } catch { /* ignore network errors */ }
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [refetchMe, dispatch]);
+  }, [dispatch]);
 
   // Sync form when user changes
   useEffect(() => {
