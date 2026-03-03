@@ -1,6 +1,5 @@
 """Supplier order management endpoints."""
 from decimal import Decimal
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -72,14 +71,14 @@ class OrderMetricsResponse(BaseModel):
 
 
 # Endpoints
-@router.get("")
+@router.get("", response_model=None)
 async def list_supplier_orders(
     supplier_id: UUID,
     status: str | None = None,
     limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-) -> List[Order]:
+):
     """List orders for supplier."""
     # Validate supplier exists
     result = await db.execute(
@@ -151,7 +150,7 @@ async def confirm_order(
     supplier_id: UUID,
     action_data: OrderConfirm,
     db: AsyncSession = Depends(get_db),
-) -> Order:
+):
     """Confirm an order (supplier action)."""
     order_service = OrderService(db)
 
@@ -180,7 +179,7 @@ async def reject_order(
     supplier_id: UUID,
     action_data: OrderReject,
     db: AsyncSession = Depends(get_db),
-) -> Order:
+):
     """Reject an order (supplier action)."""
     order_service = OrderService(db)
 
@@ -211,7 +210,7 @@ async def assemble_order(
     supplier_id: UUID,
     action_data: OrderAssemble,
     db: AsyncSession = Depends(get_db),
-) -> Order:
+):
     """Mark order as assembled/picked (supplier action)."""
     order_service = OrderService(db)
 
@@ -240,7 +239,7 @@ async def ship_order(
     supplier_id: UUID,
     action_data: OrderShip,
     db: AsyncSession = Depends(get_db),
-) -> Order:
+):
     """Mark order as shipped (supplier action)."""
     order_service = OrderService(db)
 
