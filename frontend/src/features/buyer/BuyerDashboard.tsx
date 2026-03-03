@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppSelector } from '../../hooks/useAppSelector';
 import { useAppDispatch } from '../../hooks/useAppDispatch';
 import {
   updateQuantity,
   removeItem,
+  removeItemsByOfferIds,
   clearSupplierCart,
 } from './cartSlice';
-import { useGetOrdersQuery } from './ordersApi';
+import { useGetOrdersQuery, useValidateCartMutation } from './ordersApi';
 import CheckoutModal from './CheckoutModal';
 
 /* ───── SVG icons ───── */
@@ -77,6 +78,40 @@ export default function BuyerDashboard() {
   const [activeTab, setActiveTab] = useState<'cart' | 'orders'>('cart');
   const [checkoutSupplier, setCheckoutSupplier] = useState<string | null>(null);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [staleMessage, setStaleMessage] = useState<string | null>(null);
+
+  const [validateCart] = useValidateCartMutation();
+
+  // Validate cart on mount — remove stale offers
+  const runCartValidation = useCallback(async () => {
+    const allOfferIds = cart.suppliers.flatMap((s) => s.items.map((i) => i.offer_id));
+    if (allOfferIds.length === 0) return;
+
+    try {
+      const result = await validateCart({ offer_ids: allOfferIds }).unwrap();
+      if (result.invalid.length > 0) {
+        // Find names of stale items before removing
+        const staleNames: string[] = [];
+        for (const s of cart.suppliers) {
+          for (const item of s.items) {
+            if (result.invalid.includes(item.offer_id)) {
+              staleNames.push(item.name);
+            }
+          }
+        }
+        dispatch(removeItemsByOfferIds(result.invalid));
+        setStaleMessage(
+          `Удалено из корзины (больше недоступны): ${staleNames.join(', ')}`
+        );
+      }
+    } catch {
+      // Network error — skip validation silently
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    runCartValidation();
+  }, [runCartValidation]);
 
   const { data: ordersData } = useGetOrdersQuery(
     { buyer_id: user?.id || '', limit: 20 },
@@ -156,6 +191,22 @@ export default function BuyerDashboard() {
       {/* ───── CART TAB ───── */}
       {activeTab === 'cart' && (
         <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* Stale items warning */}
+          {staleMessage && (
+            <div className="mb-4 flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+              <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <span className="flex-1">{staleMessage}</span>
+              <button
+                onClick={() => setStaleMessage(null)}
+                className="text-amber-600 hover:text-amber-800 font-medium shrink-0"
+              >
+                OK
+              </button>
+            </div>
+          )}
+
           {cart.suppliers.length === 0 ? (
             /* Empty cart */
             <div className="bg-white rounded-2xl shadow-sm p-12 text-center">

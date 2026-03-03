@@ -121,6 +121,18 @@ const cartSlice = createSlice({
       localStorage.setItem('cart', JSON.stringify(state.suppliers));
     },
 
+    removeItemsByOfferIds: (state, action: PayloadAction<string[]>) => {
+      const idsToRemove = new Set(action.payload);
+      for (const supplier of state.suppliers) {
+        supplier.items = supplier.items.filter(
+          (i) => !idsToRemove.has(i.offer_id)
+        );
+      }
+      // Remove empty supplier groups
+      state.suppliers = state.suppliers.filter((s) => s.items.length > 0);
+      localStorage.setItem('cart', JSON.stringify(state.suppliers));
+    },
+
     clearSupplierCart: (state, action: PayloadAction<string>) => {
       state.suppliers = state.suppliers.filter(
         (s) => s.supplier_id !== action.payload
@@ -139,6 +151,7 @@ export const {
   addToCart,
   updateQuantity,
   removeItem,
+  removeItemsByOfferIds,
   clearSupplierCart,
   clearCart,
 } = cartSlice.actions;

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.database import get_db
 from apps.api.logging_config import get_logger
-from apps.api.models import Order, OrderItem
+from apps.api.models import Offer, Order, OrderItem
 from apps.api.services.order_service import OrderService
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -253,3 +253,42 @@ async def get_order(
     await db.refresh(order, ["items", "buyer", "supplier"])
 
     return order
+
+
+# ── Cart validation ──
+
+
+class ValidateCartRequest(BaseModel):
+    """Schema for cart validation."""
+
+    offer_ids: List[UUID]
+
+
+class ValidateCartResponse(BaseModel):
+    """Schema for cart validation response."""
+
+    valid: List[UUID]
+    invalid: List[UUID]
+
+
+@router.post("/validate-cart", response_model=ValidateCartResponse)
+async def validate_cart(
+    data: ValidateCartRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Check which offer_ids are still active."""
+    if not data.offer_ids:
+        return ValidateCartResponse(valid=[], invalid=[])
+
+    result = await db.execute(
+        select(Offer.id).where(
+            Offer.id.in_(data.offer_ids),
+            Offer.is_active == True,
+        )
+    )
+    active_ids = {row[0] for row in result.all()}
+
+    valid = [oid for oid in data.offer_ids if oid in active_ids]
+    invalid = [oid for oid in data.offer_ids if oid not in active_ids]
+
+    return ValidateCartResponse(valid=valid, invalid=invalid)

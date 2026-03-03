@@ -75,9 +75,18 @@ export default function CheckoutModal({
       onClose();
 
       alert('Заказ успешно создан!');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to create order:', error);
-      alert('Ошибка при создании заказа. Проверьте подключение к API.');
+      const detail = (error as { data?: { detail?: string } })?.data?.detail || '';
+      if (detail.includes('not active')) {
+        alert('Некоторые товары больше недоступны. Вернитесь в корзину — устаревшие товары будут удалены автоматически.');
+      } else if (detail.includes('Buyer not found')) {
+        alert('Ошибка аккаунта. Попробуйте перелогиниться.');
+      } else if (detail) {
+        alert(`Ошибка: ${detail}`);
+      } else {
+        alert('Ошибка при создании заказа. Проверьте подключение к API.');
+      }
     }
   };
 

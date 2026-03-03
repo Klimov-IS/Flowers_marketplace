@@ -50,6 +50,17 @@ export const ordersApi = createApi({
       }),
       invalidatesTags: ['Orders'],
     }),
+
+    validateCart: builder.mutation<
+      { valid: string[]; invalid: string[] },
+      { offer_ids: string[] }
+    >({
+      query: (body) => ({
+        url: '/orders/validate-cart',
+        method: 'POST',
+        body,
+      }),
+    }),
   }),
 });
 
@@ -57,4 +68,5 @@ export const {
   useGetOrdersQuery,
   useGetOrderByIdQuery,
   useCreateOrderMutation,
+  useValidateCartMutation,
 } = ordersApi;
