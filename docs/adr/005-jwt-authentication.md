@@ -135,12 +135,13 @@ def create_refresh_token(user_id: UUID, role: str) -> str:
 
 ## Password Reset Flow
 
-Восстановление пароля через Telegram-бота (добавлено 2026-03-02):
+Восстановление пароля через email (обновлено 2026-03-16, ранее — через Telegram):
 
 ```
 1. POST /auth/forgot-password (email + role)
-   → Найти пользователя → Найти TelegramLink → Сгенерировать 6-digit code
-   → SHA-256 hash → password_reset_codes → Отправить в Telegram
+   → Найти пользователя → Сгенерировать 6-digit code
+   → SHA-256 hash → password_reset_codes → Отправить на email
+   → (бонус: если привязан Telegram — дублировать туда)
 2. POST /auth/verify-reset-code (email + role + code)
    → Проверить hash → Выдать JWT type="password_reset" (TTL 5 мин)
 3. POST /auth/reset-password (reset_token + new_password)
@@ -151,7 +152,7 @@ def create_refresh_token(user_id: UUID, role: str) -> str:
 - Код: 6 цифр, SHA-256 в БД, TTL 10 мин
 - Макс 5 попыток ввода, rate limit 3 кода / 15 мин
 - Reset-токен: JWT с type="password_reset", TTL 5 мин
-- Требует привязанного Telegram-аккаунта
+- Email — основной канал доставки кода, Telegram — опциональный
 
 ## Эволюция
 

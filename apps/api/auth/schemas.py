@@ -100,7 +100,7 @@ class MessageResponse(BaseModel):
 
 
 class ForgotPasswordRequest(BaseModel):
-    """Request to send a reset code via Telegram."""
+    """Request to send a reset code via email."""
 
     email: EmailStr = Field(..., description="Account email")
     role: Literal["buyer", "supplier"] = Field(..., description="Account role")

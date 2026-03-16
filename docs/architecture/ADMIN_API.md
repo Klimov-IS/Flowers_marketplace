@@ -350,7 +350,7 @@ curl -X POST http://localhost:8000/auth/logout \
 
 **Endpoint**: `POST /auth/forgot-password`
 
-**Description**: Отправляет 6-значный код сброса пароля в привязанный Telegram.
+**Description**: Отправляет 6-значный код сброса пароля на email пользователя (и в Telegram, если привязан).
 
 **Request Body**:
 ```json
@@ -369,9 +369,9 @@ curl -X POST http://localhost:8000/auth/logout \
 ```
 
 **Errors**:
-- `400` — Email не найден или Telegram не привязан
+- `400` — Email не найден
 - `429` — Слишком много запросов (макс 3 за 15 мин)
-- `502` — Ошибка отправки в Telegram
+- `502` — Ошибка отправки email
 
 ---
 

@@ -9,7 +9,7 @@ from apps.api.models.base import Base, UUIDMixin
 
 
 class PasswordResetCode(Base, UUIDMixin):
-    """One-time password reset code sent via Telegram."""
+    """One-time password reset code sent via email (and optionally Telegram)."""
 
     __tablename__ = "password_reset_codes"
 
