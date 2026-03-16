@@ -217,23 +217,21 @@ async def register_supplier(
             detail="Company name already registered",
         )
 
-    # Verify city if provided
-    city_id = None
-    if request.city_id:
-        try:
-            city_id = UUID(request.city_id)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid city_id format",
-            )
+    # Verify city
+    try:
+        city_id = UUID(request.city_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid city_id format",
+        )
 
-        result = await db.execute(select(City).where(City.id == city_id))
-        if not result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="City not found",
-            )
+    result = await db.execute(select(City).where(City.id == city_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="City not found",
+        )
 
     # Create supplier (pending status, needs admin approval for production)
     supplier = Supplier(

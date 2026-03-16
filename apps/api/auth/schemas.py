@@ -32,7 +32,7 @@ class RegisterSupplierRequest(BaseModel):
     email: EmailStr = Field(..., description="Email address")
     phone: str = Field(..., min_length=10, max_length=20, description="Phone number")
     password: str = Field(..., min_length=6, max_length=128, description="Password")
-    city_id: str | None = Field(None, description="City UUID")
+    city_id: str = Field(..., description="City UUID")
 
 
 class TokenResponse(BaseModel):
