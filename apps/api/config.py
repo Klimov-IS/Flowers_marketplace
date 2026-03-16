@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     telegram_internal_token: str = ""  # Token for bot → API auth
     telegram_bot_token: str = ""  # Bot token for sending messages via Bot API
 
+    # SMTP (Email)
+    smtp_host: str = "smtp.yandex.ru"
+    smtp_port: int = 465
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_name: str = "Вцвет Маркет"
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS origins from comma-separated string."""

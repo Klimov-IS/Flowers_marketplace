@@ -33,6 +33,7 @@ from apps.api.auth.schemas import (
     VerifyResetCodeRequest,
     VerifyResetCodeResponse,
 )
+from apps.api.auth.email_notify import send_reset_code_email
 from apps.api.auth.telegram_notify import send_reset_code
 from apps.api.database import get_db
 from apps.api.logging_config import get_logger
@@ -631,24 +632,9 @@ async def forgot_password(
     request: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Send a 6-digit reset code to the user's linked Telegram."""
+    """Send a 6-digit reset code to the user's email (and Telegram if linked)."""
     email = request.email.lower()
     user = await _find_user_by_email(email, request.role, db)
-
-    # Check Telegram link
-    link_result = await db.execute(
-        select(TelegramLink).where(
-            TelegramLink.entity_id == user.id,
-            TelegramLink.role == request.role,
-            TelegramLink.is_active.is_(True),
-        )
-    )
-    tg_link = link_result.scalar_one_or_none()
-    if not tg_link:
-        raise HTTPException(
-            status_code=400,
-            detail="К этому аккаунту не привязан Telegram. Привяжите бота, чтобы восстановить пароль.",
-        )
 
     # Rate limit: max N codes in last 15 min
     since = datetime.now(timezone.utc) - RESET_CODE_RATE_WINDOW
@@ -665,6 +651,16 @@ async def forgot_password(
             detail="Слишком много запросов. Попробуйте через несколько минут.",
         )
 
+    # Check Telegram link (optional bonus channel)
+    link_result = await db.execute(
+        select(TelegramLink).where(
+            TelegramLink.entity_id == user.id,
+            TelegramLink.role == request.role,
+            TelegramLink.is_active.is_(True),
+        )
+    )
+    tg_link = link_result.scalar_one_or_none()
+
     # Generate code
     code = str(secrets.randbelow(900000) + 100000)
     code_hash = hashlib.sha256(code.encode()).hexdigest()
@@ -673,21 +669,26 @@ async def forgot_password(
         user_id=user.id,
         role=request.role,
         code_hash=code_hash,
-        telegram_chat_id=tg_link.telegram_chat_id,
+        telegram_chat_id=tg_link.telegram_chat_id if tg_link else None,
         expires_at=datetime.now(timezone.utc) + RESET_CODE_TTL,
     )
     db.add(reset_entry)
     await db.flush()
 
-    # Send via Telegram
-    sent = await send_reset_code(tg_link.telegram_chat_id, code)
-    if not sent:
+    # Send code via email (primary channel)
+    email_sent = await send_reset_code_email(email, code)
+
+    # Also send via Telegram if linked (bonus)
+    if tg_link:
+        await send_reset_code(tg_link.telegram_chat_id, code)
+
+    if not email_sent:
         raise HTTPException(
             status_code=502,
-            detail="Не удалось отправить код в Telegram. Попробуйте позже.",
+            detail="Не удалось отправить код на email. Попробуйте позже.",
         )
 
-    logger.info("password_reset_requested", user_id=str(user.id), role=request.role)
+    logger.info("password_reset_requested", user_id=str(user.id), role=request.role, email=email)
 
     return ForgotPasswordResponse(status="code_sent", expires_in=int(RESET_CODE_TTL.total_seconds()))
 

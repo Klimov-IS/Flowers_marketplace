@@ -16,7 +16,7 @@ class PasswordResetCode(Base, UUIDMixin):
     user_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    telegram_chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
