@@ -475,6 +475,77 @@ class ImportService:
             )
             raise ValueError(f"Import failed: {str(e)}")
 
+    async def parse_raw_rows(self, import_batch_id: UUID) -> Dict:
+        """
+        Re-parse an import batch from existing raw_rows in the database.
+
+        Fetches raw_rows, creates a new ParseRun, and re-runs _process_rows.
+        Used by the reparse admin endpoint.
+        """
+        # Fetch batch to get supplier_id
+        batch_result = await self.db.execute(
+            select(ImportBatch).where(ImportBatch.id == import_batch_id)
+        )
+        batch = batch_result.scalar_one_or_none()
+        if not batch:
+            raise ValueError(f"Import batch {import_batch_id} not found")
+
+        # Fetch existing raw_rows
+        raw_rows_result = await self.db.execute(
+            select(RawRow)
+            .where(RawRow.import_batch_id == import_batch_id)
+            .order_by(RawRow.row_ref)
+        )
+        raw_rows = list(raw_rows_result.scalars().all())
+
+        if not raw_rows:
+            raise ValueError(f"No raw_rows found for batch {import_batch_id}")
+
+        # Reconstruct parsed rows from raw_cells
+        rows = []
+        for raw_row in raw_rows:
+            cells = raw_row.raw_cells.get("cells", [])
+            headers = raw_row.raw_cells.get("headers", [])
+            row_ref = raw_row.row_ref or ""
+            # Extract row number from row_ref like "row_5"
+            try:
+                row_number = int(row_ref.replace("row_", ""))
+            except (ValueError, AttributeError):
+                row_number = 0
+
+            rows.append({
+                "row_number": row_number,
+                "cells": cells,
+                "headers": headers,
+            })
+
+        # Create new parse run
+        parse_run = ParseRun(
+            import_batch_id=import_batch_id,
+            parser_version=PARSER_VERSION,
+        )
+        self.db.add(parse_run)
+        await self.db.flush()
+
+        logger.info(
+            "reparse_processing",
+            batch_id=str(import_batch_id),
+            supplier_id=str(batch.supplier_id),
+            rows_count=len(rows),
+        )
+
+        # Re-run processing
+        summary = await self._process_rows(
+            supplier_id=batch.supplier_id,
+            import_batch_id=import_batch_id,
+            parse_run_id=parse_run.id,
+            rows=rows,
+            raw_rows=raw_rows,
+        )
+
+        await self.db.commit()
+        return summary
+
     async def _process_rows(
         self,
         supplier_id: UUID,
