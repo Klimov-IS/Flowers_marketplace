@@ -13,6 +13,49 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
 from apps.api.database import get_db
+
+
+# ── Magic bytes validation ──
+
+# File signatures (magic bytes)
+_MAGIC_PDF = b"%PDF"
+_MAGIC_XLSX = b"PK\x03\x04"  # ZIP (OOXML)
+_MAGIC_JPEG = b"\xff\xd8\xff"
+_MAGIC_PNG = b"\x89PNG\r\n\x1a\n"
+_MAGIC_WEBP_RIFF = b"RIFF"
+_MAGIC_WEBP_MARKER = b"WEBP"
+
+
+def _validate_magic_bytes(content: bytes, expected_type: str) -> bool:
+    """Validate file content against expected magic bytes.
+
+    Args:
+        content: Raw file bytes
+        expected_type: One of 'csv', 'pdf', 'xlsx', 'image'
+
+    Returns:
+        True if magic bytes match expected type
+    """
+    if not content:
+        return False
+
+    if expected_type == "pdf":
+        return content[:4] == _MAGIC_PDF
+    elif expected_type == "xlsx":
+        return content[:4] == _MAGIC_XLSX
+    elif expected_type == "csv":
+        # CSV is plain text — reject if it starts with known binary signatures
+        binary_sigs = [_MAGIC_PDF, _MAGIC_XLSX, _MAGIC_JPEG, _MAGIC_PNG, _MAGIC_WEBP_RIFF]
+        return not any(content[:8].startswith(sig) for sig in binary_sigs)
+    elif expected_type == "image":
+        if content[:3] == _MAGIC_JPEG:
+            return True
+        if content[:8] == _MAGIC_PNG:
+            return True
+        if content[:4] == _MAGIC_WEBP_RIFF and content[8:12] == _MAGIC_WEBP_MARKER:
+            return True
+        return False
+    return False
 from apps.api.logging_config import get_logger
 from apps.api.models import ImportBatch, Supplier, AISuggestion, AIRun
 from apps.api.models.ai import AISuggestionStatus
@@ -1068,6 +1111,8 @@ async def upload_item_photo(
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large. Maximum size: 5MB")
+    if not _validate_magic_bytes(contents, "image"):
+        raise HTTPException(status_code=400, detail="File content does not match an image format (JPEG/PNG/WebP)")
 
     import os
     import uuid as uuid_module
@@ -1132,6 +1177,8 @@ async def upload_csv_import(
     content = await file.read()
     if len(content) > 50 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="CSV file too large (max 50MB)")
+    if not _validate_magic_bytes(content, "csv"):
+        raise HTTPException(status_code=400, detail="File content does not match CSV format")
 
     # Import CSV
     import_service = ImportService(db)
@@ -1176,6 +1223,8 @@ async def upload_pdf_import(
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="PDF file too large (max 10MB)")
+    if not _validate_magic_bytes(content, "pdf"):
+        raise HTTPException(status_code=400, detail="File content does not match PDF format")
 
     import_service = ImportService(db)
     try:
@@ -1219,6 +1268,8 @@ async def upload_xlsx_import(
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="XLSX file too large (max 10MB)")
+    if not _validate_magic_bytes(content, "xlsx"):
+        raise HTTPException(status_code=400, detail="File content does not match XLSX format")
 
     import_service = ImportService(db)
     try:

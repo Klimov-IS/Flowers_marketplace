@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.logging_config import get_logger
@@ -165,22 +166,24 @@ class ImportService:
                 summary["extraction_method"] = "ai_text_fallback"
 
             try:
-                ai_result = await run_ai_enrichment_for_batch(
-                    db=self.db,
-                    supplier_id=supplier_id,
-                    import_batch_id=import_batch.id,
-                )
-                summary["ai_enrichment"] = ai_result
+                async with self.db.begin_nested():
+                    ai_result = await run_ai_enrichment_for_batch(
+                        db=self.db,
+                        supplier_id=supplier_id,
+                        import_batch_id=import_batch.id,
+                    )
+                    summary["ai_enrichment"] = ai_result
             except Exception as e:
                 logger.warning("ai_enrichment_error", batch_id=str(import_batch.id), error=str(e))
                 summary["ai_enrichment"] = {"status": "error", "error": str(e)}
 
             try:
-                mapping_result = await self._auto_create_sku_mappings(
-                    supplier_id=supplier_id,
-                    import_batch_id=import_batch.id,
-                )
-                summary["auto_mappings"] = mapping_result
+                async with self.db.begin_nested():
+                    mapping_result = await self._auto_create_sku_mappings(
+                        supplier_id=supplier_id,
+                        import_batch_id=import_batch.id,
+                    )
+                    summary["auto_mappings"] = mapping_result
             except Exception as e:
                 logger.warning("auto_mappings_error", batch_id=str(import_batch.id), error=str(e))
                 summary["auto_mappings"] = {"status": "error", "error": str(e)}
@@ -264,22 +267,24 @@ class ImportService:
             )
 
             try:
-                ai_result = await run_ai_enrichment_for_batch(
-                    db=self.db,
-                    supplier_id=supplier_id,
-                    import_batch_id=import_batch.id,
-                )
-                summary["ai_enrichment"] = ai_result
+                async with self.db.begin_nested():
+                    ai_result = await run_ai_enrichment_for_batch(
+                        db=self.db,
+                        supplier_id=supplier_id,
+                        import_batch_id=import_batch.id,
+                    )
+                    summary["ai_enrichment"] = ai_result
             except Exception as e:
                 logger.warning("ai_enrichment_error", batch_id=str(import_batch.id), error=str(e))
                 summary["ai_enrichment"] = {"status": "error", "error": str(e)}
 
             try:
-                mapping_result = await self._auto_create_sku_mappings(
-                    supplier_id=supplier_id,
-                    import_batch_id=import_batch.id,
-                )
-                summary["auto_mappings"] = mapping_result
+                async with self.db.begin_nested():
+                    mapping_result = await self._auto_create_sku_mappings(
+                        supplier_id=supplier_id,
+                        import_batch_id=import_batch.id,
+                    )
+                    summary["auto_mappings"] = mapping_result
             except Exception as e:
                 logger.warning("auto_mappings_error", batch_id=str(import_batch.id), error=str(e))
                 summary["auto_mappings"] = {"status": "error", "error": str(e)}
@@ -384,21 +389,22 @@ class ImportService:
                 raw_rows=raw_rows,
             )
 
-            # Stage 4.5: AI Enrichment (optional, runs if AI is enabled)
+            # Stage 4.5: AI Enrichment (savepoint — failure won't roll back import)
             try:
-                ai_result = await run_ai_enrichment_for_batch(
-                    db=self.db,
-                    supplier_id=supplier_id,
-                    import_batch_id=import_batch.id,
-                )
-                summary["ai_enrichment"] = ai_result
-                logger.info(
-                    "ai_enrichment_result",
-                    batch_id=str(import_batch.id),
-                    status=ai_result.get("status"),
-                    auto_applied=ai_result.get("auto_applied", 0),
-                    needs_review=ai_result.get("needs_review", 0),
-                )
+                async with self.db.begin_nested():
+                    ai_result = await run_ai_enrichment_for_batch(
+                        db=self.db,
+                        supplier_id=supplier_id,
+                        import_batch_id=import_batch.id,
+                    )
+                    summary["ai_enrichment"] = ai_result
+                    logger.info(
+                        "ai_enrichment_result",
+                        batch_id=str(import_batch.id),
+                        status=ai_result.get("status"),
+                        auto_applied=ai_result.get("auto_applied", 0),
+                        needs_review=ai_result.get("needs_review", 0),
+                    )
             except Exception as e:
                 # AI enrichment failure should not fail the import
                 logger.warning(
@@ -408,19 +414,20 @@ class ImportService:
                 )
                 summary["ai_enrichment"] = {"status": "error", "error": str(e)}
 
-            # Stage 5: Auto-create SKU mappings for new supplier items
+            # Stage 5: Auto-create SKU mappings (savepoint — failure won't roll back import)
             try:
-                mapping_result = await self._auto_create_sku_mappings(
-                    supplier_id=supplier_id,
-                    import_batch_id=import_batch.id,
-                )
-                summary["auto_mappings"] = mapping_result
-                logger.info(
-                    "auto_mappings_created",
-                    batch_id=str(import_batch.id),
-                    skus_created=mapping_result.get("skus_created", 0),
-                    mappings_created=mapping_result.get("mappings_created", 0),
-                )
+                async with self.db.begin_nested():
+                    mapping_result = await self._auto_create_sku_mappings(
+                        supplier_id=supplier_id,
+                        import_batch_id=import_batch.id,
+                    )
+                    summary["auto_mappings"] = mapping_result
+                    logger.info(
+                        "auto_mappings_created",
+                        batch_id=str(import_batch.id),
+                        skus_created=mapping_result.get("skus_created", 0),
+                        mappings_created=mapping_result.get("mappings_created", 0),
+                    )
             except Exception as e:
                 logger.warning(
                     "auto_mappings_error",
@@ -1467,7 +1474,7 @@ class ImportService:
                 await self.db.flush()
                 result["skus_created"] += 1
 
-            # Create confirmed mapping
+            # Create confirmed mapping (with savepoint for race condition safety)
             mapping = SKUMapping(
                 supplier_item_id=item.id,
                 normalized_sku_id=sku.id,
@@ -1475,8 +1482,13 @@ class ImportService:
                 confidence=Decimal("0.900"),
                 status="confirmed",
             )
-            self.db.add(mapping)
-            result["mappings_created"] += 1
+            try:
+                async with self.db.begin_nested():
+                    self.db.add(mapping)
+                    await self.db.flush()
+                result["mappings_created"] += 1
+            except IntegrityError:
+                result["skipped"] += 1
 
         await self.db.flush()
         return result

@@ -137,21 +137,10 @@ class PublishService:
         supplier_items = result.scalars().all()
         item_dict = {item.id: item for item in supplier_items}
 
-        # Step 5: Deactivate old offers (transaction)
-        result = await self.db.execute(
-            update(Offer)
-            .where(
-                Offer.supplier_id == supplier_id,
-                Offer.is_active == True,
-            )
-            .values(is_active=False)
-        )
-        offers_deactivated = result.rowcount or 0
-        log.info("publish.offers_deactivated", count=offers_deactivated)
-
-        # Step 6: Create new offers
+        # Step 5: Create new offers FIRST (before deactivating old ones — no blackout)
         offers_created = 0
         skipped_unmapped = 0
+        new_offer_ids = []
 
         for candidate in candidates:
             # Check if has confirmed mapping
@@ -221,14 +210,27 @@ class PublishService:
             self.db.add(offer)
             offers_created += 1
 
+        # Flush to get IDs for new offers
+        await self.db.flush()
+
         log.info(
             "publish.offers_created",
             created=offers_created,
             skipped=skipped_unmapped,
         )
 
-        # Step 7: Flush to ensure offers are created
-        await self.db.flush()
+        # Step 6: Deactivate OLD offers (exclude just-created ones by batch)
+        result = await self.db.execute(
+            update(Offer)
+            .where(
+                Offer.supplier_id == supplier_id,
+                Offer.is_active == True,
+                Offer.source_import_batch_id != import_batch.id,
+            )
+            .values(is_active=False)
+        )
+        offers_deactivated = result.rowcount or 0
+        log.info("publish.offers_deactivated", count=offers_deactivated)
 
         # Step 8: Update import_batch status to 'published'
         import_batch.status = "published"

@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Set
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.logging_config import get_logger
@@ -370,13 +371,15 @@ class NormalizationService:
         confidence: Decimal,
         method: str = "rule",
     ) -> bool:
-        """Create mapping if not exists. Returns True if created."""
-        # Check if exists
+        """Create mapping if not exists. Returns True if created.
+
+        Uses DB unique constraint as final guard against race conditions.
+        """
+        # Check if exists (any status — unique constraint is on item+sku pair)
         result = await self.db.execute(
             select(SKUMapping).where(
                 SKUMapping.supplier_item_id == supplier_item_id,
                 SKUMapping.normalized_sku_id == normalized_sku_id,
-                SKUMapping.status == "proposed",
             )
         )
         existing = result.scalar_one_or_none()
@@ -384,7 +387,7 @@ class NormalizationService:
         if existing:
             return False
 
-        # Create new
+        # Create new with savepoint to handle race condition
         mapping = SKUMapping(
             supplier_item_id=supplier_item_id,
             normalized_sku_id=normalized_sku_id,
@@ -392,7 +395,17 @@ class NormalizationService:
             confidence=confidence,
             status="proposed",
         )
-        self.db.add(mapping)
+        try:
+            async with self.db.begin_nested():
+                self.db.add(mapping)
+                await self.db.flush()
+        except IntegrityError:
+            logger.debug(
+                "mapping_duplicate_skipped",
+                supplier_item_id=str(supplier_item_id),
+                normalized_sku_id=str(normalized_sku_id),
+            )
+            return False
 
         logger.debug(
             "mapping_created",

@@ -94,6 +94,11 @@ class SKUMapping(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "sku_mappings"
     __table_args__ = (
+        UniqueConstraint(
+            "supplier_item_id",
+            "normalized_sku_id",
+            name="uq_sku_mappings_item_sku",
+        ),
         CheckConstraint(
             "confidence >= 0 AND confidence <= 1",
             name="ck_sku_mappings_confidence_range",
