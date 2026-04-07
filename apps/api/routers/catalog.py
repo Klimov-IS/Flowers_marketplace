@@ -956,7 +956,7 @@ async def seed_catalog(
         return {"status": "success", **stats}
     except Exception as e:
         logger.error("catalog_seed_failed", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Seed failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Seed failed. Check server logs for details.")
 
 
 # Needed for forward reference resolution

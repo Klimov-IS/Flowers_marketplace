@@ -71,4 +71,4 @@ async def publish_supplier_offers(
     except Exception as e:
         await db.rollback()
         log.error("publish.endpoint.error", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Publish failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Publish failed. Check server logs for details.")

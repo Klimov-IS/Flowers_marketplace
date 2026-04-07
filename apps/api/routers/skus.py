@@ -67,7 +67,7 @@ async def create_sku(
         return sku
     except Exception as e:
         logger.error("sku_create_failed", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Creation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Creation failed. Check server logs for details.")
 
 
 @router.get("", response_model=List[NormalizedSKUResponse])

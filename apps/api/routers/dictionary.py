@@ -79,7 +79,7 @@ async def bootstrap_dictionary(db: AsyncSession = Depends(get_db)) -> BootstrapR
         return BootstrapResponse(**result)
     except Exception as e:
         logger.error("dictionary_bootstrap_failed", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Bootstrap failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Bootstrap failed. Check server logs for details.")
 
 
 @router.get("", response_model=List[DictionaryEntryResponse])
@@ -132,7 +132,7 @@ async def create_dictionary_entry(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("dictionary_entry_create_failed", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Creation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Creation failed. Check server logs for details.")
 
 
 @router.patch("/{entry_id}", response_model=DictionaryEntryResponse)
@@ -166,4 +166,4 @@ async def update_dictionary_entry(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error("dictionary_entry_update_failed", error=str(e), entry_id=str(entry_id))
-        raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Update failed. Check server logs for details.")

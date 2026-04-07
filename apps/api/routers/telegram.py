@@ -308,7 +308,7 @@ async def upload_price(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("telegram_import_failed", supplier_id=str(supplier_id), error=str(e))
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Import failed. Check server logs for details.")
 
     # Gather stats
     items_count = (await db.execute(

@@ -1130,6 +1130,8 @@ async def upload_csv_import(
 
     # Read file content
     content = await file.read()
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="CSV file too large (max 50MB)")
 
     # Import CSV
     import_service = ImportService(db)
@@ -1153,7 +1155,7 @@ async def upload_csv_import(
             filename=file.filename,
             error=str(e),
         )
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Import failed. Check server logs for details.")
 
 
 @router.post("/suppliers/{supplier_id}/imports/pdf", response_model=ImportBatchResponse)
@@ -1196,7 +1198,7 @@ async def upload_pdf_import(
             filename=file.filename,
             error=str(e),
         )
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Import failed. Check server logs for details.")
 
 
 @router.post("/suppliers/{supplier_id}/imports/xlsx", response_model=ImportBatchResponse)
@@ -1239,7 +1241,7 @@ async def upload_xlsx_import(
             filename=file.filename,
             error=str(e),
         )
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Import failed. Check server logs for details.")
 
 
 @router.get("/imports/{import_batch_id}", response_model=ImportSummaryResponse)
@@ -1613,7 +1615,7 @@ async def run_ai_enrichment(
             batch_id=str(import_batch_id),
             error=str(e),
         )
-        raise HTTPException(status_code=500, detail=f"AI enrichment failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="AI enrichment failed. Check server logs for details.")
 
 
 # AI Suggestions Review endpoints

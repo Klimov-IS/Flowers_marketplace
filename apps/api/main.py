@@ -5,10 +5,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from apps.api.auth.dependencies import get_current_supplier
 from apps.api.config import settings
 from apps.api.logging_config import get_logger, setup_logging
 from apps.api.routers import (
@@ -36,6 +37,13 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
     # Startup
+    # Security warning: check secret_key in production
+    if settings.app_env == "production" and settings.secret_key == "dev-secret-key-change-in-production":
+        logger.critical(
+            "INSECURE_SECRET_KEY",
+            message="Default secret_key detected in production! Set SECRET_KEY in .env immediately.",
+        )
+
     logger.info(
         "application_started",
         env=settings.app_env,
@@ -115,19 +123,22 @@ async def rate_limit_middleware(request: Request, call_next):
 
 
 # Include routers
+# Auth guard for all /admin/* endpoints — requires authenticated supplier
+_supplier_auth = [Depends(get_current_supplier)]
+
 app.include_router(health.router, tags=["health"])
 app.include_router(auth.router)  # /auth/* - authentication endpoints
-app.include_router(admin.router, prefix="/admin", tags=["admin"])
-app.include_router(dictionary.router, prefix="/admin/dictionary", tags=["dictionary"])
-app.include_router(skus.router, prefix="/admin/skus", tags=["skus"])
-app.include_router(normalization.router, prefix="/admin/normalization", tags=["normalization"])
-app.include_router(publish.router, prefix="/admin/publish", tags=["publish"])
-app.include_router(buyers.router, tags=["buyers"])  # Admin buyer management
-app.include_router(orders.router, tags=["orders"])  # Retail order endpoints (no prefix)
-app.include_router(supplier_orders.router, prefix="/admin", tags=["supplier-orders"])  # Supplier order management
+app.include_router(admin.router, prefix="/admin", tags=["admin"], dependencies=_supplier_auth)
+app.include_router(dictionary.router, prefix="/admin/dictionary", tags=["dictionary"], dependencies=_supplier_auth)
+app.include_router(skus.router, prefix="/admin/skus", tags=["skus"], dependencies=_supplier_auth)
+app.include_router(normalization.router, prefix="/admin/normalization", tags=["normalization"], dependencies=_supplier_auth)
+app.include_router(publish.router, prefix="/admin/publish", tags=["publish"], dependencies=_supplier_auth)
+app.include_router(buyers.router, tags=["buyers"])  # Buyer management (has own auth)
+app.include_router(orders.router, tags=["orders"])  # Retail order endpoints
+app.include_router(supplier_orders.router, prefix="/admin", tags=["supplier-orders"], dependencies=_supplier_auth)
 app.include_router(offers.router, tags=["offers"])  # No prefix - public endpoint
-app.include_router(catalog.router, prefix="/admin/catalog", tags=["catalog"])  # Flower catalog management
-app.include_router(telegram.router)  # Internal Telegram bot API
+app.include_router(catalog.router, prefix="/admin/catalog", tags=["catalog"], dependencies=_supplier_auth)
+app.include_router(telegram.router)  # Internal Telegram bot API (has own token auth)
 
 # Static file serving for uploaded photos
 import os

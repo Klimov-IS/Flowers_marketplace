@@ -205,7 +205,7 @@ async def propose_mappings(
     except Exception as e:
         await db.rollback()
         log.error("normalization.propose.error", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Propose failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Propose failed. Check server logs for details.")
 
 
 @router.get("/tasks", response_model=TasksListResponse)
@@ -454,4 +454,4 @@ async def confirm_mapping(
     except Exception as e:
         await db.rollback()
         log.error("normalization.confirm.error", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Confirm failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Confirm failed. Check server logs for details.")

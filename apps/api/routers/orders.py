@@ -4,11 +4,14 @@ from decimal import Decimal
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.api.auth.dependencies import CurrentUser, get_current_buyer
 from apps.api.database import get_db
 from apps.api.logging_config import get_logger
 from apps.api.models import Offer, Order, OrderItem
@@ -30,7 +33,6 @@ class OrderItemCreate(BaseModel):
 class OrderCreate(BaseModel):
     """Schema for creating an order."""
 
-    buyer_id: UUID  # MVP: No auth, pass buyer_id explicitly
     items: List[OrderItemCreate]
     delivery_type: str | None = None  # 'pickup' or 'delivery'
     delivery_address: str | None = None
@@ -129,15 +131,17 @@ async def _enrich_order_items(db: AsyncSession, order: Order) -> None:
 @router.post("", response_model=OrderResponse, status_code=201)
 async def create_order(
     order_data: OrderCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_buyer)],
     db: AsyncSession = Depends(get_db),
 ) -> Order:
     """
     Create a new order (retail endpoint).
 
-    MVP: No authentication - buyer_id passed in request body.
+    Requires authenticated buyer. buyer_id taken from JWT token.
 
     Args:
         order_data: Order creation data
+        current_user: Authenticated buyer from JWT
         db: Database session
 
     Returns:
@@ -154,7 +158,7 @@ async def create_order(
         items_data = [item.model_dump() for item in order_data.items]
 
         order = await order_service.create_order(
-            buyer_id=order_data.buyer_id,
+            buyer_id=current_user.id,
             items=items_data,
             delivery_address=order_data.delivery_address,
             delivery_date=order_data.delivery_date,
@@ -182,21 +186,19 @@ async def create_order(
 
 @router.get("", response_model=OrderListResponse)
 async def list_orders(
-    buyer_id: UUID | None = None,
-    supplier_id: UUID | None = None,
+    current_user: Annotated[CurrentUser, Depends(get_current_buyer)],
     status: str | None = None,
     limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
 ) -> OrderListResponse:
     """
-    List orders with filters (retail endpoint).
+    List orders for authenticated buyer.
 
-    MVP: No authentication - filter by buyer_id for buyer's orders.
+    Returns only the current buyer's orders.
 
     Args:
-        buyer_id: Optional filter by buyer
-        supplier_id: Optional filter by supplier
+        current_user: Authenticated buyer from JWT
         status: Optional filter by status
         limit: Max results (default 50)
         offset: Offset for pagination
@@ -207,11 +209,8 @@ async def list_orders(
     """
     query = select(Order).order_by(Order.created_at.desc())
 
-    if buyer_id:
-        query = query.where(Order.buyer_id == buyer_id)
-
-    if supplier_id:
-        query = query.where(Order.supplier_id == supplier_id)
+    # Always filter by authenticated buyer
+    query = query.where(Order.buyer_id == current_user.id)
 
     if status:
         query = query.where(Order.status == status)
@@ -243,13 +242,17 @@ async def list_orders(
 @router.get("/{order_id}", response_model=OrderResponse)
 async def get_order(
     order_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_buyer)],
     db: AsyncSession = Depends(get_db),
 ) -> Order:
     """
     Get order details by ID (retail endpoint).
 
+    Requires authenticated buyer; returns only own orders.
+
     Args:
         order_id: Order UUID
+        current_user: Authenticated buyer from JWT
         db: Database session
 
     Returns:
@@ -259,7 +262,7 @@ async def get_order(
         HTTPException 404: Order not found
     """
     result = await db.execute(
-        select(Order).where(Order.id == order_id)
+        select(Order).where(Order.id == order_id, Order.buyer_id == current_user.id)
     )
     order = result.scalar_one_or_none()
 
