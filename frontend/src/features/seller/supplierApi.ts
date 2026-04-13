@@ -1,4 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query';
 import { catalogApi } from '../catalog/catalogApi';
 import type { Order, OrderMetrics } from '../../types/order';
 import type {
@@ -130,9 +131,55 @@ export interface ImportSummaryResponse {
 // In production, set VITE_API_BASE_URL to the actual API URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
+const rawBaseQuery = fetchBaseQuery({
+  baseUrl: API_BASE_URL,
+  prepareHeaders: (headers) => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    return headers;
+  },
+});
+
+// Auto-refresh token on 401
+const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
+  args,
+  api,
+  extraOptions,
+) => {
+  let result = await rawBaseQuery(args, api, extraOptions);
+
+  if (result.error && result.error.status === 401) {
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (refreshToken) {
+      const refreshResult = await rawBaseQuery(
+        { url: '/auth/refresh', method: 'POST', body: { refresh_token: refreshToken } },
+        api,
+        extraOptions,
+      );
+
+      if (refreshResult.data) {
+        const tokens = refreshResult.data as { access_token: string; refresh_token: string };
+        localStorage.setItem('access_token', tokens.access_token);
+        localStorage.setItem('refresh_token', tokens.refresh_token);
+        result = await rawBaseQuery(args, api, extraOptions);
+      } else {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user');
+        const basePath = import.meta.env.VITE_BASE_PATH || '/';
+        window.location.href = basePath + 'login';
+      }
+    }
+  }
+
+  return result;
+};
+
 export const supplierApi = createApi({
   reducerPath: 'supplierApi',
-  baseQuery: fetchBaseQuery({ baseUrl: API_BASE_URL }),
+  baseQuery: baseQueryWithReauth,
   tagTypes: ['SupplierOrders', 'OrderMetrics', 'ImportBatches', 'NormalizationTasks', 'SupplierItems', 'AISuggestions'],
   endpoints: (builder) => ({
     // Supplier Items (Assortment)
