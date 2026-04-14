@@ -98,7 +98,7 @@ class PublishService:
             select(OfferCandidate)
             .where(
                 OfferCandidate.import_batch_id == import_batch.id,
-                OfferCandidate.validation.in_(["ok", "warn"]),
+                OfferCandidate.validation.in_(["ok", "warn", "warning"]),
             )
         )
         candidates = result.scalars().all()
