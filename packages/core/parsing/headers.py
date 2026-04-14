@@ -13,6 +13,9 @@ HEADER_MAPPINGS = {
         "product",
         "name",
         "item",
+        "description",
+        "variety",
+        "сорт",
     ],
     "price": [
         "цена",
