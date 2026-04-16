@@ -17,13 +17,12 @@ import type { FlatOfferVariant, SortState } from '../../../types/supplierItem';
 import UploadModal from './UploadModal';
 import CreateItemModal from './CreateItemModal';
 
-type StatusFilter = 'all' | 'published' | 'needs_review' | 'errors';
+type StatusFilter = 'all' | 'active' | 'hidden';
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'Все статусы' },
-  { value: 'published', label: 'Опубликовано' },
-  { value: 'needs_review', label: 'На проверке' },
-  { value: 'errors', label: 'Ошибки' },
+  { value: 'active', label: 'Активные' },
+  { value: 'hidden', label: 'Скрытые' },
 ];
 
 interface AssortmentTabProps {
@@ -61,6 +60,7 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
     q: debouncedSearch || undefined,
     page,
     per_page: perPage,
+    status: statusFilter !== 'all' ? [statusFilter] : undefined,
     ...filterParams,
     sort_by: sort.field || undefined,
     sort_dir: sort.direction || undefined,
