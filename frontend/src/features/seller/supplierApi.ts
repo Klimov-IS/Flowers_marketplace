@@ -127,6 +127,43 @@ export interface ImportSummaryResponse {
   parse_events_count: number;
 }
 
+// Admin Product types (new unified product model)
+export interface AdminProduct {
+  id: string;
+  title: string;
+  flower_type: string | null;
+  variety: string | null;
+  length_cm: number | null;
+  color: string | null;
+  origin_country: string | null;
+  pack_type: string | null;
+  pack_qty: number | null;
+  photo_url: string | null;
+  price: string;
+  currency: string;
+  stock_qty: number | null;
+  status: string;
+  is_active: boolean;
+  raw_name: string | null;
+}
+
+export interface AdminProductsParams {
+  q?: string;
+  page?: number;
+  per_page?: number;
+  status?: string[];
+  origin_country?: (string | null)[];
+  colors?: (string | null)[];
+  price_min?: number;
+  price_max?: number;
+  length_min?: number;
+  length_max?: number;
+  stock_min?: number;
+  stock_max?: number;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
+}
+
 // In development, Vite proxy handles /offers, /orders, /admin routes
 // In production, set VITE_API_BASE_URL to the actual API URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -541,7 +578,7 @@ export const supplierApi = createApi({
       invalidatesTags: ['SupplierItems'],
       async onQueryStarted(_, { dispatch, queryFulfilled }) {
         await queryFulfilled;
-        dispatch(catalogApi.util.invalidateTags(['Offers']));
+        dispatch(catalogApi.util.invalidateTags(['Products']));
       },
     }),
 
@@ -556,7 +593,7 @@ export const supplierApi = createApi({
       invalidatesTags: ['SupplierItems'],
       async onQueryStarted(_, { dispatch, queryFulfilled }) {
         await queryFulfilled;
-        dispatch(catalogApi.util.invalidateTags(['Offers']));
+        dispatch(catalogApi.util.invalidateTags(['Products']));
       },
     }),
 
@@ -571,7 +608,7 @@ export const supplierApi = createApi({
       invalidatesTags: ['SupplierItems'],
       async onQueryStarted(_, { dispatch, queryFulfilled }) {
         await queryFulfilled;
-        dispatch(catalogApi.util.invalidateTags(['Offers']));
+        dispatch(catalogApi.util.invalidateTags(['Products']));
       },
     }),
 
@@ -597,7 +634,7 @@ export const supplierApi = createApi({
       invalidatesTags: ['SupplierItems'],
       async onQueryStarted(_, { dispatch, queryFulfilled }) {
         await queryFulfilled;
-        dispatch(catalogApi.util.invalidateTags(['Offers']));
+        dispatch(catalogApi.util.invalidateTags(['Products']));
       },
     }),
 
@@ -612,7 +649,7 @@ export const supplierApi = createApi({
       invalidatesTags: ['SupplierItems'],
       async onQueryStarted(_, { dispatch, queryFulfilled }) {
         await queryFulfilled;
-        dispatch(catalogApi.util.invalidateTags(['Offers']));
+        dispatch(catalogApi.util.invalidateTags(['Products']));
       },
     }),
 
@@ -653,7 +690,192 @@ export const supplierApi = createApi({
       invalidatesTags: ['SupplierItems'],
     }),
 
-    // Photo upload
+    // ========================================================================
+    // New Product CRUD endpoints (replaces supplier-items + offer-candidates)
+    // ========================================================================
+    getAdminProducts: builder.query<
+      { products: AdminProduct[]; total: number },
+      AdminProductsParams
+    >({
+      query: ({
+        q, page, per_page, status, origin_country, colors,
+        price_min, price_max, length_min, length_max,
+        stock_min, stock_max, sort_by, sort_dir,
+      }) => {
+        const params = new URLSearchParams();
+        if (q) params.append('q', q);
+        if (page) params.append('page', String(page));
+        if (per_page) params.append('per_page', String(per_page));
+        if (status?.length) status.forEach(s => params.append('status', s));
+        if (origin_country?.length) {
+          origin_country.forEach(c => params.append('origin_country', c === null ? '__null__' : c));
+        }
+        if (colors?.length) {
+          colors.forEach(c => params.append('colors', c === null ? '__null__' : c));
+        }
+        if (price_min !== undefined) params.append('price_min', String(price_min));
+        if (price_max !== undefined) params.append('price_max', String(price_max));
+        if (length_min !== undefined) params.append('length_min', String(length_min));
+        if (length_max !== undefined) params.append('length_max', String(length_max));
+        if (stock_min !== undefined) params.append('stock_min', String(stock_min));
+        if (stock_max !== undefined) params.append('stock_max', String(stock_max));
+        if (sort_by) params.append('sort_by', sort_by);
+        if (sort_dir) params.append('sort_dir', sort_dir);
+        const qs = params.toString();
+        return `/admin/products${qs ? `?${qs}` : ''}`;
+      },
+      providesTags: ['SupplierItems'],
+    }),
+
+    createProduct: builder.mutation<
+      { product_id: string },
+      {
+        title: string;
+        flower_type?: string;
+        variety?: string;
+        price: number;
+        length_cm?: number;
+        color?: string;
+        origin_country?: string;
+        pack_type?: string;
+        pack_qty?: number;
+        stock_qty?: number;
+      }
+    >({
+      query: (body) => ({
+        url: '/admin/products',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['SupplierItems'],
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        await queryFulfilled;
+        dispatch(catalogApi.util.invalidateTags(['Products']));
+      },
+    }),
+
+    updateProduct: builder.mutation<
+      { ok: boolean },
+      { id: string; data: Record<string, unknown> }
+    >({
+      query: ({ id, data }) => ({
+        url: `/admin/products/${id}`,
+        method: 'PATCH',
+        body: data,
+      }),
+      invalidatesTags: ['SupplierItems'],
+    }),
+
+    deleteProduct: builder.mutation<{ ok: boolean }, string>({
+      query: (productId) => ({
+        url: `/admin/products/${productId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['SupplierItems'],
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        await queryFulfilled;
+        dispatch(catalogApi.util.invalidateTags(['Products']));
+      },
+    }),
+
+    hideProduct: builder.mutation<
+      { id: string; status: string; message: string },
+      string
+    >({
+      query: (productId) => ({
+        url: `/admin/products/${productId}/hide`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['SupplierItems'],
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        await queryFulfilled;
+        dispatch(catalogApi.util.invalidateTags(['Products']));
+      },
+    }),
+
+    restoreProduct: builder.mutation<
+      { id: string; status: string; message: string },
+      string
+    >({
+      query: (productId) => ({
+        url: `/admin/products/${productId}/restore`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['SupplierItems'],
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        await queryFulfilled;
+        dispatch(catalogApi.util.invalidateTags(['Products']));
+      },
+    }),
+
+    duplicateProduct: builder.mutation<
+      { original_id: string; new_product_id: string; message: string },
+      string
+    >({
+      query: (productId) => ({
+        url: `/admin/products/${productId}/duplicate`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['SupplierItems'],
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        await queryFulfilled;
+        dispatch(catalogApi.util.invalidateTags(['Products']));
+      },
+    }),
+
+    uploadProductPhoto: builder.mutation<
+      { photo_url: string },
+      { productId: string; file: File }
+    >({
+      query: ({ productId, file }) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return {
+          url: `/admin/products/${productId}/photo`,
+          method: 'POST',
+          body: formData,
+        };
+      },
+      invalidatesTags: ['SupplierItems'],
+    }),
+
+    bulkDeleteProducts: builder.mutation<
+      { affected_count: number; status: string; message: string },
+      string[]
+    >({
+      query: (productIds) => ({
+        url: '/admin/products/bulk-delete',
+        method: 'POST',
+        body: { product_ids: productIds },
+      }),
+      invalidatesTags: ['SupplierItems'],
+    }),
+
+    bulkHideProducts: builder.mutation<
+      { affected_count: number; status: string; message: string },
+      string[]
+    >({
+      query: (productIds) => ({
+        url: '/admin/products/bulk-hide',
+        method: 'POST',
+        body: { product_ids: productIds },
+      }),
+      invalidatesTags: ['SupplierItems'],
+    }),
+
+    bulkRestoreProducts: builder.mutation<
+      { affected_count: number; status: string; message: string },
+      string[]
+    >({
+      query: (productIds) => ({
+        url: '/admin/products/bulk-restore',
+        method: 'POST',
+        body: { product_ids: productIds },
+      }),
+      invalidatesTags: ['SupplierItems'],
+    }),
+
+    // Photo upload (legacy — for old supplier-items)
     uploadItemPhoto: builder.mutation<
       { photo_url: string },
       { itemId: string; file: File }
@@ -706,4 +928,16 @@ export const {
   useGetParseEventsQuery,
   useDeleteImportMutation,
   useReparseImportMutation,
+  // New product CRUD
+  useGetAdminProductsQuery,
+  useCreateProductMutation,
+  useUpdateProductMutation,
+  useDeleteProductMutation,
+  useHideProductMutation,
+  useRestoreProductMutation,
+  useDuplicateProductMutation,
+  useUploadProductPhotoMutation,
+  useBulkDeleteProductsMutation,
+  useBulkHideProductsMutation,
+  useBulkRestoreProductsMutation,
 } = supplierApi;

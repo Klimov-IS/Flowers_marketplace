@@ -99,7 +99,7 @@ export const ordersApi = createApi({
 
     validateCart: builder.mutation<
       { valid: string[]; invalid: string[] },
-      { offer_ids: string[] }
+      { product_ids: string[] }
     >({
       query: (body) => ({
         url: '/orders/validate-cart',

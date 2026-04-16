@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import Modal from '../../../components/ui/Modal';
 import Button from '../../../components/ui/Button';
-import { useCreateSupplierItemMutation, useUploadItemPhotoMutation } from '../supplierApi';
+import { useCreateProductMutation, useUploadProductPhotoMutation } from '../supplierApi';
 import { useToast } from '../../../components/ui/Toast';
 
 interface CreateItemModalProps {
@@ -13,10 +13,10 @@ interface CreateItemModalProps {
 export default function CreateItemModal({
   isOpen,
   onClose,
-  supplierId,
+  supplierId: _supplierId,
 }: CreateItemModalProps) {
-  const [createItem, { isLoading }] = useCreateSupplierItemMutation();
-  const [uploadPhoto] = useUploadItemPhotoMutation();
+  const [createProduct, { isLoading }] = useCreateProductMutation();
+  const [uploadPhoto] = useUploadProductPhotoMutation();
   const { showToast } = useToast();
 
   const [rawName, setRawName] = useState('');
@@ -84,9 +84,8 @@ export default function CreateItemModal({
     if (!validate()) return;
 
     try {
-      const result = await createItem({
-        supplier_id: supplierId,
-        raw_name: rawName.trim(),
+      const result = await createProduct({
+        title: rawName.trim(),
         variety: variety.trim() || undefined,
         price: Number(price),
         length_cm: lengthCm ? Number(lengthCm) : undefined,
@@ -97,9 +96,9 @@ export default function CreateItemModal({
       }).unwrap();
 
       // Upload photo if selected
-      if (photoFile && result.item_id) {
+      if (photoFile && result.product_id) {
         try {
-          await uploadPhoto({ itemId: result.item_id, file: photoFile }).unwrap();
+          await uploadPhoto({ productId: result.product_id, file: photoFile }).unwrap();
         } catch (err) {
           console.error('Photo upload failed:', err);
           showToast('Карточка создана, но фото не загрузилось', 'error');
@@ -109,7 +108,7 @@ export default function CreateItemModal({
       resetForm();
       onClose();
     } catch (err) {
-      console.error('Failed to create item:', err);
+      console.error('Failed to create product:', err);
     }
   };
 

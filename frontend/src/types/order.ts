@@ -9,8 +9,9 @@ export interface Buyer {
 
 export interface OrderItem {
   id: string;
-  offer_id: string;
-  normalized_sku_id: string;
+  product_id?: string;
+  offer_id?: string;
+  normalized_sku_id?: string;
   product_name?: string;
   quantity: number;
   unit_price: string;
@@ -51,7 +52,8 @@ export interface OrdersResponse {
 export interface CreateOrderRequest {
   buyer_id: string;
   items: {
-    offer_id: string;
+    product_id?: string;
+    offer_id?: string;
     quantity: number;
     notes?: string;
   }[];

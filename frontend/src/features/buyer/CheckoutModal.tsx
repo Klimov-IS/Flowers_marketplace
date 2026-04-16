@@ -61,7 +61,7 @@ export default function CheckoutModal({
       await createOrder({
         buyer_id: user.id,
         items: supplier.items.map((item) => ({
-          offer_id: item.offer_id,
+          product_id: item.product_id,
           quantity: item.quantity,
         })),
         delivery_type: deliveryType,
@@ -110,7 +110,7 @@ export default function CheckoutModal({
           <h4 className="font-semibold mb-3">Ваш заказ из {supplier.supplier_name}</h4>
           <div className="space-y-2">
             {supplier.items.map((item) => (
-              <div key={item.offer_id} className="flex justify-between text-sm">
+              <div key={item.product_id} className="flex justify-between text-sm">
                 <span className="text-gray-700">
                   {item.name} × {item.quantity}
                 </span>

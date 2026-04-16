@@ -88,13 +88,23 @@ class ProductListResponse(BaseModel):
 @router.get("/products")
 async def list_supplier_products(
     q: str | None = Query(None),
-    status: str | None = Query(None),
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
+    status: list[str] | None = Query(None),
+    origin_country: list[str] | None = Query(None),
+    colors: list[str] | None = Query(None),
+    price_min: float | None = Query(None),
+    price_max: float | None = Query(None),
+    length_min: int | None = Query(None),
+    length_max: int | None = Query(None),
+    stock_min: int | None = Query(None),
+    stock_max: int | None = Query(None),
+    sort_by: str | None = Query(None),
+    sort_dir: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=500),
     supplier=Depends(get_current_supplier),
     db: AsyncSession = Depends(get_db),
 ) -> ProductListResponse:
-    """List products for the authenticated supplier."""
+    """List products for the authenticated supplier with filtering and sorting."""
     query = (
         select(Product)
         .where(
@@ -103,44 +113,85 @@ async def list_supplier_products(
         )
     )
 
+    # Multi-status filter
     if status:
-        query = query.where(Product.status == status)
+        query = query.where(Product.status.in_(status))
 
+    # Text search
     if q:
         q_lower = q.lower()
         query = query.where(
             func.lower(Product.title).contains(q_lower)
         )
 
+    # Origin country filter (supports __null__ sentinel)
+    if origin_country:
+        conditions = []
+        has_null = "__null__" in origin_country
+        real_countries = [c for c in origin_country if c != "__null__"]
+        if real_countries:
+            conditions.append(Product.origin_country.in_(real_countries))
+        if has_null:
+            conditions.append(Product.origin_country.is_(None))
+        if conditions:
+            from sqlalchemy import or_
+            query = query.where(or_(*conditions))
+
+    # Color filter (supports __null__ sentinel)
+    if colors:
+        conditions = []
+        has_null = "__null__" in colors
+        real_colors = [c for c in colors if c != "__null__"]
+        if real_colors:
+            conditions.append(Product.color.in_(real_colors))
+        if has_null:
+            conditions.append(Product.color.is_(None))
+        if conditions:
+            from sqlalchemy import or_
+            query = query.where(or_(*conditions))
+
+    # Range filters
+    if price_min is not None:
+        query = query.where(Product.price >= price_min)
+    if price_max is not None:
+        query = query.where(Product.price <= price_max)
+    if length_min is not None:
+        query = query.where(Product.length_cm >= length_min)
+    if length_max is not None:
+        query = query.where(Product.length_cm <= length_max)
+    if stock_min is not None:
+        query = query.where(Product.stock_qty >= stock_min)
+    if stock_max is not None:
+        query = query.where(Product.stock_qty <= stock_max)
+
+    # Count
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar() or 0
 
-    query = query.order_by(Product.created_at.desc()).limit(limit).offset(offset)
+    # Sorting
+    sort_columns = {
+        "raw_name": Product.title,
+        "title": Product.title,
+        "price": Product.price,
+        "length_cm": Product.length_cm,
+        "stock_qty": Product.stock_qty,
+        "created_at": Product.created_at,
+    }
+    sort_col = sort_columns.get(sort_by or "", Product.created_at)
+    if sort_dir == "asc":
+        query = query.order_by(sort_col.asc())
+    else:
+        query = query.order_by(sort_col.desc())
+
+    # Pagination (page/per_page)
+    offset = (page - 1) * per_page
+    query = query.limit(per_page).offset(offset)
+
     result = await db.execute(query)
     products = result.scalars().all()
 
     return ProductListResponse(
-        products=[
-            ProductRow(
-                id=p.id,
-                title=p.title,
-                flower_type=p.flower_type,
-                variety=p.variety,
-                length_cm=p.length_cm,
-                color=p.color,
-                origin_country=p.origin_country,
-                pack_type=p.pack_type,
-                pack_qty=p.pack_qty,
-                photo_url=p.photo_url,
-                price=p.price,
-                currency=p.currency,
-                stock_qty=p.stock_qty,
-                status=p.status,
-                is_active=p.is_active,
-                raw_name=p.raw_name,
-            )
-            for p in products
-        ],
+        products=[ProductRow.model_validate(p) for p in products],
         total=total,
     )
 
@@ -304,3 +355,165 @@ async def upload_product_photo(
 
     logger.info("product.photo_uploaded", product_id=str(product_id), photo_url=photo_url)
     return {"photo_url": photo_url}
+
+
+@router.post("/products/{product_id}/hide")
+async def hide_product(
+    product_id: UUID,
+    supplier=Depends(get_current_supplier),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hide a product (set status=hidden, is_active=false)."""
+    result = await db.execute(
+        select(Product).where(
+            Product.id == product_id,
+            Product.supplier_id == supplier.id,
+        )
+    )
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    product.status = "hidden"
+    product.is_active = False
+    await db.commit()
+
+    logger.info("product.hidden", product_id=str(product_id))
+    return {"id": str(product_id), "status": "hidden", "message": "Product hidden"}
+
+
+@router.post("/products/{product_id}/restore")
+async def restore_product(
+    product_id: UUID,
+    supplier=Depends(get_current_supplier),
+    db: AsyncSession = Depends(get_db),
+):
+    """Restore a hidden product (set status=active, is_active=true)."""
+    result = await db.execute(
+        select(Product).where(
+            Product.id == product_id,
+            Product.supplier_id == supplier.id,
+        )
+    )
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    product.status = "active"
+    product.is_active = True
+    await db.commit()
+
+    logger.info("product.restored", product_id=str(product_id))
+    return {"id": str(product_id), "status": "active", "message": "Product restored"}
+
+
+@router.post("/products/{product_id}/duplicate")
+async def duplicate_product(
+    product_id: UUID,
+    supplier=Depends(get_current_supplier),
+    db: AsyncSession = Depends(get_db),
+):
+    """Duplicate a product — create a copy with '(копия)' suffix."""
+    result = await db.execute(
+        select(Product).where(
+            Product.id == product_id,
+            Product.supplier_id == supplier.id,
+        )
+    )
+    original = result.scalar_one_or_none()
+    if not original:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    copy = Product(
+        supplier_id=supplier.id,
+        title=f"{original.title} (копия)",
+        flower_type=original.flower_type,
+        variety=original.variety,
+        length_cm=original.length_cm,
+        color=original.color,
+        origin_country=original.origin_country,
+        pack_type=original.pack_type,
+        pack_qty=original.pack_qty,
+        photo_url=original.photo_url,
+        price=original.price,
+        currency=original.currency,
+        stock_qty=original.stock_qty,
+        status="active",
+        is_active=True,
+        raw_name=original.raw_name,
+    )
+    db.add(copy)
+    await db.commit()
+    await db.refresh(copy)
+
+    logger.info("product.duplicated", original_id=str(product_id), new_id=str(copy.id))
+    return {"original_id": str(product_id), "new_product_id": str(copy.id), "message": "Product duplicated"}
+
+
+class BulkActionRequest(BaseModel):
+    product_ids: list[UUID]
+
+
+@router.post("/products/bulk-delete")
+async def bulk_delete_products(
+    body: BulkActionRequest,
+    supplier=Depends(get_current_supplier),
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft-delete multiple products."""
+    result = await db.execute(
+        select(Product).where(
+            Product.id.in_(body.product_ids),
+            Product.supplier_id == supplier.id,
+            Product.status != "deleted",
+        )
+    )
+    products = result.scalars().all()
+    for p in products:
+        p.status = "deleted"
+        p.is_active = False
+    await db.commit()
+    return {"affected_count": len(products), "status": "deleted", "message": f"Deleted {len(products)} products"}
+
+
+@router.post("/products/bulk-hide")
+async def bulk_hide_products(
+    body: BulkActionRequest,
+    supplier=Depends(get_current_supplier),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hide multiple products."""
+    result = await db.execute(
+        select(Product).where(
+            Product.id.in_(body.product_ids),
+            Product.supplier_id == supplier.id,
+            Product.status != "deleted",
+        )
+    )
+    products = result.scalars().all()
+    for p in products:
+        p.status = "hidden"
+        p.is_active = False
+    await db.commit()
+    return {"affected_count": len(products), "status": "hidden", "message": f"Hidden {len(products)} products"}
+
+
+@router.post("/products/bulk-restore")
+async def bulk_restore_products(
+    body: BulkActionRequest,
+    supplier=Depends(get_current_supplier),
+    db: AsyncSession = Depends(get_db),
+):
+    """Restore multiple products."""
+    result = await db.execute(
+        select(Product).where(
+            Product.id.in_(body.product_ids),
+            Product.supplier_id == supplier.id,
+        )
+    )
+    products = result.scalars().all()
+    for p in products:
+        p.status = "active"
+        p.is_active = True
+    await db.commit()
+    return {"affected_count": len(products), "status": "active", "message": f"Restored {len(products)} products"}

@@ -4,6 +4,55 @@ export interface Supplier {
   warehouse_address?: string | null;
 }
 
+// ── New product types (flat, no joins) ──
+
+export interface CatalogProduct {
+  id: string;
+  supplier: Supplier;
+  title: string;
+  flower_type: string | null;
+  variety: string | null;
+  length_cm: number | null;
+  color: string | null;
+  origin_country: string | null;
+  pack_type: string | null;
+  pack_qty: number | null;
+  photo_url: string | null;
+  price: number;
+  currency: string;
+  stock_qty: number | null;
+  created_at: string;
+}
+
+export interface ProductsResponse {
+  products: CatalogProduct[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface ProductFilters {
+  q?: string;
+  product_type?: string;  // kept for backward compat with filtersSlice
+  flower_type?: string;
+  variety?: string;
+  length_cm?: number;
+  length_min?: number;
+  length_max?: number;
+  price_min?: number;
+  price_max?: number;
+  supplier_id?: string;
+  color?: string;
+  origin_country?: string[];
+  colors?: string[];
+  in_stock?: boolean;
+  sort_by?: string;
+  limit?: number;
+  offset?: number;
+}
+
+// ── Legacy types (kept for backward compat) ──
+
 export interface NormalizedSKU {
   id: string;
   product_type: string;
@@ -16,7 +65,7 @@ export interface Offer {
   id: string;
   supplier: Supplier;
   sku: NormalizedSKU;
-  display_title: string | null;  // Clean name: Тип + Субтип + Сорт
+  display_title: string | null;
   length_cm: number | null;
   pack_type: string | null;
   pack_qty: number | null;
@@ -29,7 +78,6 @@ export interface Offer {
   availability: string;
   stock_qty: number | null;
   published_at: string;
-  // Enriched from supplier_item attributes
   origin_country: string | null;
   colors: string[];
   photo_url: string | null;
@@ -40,21 +88,4 @@ export interface OffersResponse {
   total: number;
   limit: number;
   offset: number;
-}
-
-export interface ProductFilters {
-  q?: string;
-  product_type?: string;
-  length_cm?: number;
-  length_min?: number;
-  length_max?: number;
-  price_min?: number;
-  price_max?: number;
-  supplier_id?: string;
-  origin_country?: string[];
-  colors?: string[];
-  in_stock?: boolean;
-  sort_by?: string;
-  limit?: number;
-  offset?: number;
 }

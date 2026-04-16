@@ -4,15 +4,12 @@ import EditableCell from './EditableCell';
 import EditableSelect from './EditableSelect';
 import EditableColorSelect from './EditableColorSelect';
 import {
-  useGetFlatItemsQuery,
-  useUpdateSupplierItemMutation,
-  useUpdateOfferCandidateMutation,
-  useUploadItemPhotoMutation,
-  useHideSupplierItemMutation,
-  useRestoreSupplierItemMutation,
-  useDuplicateSupplierItemMutation,
+  useUpdateProductMutation,
+  useUploadProductPhotoMutation,
+  useHideProductMutation,
+  useRestoreProductMutation,
+  useDuplicateProductMutation,
 } from '../supplierApi';
-import { useAppSelector } from '../../../hooks/useAppSelector';
 import { useToast } from '../../../components/ui/Toast';
 import type { FlatOfferVariant } from '../../../types/supplierItem';
 import { getFlowerImage, getDefaultFlowerImage } from '../../../utils/flowerImages';
@@ -178,57 +175,36 @@ export default function ProductDetailModal({
   onClose,
   variant,
 }: ProductDetailModalProps) {
-  const user = useAppSelector((state) => state.auth.user);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const { showToast } = useToast();
 
-  const { data: variantsData } = useGetFlatItemsQuery(
-    {
-      supplier_id: user?.id || '',
-      item_id: variant.item_id,
-      per_page: 100,
-      status: ['active', 'hidden'],
-    },
-    { skip: !isOpen || !user?.id }
-  );
+  const [updateProduct] = useUpdateProductMutation();
+  const [uploadPhoto, { isLoading: isUploading }] = useUploadProductPhotoMutation();
+  const [hideProduct] = useHideProductMutation();
+  const [restoreProduct] = useRestoreProductMutation();
+  const [duplicateProduct] = useDuplicateProductMutation();
 
-  const [updateSupplierItem] = useUpdateSupplierItemMutation();
-  const [updateOfferCandidate] = useUpdateOfferCandidateMutation();
-  const [uploadPhoto, { isLoading: isUploading }] = useUploadItemPhotoMutation();
-  const [hideSupplierItem] = useHideSupplierItemMutation();
-  const [restoreSupplierItem] = useRestoreSupplierItemMutation();
-  const [duplicateSupplierItem] = useDuplicateSupplierItemMutation();
+  // In the new model, variant.item_id === variant.variant_id === product.id
+  const productId = variant.item_id;
 
-  const allVariants = variantsData?.items || [];
-  const itemData = allVariants.length > 0 ? allVariants[0] : variant;
-  // Use fresh variant data from refetched query instead of stale prop
-  const currentVariant = allVariants.find(v => v.variant_id === variant.variant_id) || variant;
-
-  const handleUpdateItem = async (field: string, value: ItemUpdateValue) => {
+  const handleUpdate = async (field: string, value: ItemUpdateValue) => {
     try {
-      const data: Record<string, unknown> = {};
-      data[field] = value;
-      await updateSupplierItem({ id: variant.item_id, data }).unwrap();
-    } catch (err) {
-      console.error('Failed to update item:', field, value, err);
-      showToast('Ошибка сохранения', 'error');
-      throw err;
-    }
-  };
+      // Map old field names to new product fields
+      const fieldMap: Record<string, string> = { price_min: 'price', raw_name: 'title' };
+      const mappedField = fieldMap[field] || field;
 
-  const handleUpdateVariant = async (
-    variantId: string,
-    field: string,
-    value: string | number | null
-  ) => {
-    try {
       const data: Record<string, unknown> = {};
-      data[field] = value;
-      await updateOfferCandidate({ id: variantId, data }).unwrap();
+      // colors array → single color string
+      if (field === 'colors' && Array.isArray(value)) {
+        data['color'] = value.length > 0 ? value[0] : null;
+      } else {
+        data[mappedField] = value;
+      }
+      await updateProduct({ id: productId, data }).unwrap();
     } catch (err) {
-      console.error('Failed to update variant:', variantId, field, value, err);
+      console.error('Failed to update product:', field, value, err);
       showToast('Ошибка сохранения', 'error');
       throw err;
     }
@@ -245,7 +221,7 @@ export default function ProductDetailModal({
     reader.readAsDataURL(file);
 
     try {
-      const result = await uploadPhoto({ itemId: variant.item_id, file }).unwrap();
+      const result = await uploadPhoto({ productId, file }).unwrap();
       console.log('Photo uploaded:', result);
       setUploadStatus('success');
       showToast('Фото обновлено', 'success');
@@ -263,7 +239,7 @@ export default function ProductDetailModal({
 
   const handleHide = async () => {
     try {
-      await hideSupplierItem(variant.item_id).unwrap();
+      await hideProduct(productId).unwrap();
       showToast('Позиция скрыта', 'success');
     } catch {
       showToast('Ошибка при скрытии', 'error');
@@ -272,7 +248,7 @@ export default function ProductDetailModal({
 
   const handleRestore = async () => {
     try {
-      await restoreSupplierItem(variant.item_id).unwrap();
+      await restoreProduct(productId).unwrap();
       showToast('Позиция восстановлена', 'success');
     } catch {
       showToast('Ошибка при восстановлении', 'error');
@@ -281,7 +257,7 @@ export default function ProductDetailModal({
 
   const handleDuplicate = async () => {
     try {
-      await duplicateSupplierItem(variant.item_id).unwrap();
+      await duplicateProduct(productId).unwrap();
       showToast('Карточка дублирована', 'success');
       onClose();
     } catch {
@@ -289,9 +265,9 @@ export default function ProductDetailModal({
     }
   };
 
-  const savedPhotoUrl = itemData.photo_url ? resolvePhotoUrl(itemData.photo_url) : null;
+  const savedPhotoUrl = variant.photo_url ? resolvePhotoUrl(variant.photo_url) : null;
   const photoUrl = photoPreview || savedPhotoUrl;
-  const fallbackImage = getFlowerImage(itemData.flower_type);
+  const fallbackImage = getFlowerImage(variant.flower_type);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="xl">
@@ -299,26 +275,26 @@ export default function ProductDetailModal({
       <div className="flex items-start justify-between gap-4 mb-5">
         <div className="flex-1 min-w-0">
           <EditableCell
-            value={itemData.raw_name}
+            value={variant.raw_name}
             type="text"
             placeholder="Название товара"
             onSave={async (val) => {
-              if (val) await handleUpdateItem('raw_name', val as string);
+              if (val) await handleUpdate('raw_name', val as string);
             }}
             className="text-lg font-semibold text-gray-900"
           />
           <div className="flex items-center gap-2 text-xs text-gray-400 mt-1 px-2">
-            <span className="font-mono">{variant.item_id.slice(0, 8)}</span>
-            {itemData.flower_type && (
+            <span className="font-mono">{productId.slice(0, 8)}</span>
+            {variant.flower_type && (
               <>
                 <span>&middot;</span>
-                <span>{itemData.flower_type}{itemData.subtype ? ` ${itemData.subtype.toLowerCase()}` : ''}</span>
+                <span>{variant.flower_type}{variant.subtype ? ` ${variant.subtype.toLowerCase()}` : ''}</span>
               </>
             )}
           </div>
         </div>
         <StatusBadge
-          status={itemData.item_status}
+          status={variant.item_status}
           onHide={handleHide}
           onRestore={handleRestore}
         />
@@ -334,7 +310,7 @@ export default function ProductDetailModal({
           >
             <img
               src={photoUrl || fallbackImage}
-              alt={itemData.raw_name}
+              alt={variant.raw_name}
               className="w-full h-full object-cover"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = getDefaultFlowerImage();
@@ -379,26 +355,26 @@ export default function ProductDetailModal({
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Сорт</label>
             <EditableCell
-              value={itemData.variety || ''}
+              value={variant.variety || ''}
               type="text"
               placeholder="Не указан"
-              onSave={async (val) => handleUpdateItem('variety', val)}
+              onSave={async (val) => handleUpdate('variety', val)}
               className="text-sm font-medium text-gray-900"
             />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Страна</label>
             <EditableSelect
-              value={itemData.origin_country}
+              value={variant.origin_country}
               options={COUNTRY_OPTIONS}
-              onSave={async (val) => handleUpdateItem('origin_country', val)}
+              onSave={async (val) => handleUpdate('origin_country', val)}
             />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Цвета</label>
             <EditableColorSelect
-              value={itemData.colors || []}
-              onSave={async (colors) => handleUpdateItem('colors', colors)}
+              value={variant.colors || []}
+              onSave={async (colors) => handleUpdate('colors', colors)}
             />
           </div>
         </div>
@@ -413,40 +389,40 @@ export default function ProductDetailModal({
           <div>
             <label className="block text-xs text-gray-500 mb-1">Длина</label>
             <EditableCell
-              value={currentVariant.length_cm}
+              value={variant.length_cm}
               type="number"
               placeholder="—"
               suffix=" см"
-              onSave={async (val) => handleUpdateVariant(currentVariant.variant_id, 'length_cm', val)}
+              onSave={async (val) => handleUpdate('length_cm', val)}
               className="text-sm font-medium"
             />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Цена</label>
             <EditableCell
-              value={currentVariant.price ? parseFloat(currentVariant.price) : null}
+              value={variant.price ? parseFloat(variant.price) : null}
               type="number"
               placeholder="—"
               suffix=" ₽"
-              onSave={async (val) => handleUpdateVariant(currentVariant.variant_id, 'price_min', val)}
+              onSave={async (val) => handleUpdate('price', val)}
               className="text-sm font-semibold"
             />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Упаковка</label>
             <EditableSelect
-              value={currentVariant.pack_type}
+              value={variant.pack_type}
               options={PACK_TYPE_OPTIONS}
-              onSave={async (val) => handleUpdateVariant(currentVariant.variant_id, 'pack_type', val)}
+              onSave={async (val) => handleUpdate('pack_type', val)}
             />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Кол-во в уп.</label>
             <EditableCell
-              value={currentVariant.pack_qty}
+              value={variant.pack_qty}
               type="number"
               placeholder="—"
-              onSave={async (val) => handleUpdateVariant(currentVariant.variant_id, 'pack_qty', val)}
+              onSave={async (val) => handleUpdate('pack_qty', val)}
               className="text-sm font-medium"
             />
           </div>
@@ -455,91 +431,16 @@ export default function ProductDetailModal({
         {/* Stock toggle */}
         <div className="flex items-center gap-3 mt-4 px-1">
           <ToggleSwitch
-            checked={(currentVariant.stock ?? 0) > 0}
+            checked={(variant.stock ?? 0) > 0}
             onChange={async (val) => {
-              await handleUpdateVariant(currentVariant.variant_id, 'stock_qty', val ? 999 : 0);
+              await handleUpdate('stock_qty', val ? 999 : 0);
             }}
           />
           <span className="text-sm text-gray-700">
-            {(currentVariant.stock ?? 0) > 0 ? 'Есть в наличии' : 'Нет в наличии'}
+            {(variant.stock ?? 0) > 0 ? 'Есть в наличии' : 'Нет в наличии'}
           </span>
         </div>
       </div>
-
-      {/* Variants table (only if multiple) */}
-      {allVariants.length > 1 && (
-        <div className="mt-6">
-          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-            Все варианты ({allVariants.length})
-          </h4>
-          <div className="border border-gray-200 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr className="text-left text-xs text-gray-500">
-                  <th className="px-3 py-2 font-medium">Размер</th>
-                  <th className="px-3 py-2 font-medium">Упаковка</th>
-                  <th className="px-3 py-2 font-medium">Кол-во</th>
-                  <th className="px-3 py-2 font-medium">Цена</th>
-                  <th className="px-3 py-2 font-medium text-center">Наличие</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allVariants.map((v) => (
-                  <tr
-                    key={v.variant_id}
-                    className={`border-b border-gray-100 hover:bg-gray-50 ${
-                      v.variant_id === variant.variant_id ? 'bg-primary-50/50' : ''
-                    }`}
-                  >
-                    <td className="px-3 py-2">
-                      <EditableCell
-                        value={v.length_cm}
-                        type="number"
-                        placeholder="—"
-                        suffix=" см"
-                        onSave={async (val) => handleUpdateVariant(v.variant_id, 'length_cm', val)}
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <EditableSelect
-                        value={v.pack_type}
-                        options={PACK_TYPE_OPTIONS}
-                        onSave={async (val) => handleUpdateVariant(v.variant_id, 'pack_type', val)}
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <EditableCell
-                        value={v.pack_qty}
-                        type="number"
-                        placeholder="—"
-                        onSave={async (val) => handleUpdateVariant(v.variant_id, 'pack_qty', val)}
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <EditableCell
-                        value={v.price ? parseFloat(v.price) : null}
-                        type="number"
-                        placeholder="—"
-                        suffix=" ₽"
-                        onSave={async (val) => handleUpdateVariant(v.variant_id, 'price_min', val)}
-                        className="font-medium"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <ToggleSwitch
-                        checked={(v.stock ?? 0) > 0}
-                        onChange={async (val) => {
-                          await handleUpdateVariant(v.variant_id, 'stock_qty', val ? 999 : 0);
-                        }}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {/* Footer */}
       <div className="mt-6 flex items-center justify-between pt-4 border-t border-gray-100">

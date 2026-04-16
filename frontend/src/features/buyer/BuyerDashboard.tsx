@@ -5,7 +5,7 @@ import { useAppDispatch } from '../../hooks/useAppDispatch';
 import {
   updateQuantity,
   removeItem,
-  removeItemsByOfferIds,
+  removeItemsByProductIds,
   clearSupplierCart,
 } from './cartSlice';
 import { useGetOrdersQuery, useValidateCartMutation } from './ordersApi';
@@ -82,24 +82,24 @@ export default function BuyerDashboard() {
 
   const [validateCart] = useValidateCartMutation();
 
-  // Validate cart on mount — remove stale offers
+  // Validate cart on mount — remove stale products
   const runCartValidation = useCallback(async () => {
-    const allOfferIds = cart.suppliers.flatMap((s) => s.items.map((i) => i.offer_id));
-    if (allOfferIds.length === 0) return;
+    const allProductIds = cart.suppliers.flatMap((s) => s.items.map((i) => i.product_id));
+    if (allProductIds.length === 0) return;
 
     try {
-      const result = await validateCart({ offer_ids: allOfferIds }).unwrap();
+      const result = await validateCart({ product_ids: allProductIds }).unwrap();
       if (result.invalid.length > 0) {
         // Find names of stale items before removing
         const staleNames: string[] = [];
         for (const s of cart.suppliers) {
           for (const item of s.items) {
-            if (result.invalid.includes(item.offer_id)) {
+            if (result.invalid.includes(item.product_id)) {
               staleNames.push(item.name);
             }
           }
         }
-        dispatch(removeItemsByOfferIds(result.invalid));
+        dispatch(removeItemsByProductIds(result.invalid));
         setStaleMessage(
           `Удалено из корзины (больше недоступны): ${staleNames.join(', ')}`
         );
@@ -129,13 +129,13 @@ export default function BuyerDashboard() {
 
   const grandTotal = cart.suppliers.reduce((sum, s) => sum + calculateSupplierTotal(s.supplier_id), 0);
 
-  const handleQuantityChange = (supplierId: string, offerId: string, delta: number) => {
+  const handleQuantityChange = (supplierId: string, productId: string, delta: number) => {
     const supplier = cart.suppliers.find((s) => s.supplier_id === supplierId);
-    const item = supplier?.items.find((i) => i.offer_id === offerId);
+    const item = supplier?.items.find((i) => i.product_id === productId);
     if (item) {
       const newQty = item.quantity + delta;
       if (newQty > 0) {
-        dispatch(updateQuantity({ supplier_id: supplierId, offer_id: offerId, quantity: newQty }));
+        dispatch(updateQuantity({ supplier_id: supplierId, product_id: productId, quantity: newQty }));
       }
     }
   };
@@ -255,7 +255,7 @@ export default function BuyerDashboard() {
                     {/* Items */}
                     {supplier.items.map((item, idx) => (
                       <div
-                        key={item.offer_id}
+                        key={item.product_id}
                         className={`px-5 py-4 hover:bg-gray-50/50 transition-colors ${
                           idx < supplier.items.length - 1 ? 'border-b border-gray-50' : ''
                         }`}
@@ -274,7 +274,7 @@ export default function BuyerDashboard() {
                                 </p>
                               </div>
                               <button
-                                onClick={() => dispatch(removeItem({ supplier_id: supplier.supplier_id, offer_id: item.offer_id }))}
+                                onClick={() => dispatch(removeItem({ supplier_id: supplier.supplier_id, product_id: item.product_id }))}
                                 className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0"
                               >
                                 {TrashIcon}
@@ -283,14 +283,14 @@ export default function BuyerDashboard() {
                             <div className="flex items-center justify-between mt-3">
                               <div className="flex items-center gap-1.5">
                                 <button
-                                  onClick={() => handleQuantityChange(supplier.supplier_id, item.offer_id, -1)}
+                                  onClick={() => handleQuantityChange(supplier.supplier_id, item.product_id, -1)}
                                   className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 text-sm transition-colors"
                                 >
                                   −
                                 </button>
                                 <span className="w-12 text-center text-sm font-medium">{item.quantity}</span>
                                 <button
-                                  onClick={() => handleQuantityChange(supplier.supplier_id, item.offer_id, 1)}
+                                  onClick={() => handleQuantityChange(supplier.supplier_id, item.product_id, 1)}
                                   className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 text-sm transition-colors"
                                 >
                                   +
@@ -438,7 +438,7 @@ export default function BuyerDashboard() {
                         <div className="space-y-2">
                           {order.items.map((item) => (
                             <div key={item.id} className="flex justify-between text-sm">
-                              <span className="text-gray-600">{item.product_name || `#${item.offer_id.slice(0, 8)}`}</span>
+                              <span className="text-gray-600">{item.product_name || `#${(item.product_id || item.offer_id || item.id).slice(0, 8)}`}</span>
                               <span className="text-gray-900">
                                 {item.quantity} шт — {parseFloat(item.total_price || '0').toLocaleString()} ₽
                               </span>

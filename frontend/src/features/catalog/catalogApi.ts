@@ -1,41 +1,38 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { OffersResponse, ProductFilters } from '../../types/product';
+import type { ProductsResponse, ProductFilters } from '../../types/product';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 export const catalogApi = createApi({
   reducerPath: 'catalogApi',
   baseQuery: fetchBaseQuery({ baseUrl: API_BASE_URL }),
-  tagTypes: ['Offers'],
+  tagTypes: ['Products'],
   endpoints: (builder) => ({
-    getOffers: builder.query<OffersResponse, ProductFilters>({
+    getProducts: builder.query<ProductsResponse, ProductFilters>({
       query: (filters) => {
         const params = new URLSearchParams();
 
         if (filters.q) params.append('q', filters.q);
-        if (filters.product_type) params.append('product_type', filters.product_type);
-        if (filters.length_cm) params.append('length_cm', String(filters.length_cm));
+        // product_type from filtersSlice maps to flower_type on the API
+        const flowerType = filters.flower_type || filters.product_type;
+        if (flowerType) params.append('flower_type', flowerType);
+        if (filters.variety) params.append('variety', filters.variety);
         if (filters.length_min) params.append('length_min', String(filters.length_min));
         if (filters.length_max) params.append('length_max', String(filters.length_max));
         if (filters.price_min) params.append('price_min', String(filters.price_min));
         if (filters.price_max) params.append('price_max', String(filters.price_max));
         if (filters.supplier_id) params.append('supplier_id', filters.supplier_id);
-        if (filters.origin_country?.length) {
-          filters.origin_country.forEach((c) => params.append('origin_country', c));
-        }
-        if (filters.colors?.length) {
-          filters.colors.forEach((c) => params.append('colors', c));
-        }
+        if (filters.color) params.append('color', filters.color);
         if (filters.in_stock !== undefined) params.append('in_stock', String(filters.in_stock));
         if (filters.sort_by) params.append('sort_by', filters.sort_by);
         if (filters.limit) params.append('limit', String(filters.limit));
         if (filters.offset) params.append('offset', String(filters.offset));
 
-        return `/offers?${params.toString()}`;
+        return `/products?${params.toString()}`;
       },
-      providesTags: ['Offers'],
+      providesTags: ['Products'],
     }),
   }),
 });
 
-export const { useGetOffersQuery } = catalogApi;
+export const { useGetProductsQuery } = catalogApi;

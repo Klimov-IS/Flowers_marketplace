@@ -66,7 +66,7 @@ const cartSlice = createSlice({
       }
 
       const existingItem = supplierGroup.items.find(
-        (i) => i.offer_id === item.offer_id
+        (i) => (item.product_id && i.product_id === item.product_id) || i.offer_id === item.offer_id
       );
 
       if (existingItem) {
@@ -83,15 +83,15 @@ const cartSlice = createSlice({
       state,
       action: PayloadAction<{
         supplier_id: string;
-        offer_id: string;
+        product_id: string;
         quantity: number;
       }>
     ) => {
-      const { supplier_id, offer_id, quantity } = action.payload;
+      const { supplier_id, product_id, quantity } = action.payload;
       const supplier = state.suppliers.find((s) => s.supplier_id === supplier_id);
 
       if (supplier) {
-        const item = supplier.items.find((i) => i.offer_id === offer_id);
+        const item = supplier.items.find((i) => i.product_id === product_id || i.offer_id === product_id);
         if (item) {
           item.quantity = Math.max(1, quantity);
         }
@@ -102,13 +102,13 @@ const cartSlice = createSlice({
 
     removeItem: (
       state,
-      action: PayloadAction<{ supplier_id: string; offer_id: string }>
+      action: PayloadAction<{ supplier_id: string; product_id: string }>
     ) => {
-      const { supplier_id, offer_id } = action.payload;
+      const { supplier_id, product_id } = action.payload;
       const supplier = state.suppliers.find((s) => s.supplier_id === supplier_id);
 
       if (supplier) {
-        supplier.items = supplier.items.filter((i) => i.offer_id !== offer_id);
+        supplier.items = supplier.items.filter((i) => i.product_id !== product_id && i.offer_id !== product_id);
 
         // Remove supplier group if empty
         if (supplier.items.length === 0) {
@@ -121,11 +121,11 @@ const cartSlice = createSlice({
       localStorage.setItem('cart', JSON.stringify(state.suppliers));
     },
 
-    removeItemsByOfferIds: (state, action: PayloadAction<string[]>) => {
+    removeItemsByProductIds: (state, action: PayloadAction<string[]>) => {
       const idsToRemove = new Set(action.payload);
       for (const supplier of state.suppliers) {
         supplier.items = supplier.items.filter(
-          (i) => !idsToRemove.has(i.offer_id)
+          (i) => !idsToRemove.has(i.product_id) && !idsToRemove.has(i.offer_id)
         );
       }
       // Remove empty supplier groups
@@ -151,7 +151,7 @@ export const {
   addToCart,
   updateQuantity,
   removeItem,
-  removeItemsByOfferIds,
+  removeItemsByProductIds,
   clearSupplierCart,
   clearCart,
 } = cartSlice.actions;

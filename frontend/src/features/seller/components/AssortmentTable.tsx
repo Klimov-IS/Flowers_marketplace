@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import type { FlatOfferVariant, SortState } from '../../../types/supplierItem';
 import {
-  useUpdateSupplierItemMutation,
-  useUpdateOfferCandidateMutation,
-  useDeleteOfferCandidateMutation,
-  useHideSupplierItemMutation,
-  useRestoreSupplierItemMutation,
-  useDuplicateSupplierItemMutation,
+  useUpdateProductMutation,
+  useDeleteProductMutation,
+  useHideProductMutation,
+  useRestoreProductMutation,
+  useDuplicateProductMutation,
 } from '../supplierApi';
 import { useToast } from '../../../components/ui/Toast';
 import EditableCell from './EditableCell';
@@ -652,12 +651,11 @@ export default function AssortmentTable({
   onToggleAIExpand,
   onUploadClick,
 }: AssortmentTableProps) {
-  const [updateSupplierItem] = useUpdateSupplierItemMutation();
-  const [updateOfferCandidate] = useUpdateOfferCandidateMutation();
-  const [deleteOfferCandidate] = useDeleteOfferCandidateMutation();
-  const [hideSupplierItem] = useHideSupplierItemMutation();
-  const [restoreSupplierItem] = useRestoreSupplierItemMutation();
-  const [duplicateSupplierItem] = useDuplicateSupplierItemMutation();
+  const [updateProduct] = useUpdateProductMutation();
+  const [deleteProduct] = useDeleteProductMutation();
+  const [hideProduct] = useHideProductMutation();
+  const [restoreProduct] = useRestoreProductMutation();
+  const [duplicateProduct] = useDuplicateProductMutation();
   const { showToast } = useToast();
 
   const [viewingVariant, setViewingVariant] = useState<FlatOfferVariant | null>(null);
@@ -687,48 +685,58 @@ export default function AssortmentTable({
     onSelectionChange(next);
   };
 
-  const handleUpdateItem = async (itemId: string, field: string, value: ItemUpdateValue) => {
+  // Both "item" and "variant" updates now go to one PATCH /admin/products/{id}
+  const handleUpdateItem = async (productId: string, field: string, value: ItemUpdateValue) => {
+    // Map old field names to new product fields
+    const fieldMap: Record<string, string> = { price_min: 'price', colors: 'color' };
+    const mappedField = fieldMap[field] || field;
+
+    let mappedValue: unknown = value;
+    // colors array → single color string
+    if (field === 'colors' && Array.isArray(value)) {
+      mappedValue = value.length > 0 ? value[0] : null;
+    }
+
     const data: Record<string, unknown> = {};
-    data[field] = value;
-    await updateSupplierItem({ id: itemId, data }).unwrap();
+    data[mappedField] = mappedValue;
+    await updateProduct({ id: productId, data }).unwrap();
   };
 
-  const handleUpdateVariant = async (variantId: string, field: string, value: string | number | null) => {
-    const data: Record<string, unknown> = {};
-    data[field] = value;
-    await updateOfferCandidate({ id: variantId, data }).unwrap();
+  // In the new model, item_id === variant_id === product.id
+  const handleUpdateVariant = async (productId: string, field: string, value: string | number | null) => {
+    await handleUpdateItem(productId, field, value);
   };
 
-  const handleDeleteVariant = async (variantId: string) => {
+  const handleDeleteVariant = async (productId: string) => {
     try {
-      await deleteOfferCandidate(variantId).unwrap();
-      showToast('Вариант удалён', 'success');
+      await deleteProduct(productId).unwrap();
+      showToast('Позиция удалена', 'success');
     } catch {
       showToast('Ошибка при удалении', 'error');
     }
   };
 
-  const handleHideItem = async (itemId: string) => {
+  const handleHideItem = async (productId: string) => {
     try {
-      await hideSupplierItem(itemId).unwrap();
+      await hideProduct(productId).unwrap();
       showToast('Позиция скрыта', 'success');
     } catch {
       showToast('Ошибка при скрытии', 'error');
     }
   };
 
-  const handleRestoreItem = async (itemId: string) => {
+  const handleRestoreItem = async (productId: string) => {
     try {
-      await restoreSupplierItem(itemId).unwrap();
+      await restoreProduct(productId).unwrap();
       showToast('Позиция восстановлена', 'success');
     } catch {
       showToast('Ошибка при восстановлении', 'error');
     }
   };
 
-  const handleDuplicateItem = async (itemId: string) => {
+  const handleDuplicateItem = async (productId: string) => {
     try {
-      await duplicateSupplierItem(itemId).unwrap();
+      await duplicateProduct(productId).unwrap();
       showToast('Карточка дублирована', 'success');
     } catch {
       showToast('Ошибка при дублировании', 'error');

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useGetOffersQuery } from './catalogApi';
+import { useGetProductsQuery } from './catalogApi';
 import { useAppSelector } from '../../hooks/useAppSelector';
 import { useAppDispatch } from '../../hooks/useAppDispatch';
 import {
@@ -17,8 +17,7 @@ import { addToCart } from '../buyer/cartSlice';
 import { useDebounce } from '../../hooks/useDebounce';
 import FilterSidebar, { MobileFilterDrawer } from './components/FilterSidebar';
 import { getFlowerImage } from '../../utils/flowerImages';
-import { formatTier } from '../../utils/catalogFormatters';
-import type { OffersResponse, ProductFilters } from '../../types/product';
+import type { ProductsResponse, ProductFilters } from '../../types/product';
 import type { AppDispatch } from '../../app/store';
 
 function resolvePhotoUrl(url: string): string {
@@ -145,7 +144,7 @@ function CatalogPagination({
   filters,
   dispatch,
 }: {
-  data: OffersResponse | undefined;
+  data: ProductsResponse | undefined;
   filters: ProductFilters;
   dispatch: AppDispatch;
 }) {
@@ -295,42 +294,41 @@ export default function CatalogPage() {
     dispatch(setSearchQuery(debouncedSearch));
   }, [debouncedSearch, dispatch]);
 
-  const { data, isLoading, error } = useGetOffersQuery(filters);
+  const { data, isLoading, error } = useGetProductsQuery(filters);
 
   // ── Cart handlers ───────────────────────────────────────────────────────
-  const handleAddToCart = (offerId: string) => {
-    const offer = data?.offers.find((o) => o.id === offerId);
-    if (!offer) return;
+  const handleAddToCart = (productId: string) => {
+    const product = data?.products.find((p) => p.id === productId);
+    if (!product) return;
 
-    const qty = quantities[offerId] || 1;
-    const isPackSale = !!offer.pack_qty;
-    const packQty = offer.pack_qty || 1;
+    const qty = quantities[productId] || 1;
+    const isPackSale = !!product.pack_qty;
+    const packQty = product.pack_qty || 1;
     const actualQuantity = isPackSale ? qty * packQty : qty;
-    const productName = offer.display_title || offer.sku.title;
 
     dispatch(
       addToCart({
-        supplier_id: offer.supplier.id,
-        supplier_name: offer.supplier.name,
-        warehouse_address: offer.supplier.warehouse_address || undefined,
+        supplier_id: product.supplier.id,
+        supplier_name: product.supplier.name,
+        warehouse_address: product.supplier.warehouse_address || undefined,
         item: {
-          product_id: offer.sku.id,
-          offer_id: offer.id,
-          name: productName,
-          price: offer.price_min,
+          product_id: product.id,
+          offer_id: product.id,  // backward compat
+          name: product.title,
+          price: product.price,
           quantity: actualQuantity,
-          stock: offer.stock_qty || undefined,
-          length_cm: offer.length_cm || undefined,
+          stock: product.stock_qty || undefined,
+          length_cm: product.length_cm || undefined,
         },
       })
     );
 
-    setQuantities((prev) => ({ ...prev, [offerId]: 1 }));
+    setQuantities((prev) => ({ ...prev, [productId]: 1 }));
   };
 
-  const getQuantity = (offerId: string) => quantities[offerId] || 1;
-  const setQuantity = (offerId: string, qty: number) => {
-    setQuantities((prev) => ({ ...prev, [offerId]: Math.max(1, qty) }));
+  const getQuantity = (id: string) => quantities[id] || 1;
+  const setQuantity = (id: string, qty: number) => {
+    setQuantities((prev) => ({ ...prev, [id]: Math.max(1, qty) }));
   };
 
   // ── Filter handlers ─────────────────────────────────────────────────────
@@ -479,7 +477,7 @@ export default function CatalogPage() {
             )}
 
             {/* Empty state */}
-            {data && data.offers.length === 0 && !isLoading && (
+            {data && data.products.length === 0 && !isLoading && (
               <div className="bg-white rounded-2xl shadow-sm p-12 sm:p-16 text-center">
                 <div className="text-6xl mb-4">&#128270;</div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Ничего не найдено</h3>
@@ -497,40 +495,39 @@ export default function CatalogPage() {
             )}
 
             {/* Products grid */}
-            {!isLoading && data && data.offers.length > 0 && (
+            {!isLoading && data && data.products.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                {data.offers.map((offer) => {
-                  const tierInfo = formatTier(offer.tier_min_qty, offer.tier_max_qty);
-                  const isPackSale = !!offer.pack_qty;
-                  const packQty = offer.pack_qty || 1;
-                  const pricePerUnit = Number(offer.price_min) || 0;
+                {data.products.map((product) => {
+                  const isPackSale = !!product.pack_qty;
+                  const packQty = product.pack_qty || 1;
+                  const pricePerUnit = Number(product.price) || 0;
                   const packPrice = isPackSale ? pricePerUnit * packQty : null;
                   const unitLabel = isPackSale ? 'упак.' : 'шт';
-                  const quantity = getQuantity(offer.id);
+                  const quantity = getQuantity(product.id);
                   const totalQty = isPackSale ? quantity * packQty : quantity;
                   const totalPrice = totalQty * pricePerUnit;
 
                   // Metadata line: "60 см · Эквадор"
                   const metaParts: string[] = [];
-                  if (offer.length_cm) metaParts.push(`${offer.length_cm} см`);
-                  if (offer.origin_country) metaParts.push(offer.origin_country);
+                  if (product.length_cm) metaParts.push(`${product.length_cm} см`);
+                  if (product.origin_country) metaParts.push(product.origin_country);
                   const metaLine = metaParts.join(' · ');
 
                   return (
                     <div
-                      key={offer.id}
+                      key={product.id}
                       className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden group flex flex-col"
                     >
                       {/* Image */}
                       <div className="relative overflow-hidden">
                         <div className="aspect-[4/5] bg-gray-100 overflow-hidden flex items-end justify-center">
                           <img
-                            src={offer.photo_url ? resolvePhotoUrl(offer.photo_url) : getFlowerImage(offer.sku.product_type)}
-                            alt={offer.display_title || offer.sku.title}
-                            className={`transition-transform duration-300 group-hover:scale-105 ${offer.photo_url ? 'w-full h-full object-cover' : 'max-w-full max-h-full object-contain'}`}
+                            src={product.photo_url ? resolvePhotoUrl(product.photo_url) : getFlowerImage(product.flower_type)}
+                            alt={product.title}
+                            className={`transition-transform duration-300 group-hover:scale-105 ${product.photo_url ? 'w-full h-full object-cover' : 'max-w-full max-h-full object-contain'}`}
                             loading="lazy"
                             onError={(e) => {
-                              (e.target as HTMLImageElement).src = getFlowerImage(offer.sku.product_type);
+                              (e.target as HTMLImageElement).src = getFlowerImage(product.flower_type);
                             }}
                           />
                         </div>
@@ -539,7 +536,7 @@ export default function CatalogPage() {
                       {/* Content */}
                       <div className="p-3 sm:p-4 flex flex-col flex-1">
                         <h3 className="font-semibold text-gray-900 text-sm sm:text-base line-clamp-2 mb-1">
-                          {offer.display_title || offer.sku.title}
+                          {product.title}
                         </h3>
                         {metaLine && (
                           <p className="text-xs text-gray-500 mb-3">{metaLine}</p>
@@ -559,18 +556,15 @@ export default function CatalogPage() {
                                 = {packPrice.toLocaleString('ru-RU')} &#8381; / упак. {packQty} шт
                               </p>
                             )}
-                            {tierInfo && (
-                              <p className="text-xs text-primary-600 font-medium mt-0.5">{tierInfo}</p>
-                            )}
                           </div>
 
                           {/* Supplier */}
-                          <p className="text-[11px] text-gray-400 mb-2">{offer.supplier.name}</p>
+                          <p className="text-[11px] text-gray-400 mb-2">{product.supplier.name}</p>
 
                           {/* Quantity controls */}
                           <div className="flex items-center gap-1.5 mb-2">
                             <button
-                              onClick={() => setQuantity(offer.id, getQuantity(offer.id) - 1)}
+                              onClick={() => setQuantity(product.id, getQuantity(product.id) - 1)}
                               className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors text-sm font-medium"
                             >
                               &minus;
@@ -579,11 +573,11 @@ export default function CatalogPage() {
                               type="number"
                               min="1"
                               value={quantity}
-                              onChange={(e) => setQuantity(offer.id, parseInt(e.target.value) || 1)}
+                              onChange={(e) => setQuantity(product.id, parseInt(e.target.value) || 1)}
                               className="w-12 text-center border border-gray-200 rounded-lg py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
                             />
                             <button
-                              onClick={() => setQuantity(offer.id, getQuantity(offer.id) + 1)}
+                              onClick={() => setQuantity(product.id, getQuantity(product.id) + 1)}
                               className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors text-sm font-medium"
                             >
                               +
@@ -602,7 +596,7 @@ export default function CatalogPage() {
 
                           {/* Add to cart */}
                           <button
-                            onClick={() => handleAddToCart(offer.id)}
+                            onClick={() => handleAddToCart(product.id)}
                             className="w-full bg-primary-500 hover:bg-primary-600 active:scale-[0.97] text-white font-medium py-2.5 rounded-xl text-sm transition-all duration-150 flex items-center justify-center gap-2"
                           >
                             <CartIcon />

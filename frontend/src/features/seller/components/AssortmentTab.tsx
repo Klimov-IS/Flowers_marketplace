@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
-  useGetFlatItemsQuery,
-  useGetAssortmentMetricsQuery,
-  useBulkDeleteItemsMutation,
-  useBulkHideItemsMutation,
-  useBulkRestoreItemsMutation,
+  useGetAdminProductsQuery,
+  useBulkDeleteProductsMutation,
+  useBulkHideProductsMutation,
+  useBulkRestoreProductsMutation,
 } from '../supplierApi';
+import type { AdminProduct } from '../supplierApi';
 import { useToast } from '../../../components/ui/Toast';
 import ConfirmModal from '../../../components/ui/ConfirmModal';
 import { useDebounce } from '../../../hooks/useDebounce';
@@ -13,7 +13,7 @@ import AssortmentTable from './AssortmentTable';
 import { initialFilters, filtersToParams } from './FilterBar';
 import type { ColumnFilters } from './FilterBar';
 import type { FilterValue } from './ColumnFilter';
-import type { SortState } from '../../../types/supplierItem';
+import type { FlatOfferVariant, SortState } from '../../../types/supplierItem';
 import UploadModal from './UploadModal';
 import CreateItemModal from './CreateItemModal';
 
@@ -44,9 +44,9 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
   const [expandedAIItemId, setExpandedAIItemId] = useState<string | null>(null);
   const [bulkConfirm, setBulkConfirm] = useState<{ action: 'delete' | 'hide' | 'restore'; } | null>(null);
 
-  const [bulkDelete, { isLoading: isBulkDeleting }] = useBulkDeleteItemsMutation();
-  const [bulkHide, { isLoading: isBulkHiding }] = useBulkHideItemsMutation();
-  const [bulkRestore, { isLoading: isBulkRestoring }] = useBulkRestoreItemsMutation();
+  const [bulkDelete, { isLoading: isBulkDeleting }] = useBulkDeleteProductsMutation();
+  const [bulkHide, { isLoading: isBulkHiding }] = useBulkHideProductsMutation();
+  const [bulkRestore, { isLoading: isBulkRestoring }] = useBulkRestoreProductsMutation();
   const { showToast } = useToast();
 
   const debouncedSearch = useDebounce(searchQuery, 300);
@@ -57,27 +57,37 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
 
   const filterParams = filtersToParams(filters);
 
-  const pillParams: { has_suggestions?: boolean } = {};
-  if (statusFilter === 'needs_review') {
-    pillParams.has_suggestions = true;
-  } else if (statusFilter === 'published') {
-    pillParams.has_suggestions = false;
-  }
-
-  const { data, isLoading, isFetching } = useGetFlatItemsQuery({
-    supplier_id: supplierId,
+  const { data, isLoading, isFetching } = useGetAdminProductsQuery({
     q: debouncedSearch || undefined,
     page,
     per_page: perPage,
     ...filterParams,
-    ...pillParams,
     sort_by: sort.field || undefined,
     sort_dir: sort.direction || undefined,
   });
 
-  const { data: metrics } = useGetAssortmentMetricsQuery(supplierId);
-
-  const items = data?.items || [];
+  // Map AdminProduct[] to FlatOfferVariant[] for table compatibility
+  const items: FlatOfferVariant[] = (data?.products || []).map((p: AdminProduct) => ({
+    variant_id: p.id,
+    item_id: p.id,
+    raw_name: p.title || p.raw_name || '',
+    flower_type: p.flower_type,
+    subtype: null,
+    variety: p.variety,
+    origin_country: p.origin_country,
+    colors: p.color ? [p.color] : [],
+    length_cm: p.length_cm,
+    pack_type: p.pack_type,
+    pack_qty: p.pack_qty,
+    price: String(p.price),
+    stock: p.stock_qty,
+    item_status: p.status,
+    validation: 'ok' as const,
+    source_file: null,
+    possible_duplicate: false,
+    has_pending_suggestions: false,
+    photo_url: p.photo_url,
+  }));
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / perPage);
 
@@ -102,20 +112,16 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
 
   const handleBulkAction = async () => {
     if (!bulkConfirm || selectedIds.size === 0) return;
-    // The selectedIds are variant_ids; bulk endpoints need item_ids
-    // Get unique item_ids from the selected variants
-    const selectedItemIds = [...new Set(
-      items.filter((v) => selectedIds.has(v.variant_id)).map((v) => v.item_id)
-    )];
+    const productIds = [...selectedIds];
     try {
       if (bulkConfirm.action === 'delete') {
-        const result = await bulkDelete(selectedItemIds).unwrap();
+        const result = await bulkDelete(productIds).unwrap();
         showToast(`Удалено: ${result.affected_count} позиций`, 'success');
       } else if (bulkConfirm.action === 'hide') {
-        const result = await bulkHide(selectedItemIds).unwrap();
+        const result = await bulkHide(productIds).unwrap();
         showToast(`Скрыто: ${result.affected_count} позиций`, 'success');
       } else if (bulkConfirm.action === 'restore') {
-        const result = await bulkRestore(selectedItemIds).unwrap();
+        const result = await bulkRestore(productIds).unwrap();
         showToast(`Опубликовано: ${result.affected_count} позиций`, 'success');
       }
       setSelectedIds(new Set());
@@ -153,17 +159,11 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
             className="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-primary-300 focus:ring-1 focus:ring-primary-200 outline-none transition-all cursor-pointer"
           >
-            {STATUS_OPTIONS.map((opt) => {
-              const count = opt.value === 'all' ? metrics?.total_items
-                : opt.value === 'published' ? metrics?.published
-                : opt.value === 'needs_review' ? metrics?.needs_review
-                : metrics?.errors;
-              return (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}{count !== undefined ? ` (${count})` : ''}
-                </option>
-              );
-            })}
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
           </select>
 
           {/* Reset — text button */}
