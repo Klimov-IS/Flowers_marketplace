@@ -5,22 +5,16 @@ from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.logging_config import get_logger
 from apps.api.models import (
     ImportBatch,
-    NormalizedSKU,
-    OfferCandidate,
     ParseEvent,
     ParseRun,
     RawRow,
-    SKUMapping,
-    SupplierItem,
 )
-from apps.api.services.ai_enrichment_service import run_ai_enrichment_for_batch
-from apps.api.services.publish_service import PublishService
+from apps.api.models.product import Product
 from packages.core.parsing import (
     detect_matrix_format,
     extract_length_cm,
@@ -37,7 +31,7 @@ from packages.core.ai.column_mapping import ai_detect_column_mapping
 from packages.core.ai.text_extraction import ai_extract_price_from_text
 from packages.core.parsing.attributes import extract_pack_qty
 from packages.core.parsing.headers import normalize_headers
-from packages.core.utils.stable_key import generate_stable_key, normalize_name
+from packages.core.utils.stable_key import generate_stable_key
 
 logger = get_logger(__name__)
 
@@ -165,43 +159,12 @@ class ImportService:
             if ai_text_fallback:
                 summary["extraction_method"] = "ai_text_fallback"
 
-            try:
-                async with self.db.begin_nested():
-                    ai_result = await run_ai_enrichment_for_batch(
-                        db=self.db,
-                        supplier_id=supplier_id,
-                        import_batch_id=import_batch.id,
-                    )
-                    summary["ai_enrichment"] = ai_result
-            except Exception as e:
-                logger.warning("ai_enrichment_error", batch_id=str(import_batch.id), error=str(e))
-                summary["ai_enrichment"] = {"status": "error", "error": str(e)}
-
-            try:
-                async with self.db.begin_nested():
-                    mapping_result = await self._auto_create_sku_mappings(
-                        supplier_id=supplier_id,
-                        import_batch_id=import_batch.id,
-                    )
-                    summary["auto_mappings"] = mapping_result
-            except Exception as e:
-                logger.warning("auto_mappings_error", batch_id=str(import_batch.id), error=str(e))
-                summary["auto_mappings"] = {"status": "error", "error": str(e)}
-
             parse_run.finished_at = datetime.utcnow()
             parse_run.summary = summary
             import_batch.status = "parsed"
             await self.db.commit()
 
             logger.info("import_completed", batch_id=str(import_batch.id), summary=summary)
-
-            try:
-                publish_service = PublishService(self.db)
-                publish_result = await publish_service.publish_supplier_offers(supplier_id)
-                await self.db.commit()
-            except Exception as e:
-                logger.warning("auto_publish_error", batch_id=str(import_batch.id), error=str(e))
-
             return import_batch
 
         except Exception as e:
@@ -266,43 +229,12 @@ class ImportService:
                 raw_rows=raw_rows,
             )
 
-            try:
-                async with self.db.begin_nested():
-                    ai_result = await run_ai_enrichment_for_batch(
-                        db=self.db,
-                        supplier_id=supplier_id,
-                        import_batch_id=import_batch.id,
-                    )
-                    summary["ai_enrichment"] = ai_result
-            except Exception as e:
-                logger.warning("ai_enrichment_error", batch_id=str(import_batch.id), error=str(e))
-                summary["ai_enrichment"] = {"status": "error", "error": str(e)}
-
-            try:
-                async with self.db.begin_nested():
-                    mapping_result = await self._auto_create_sku_mappings(
-                        supplier_id=supplier_id,
-                        import_batch_id=import_batch.id,
-                    )
-                    summary["auto_mappings"] = mapping_result
-            except Exception as e:
-                logger.warning("auto_mappings_error", batch_id=str(import_batch.id), error=str(e))
-                summary["auto_mappings"] = {"status": "error", "error": str(e)}
-
             parse_run.finished_at = datetime.utcnow()
             parse_run.summary = summary
             import_batch.status = "parsed"
             await self.db.commit()
 
             logger.info("import_completed", batch_id=str(import_batch.id), summary=summary)
-
-            try:
-                publish_service = PublishService(self.db)
-                publish_result = await publish_service.publish_supplier_offers(supplier_id)
-                await self.db.commit()
-            except Exception as e:
-                logger.warning("auto_publish_error", batch_id=str(import_batch.id), error=str(e))
-
             return import_batch
 
         except Exception as e:
@@ -325,19 +257,8 @@ class ImportService:
         1. Create import_batch (status=received)
         2. Parse CSV and store raw_rows
         3. Create parse_run
-        4. Process rows: create/update supplier_items and offer_candidates
+        4. Process rows: create/update products directly
         5. Mark batch as parsed/failed
-
-        Args:
-            supplier_id: Supplier UUID
-            filename: Original filename
-            content: CSV file bytes
-
-        Returns:
-            Import batch
-
-        Raises:
-            ValueError: If import fails
         """
         logger.info("import_started", supplier_id=str(supplier_id), filename=filename)
 
@@ -389,54 +310,7 @@ class ImportService:
                 raw_rows=raw_rows,
             )
 
-            # Stage 4.5: AI Enrichment (savepoint — failure won't roll back import)
-            try:
-                async with self.db.begin_nested():
-                    ai_result = await run_ai_enrichment_for_batch(
-                        db=self.db,
-                        supplier_id=supplier_id,
-                        import_batch_id=import_batch.id,
-                    )
-                    summary["ai_enrichment"] = ai_result
-                    logger.info(
-                        "ai_enrichment_result",
-                        batch_id=str(import_batch.id),
-                        status=ai_result.get("status"),
-                        auto_applied=ai_result.get("auto_applied", 0),
-                        needs_review=ai_result.get("needs_review", 0),
-                    )
-            except Exception as e:
-                # AI enrichment failure should not fail the import
-                logger.warning(
-                    "ai_enrichment_error",
-                    batch_id=str(import_batch.id),
-                    error=str(e),
-                )
-                summary["ai_enrichment"] = {"status": "error", "error": str(e)}
-
-            # Stage 5: Auto-create SKU mappings (savepoint — failure won't roll back import)
-            try:
-                async with self.db.begin_nested():
-                    mapping_result = await self._auto_create_sku_mappings(
-                        supplier_id=supplier_id,
-                        import_batch_id=import_batch.id,
-                    )
-                    summary["auto_mappings"] = mapping_result
-                    logger.info(
-                        "auto_mappings_created",
-                        batch_id=str(import_batch.id),
-                        skus_created=mapping_result.get("skus_created", 0),
-                        mappings_created=mapping_result.get("mappings_created", 0),
-                    )
-            except Exception as e:
-                logger.warning(
-                    "auto_mappings_error",
-                    batch_id=str(import_batch.id),
-                    error=str(e),
-                )
-                summary["auto_mappings"] = {"status": "error", "error": str(e)}
-
-            # Stage 6: Finalize parsing
+            # Stage 5: Finalize parsing
             parse_run.finished_at = datetime.utcnow()
             parse_run.summary = summary
             import_batch.status = "parsed"
@@ -448,25 +322,6 @@ class ImportService:
                 batch_id=str(import_batch.id),
                 summary=summary,
             )
-
-            # Stage 7: Auto-publish offers
-            try:
-                publish_service = PublishService(self.db)
-                publish_result = await publish_service.publish_supplier_offers(supplier_id)
-                await self.db.commit()
-                logger.info(
-                    "auto_publish_completed",
-                    batch_id=str(import_batch.id),
-                    offers_created=publish_result.get("offers_created", 0),
-                    offers_deactivated=publish_result.get("offers_deactivated", 0),
-                )
-            except Exception as e:
-                logger.warning(
-                    "auto_publish_error",
-                    batch_id=str(import_batch.id),
-                    error=str(e),
-                )
-                # Don't fail the import if publish fails
 
             return import_batch
 
@@ -562,23 +417,15 @@ class ImportService:
         raw_rows: List[RawRow],
     ) -> Dict:
         """
-        Process parsed rows: create supplier_items and offer_candidates.
-
-        Args:
-            supplier_id: Supplier UUID
-            import_batch_id: Import batch UUID
-            parse_run_id: Parse run UUID
-            rows: Parsed CSV rows
-            raw_rows: Corresponding RawRow models
+        Process parsed rows: create/update products directly.
 
         Returns:
             Summary dict with counts
         """
         summary = {
             "rows_total": len(rows),
-            "supplier_items_created": 0,
-            "supplier_items_updated": 0,
-            "offer_candidates_created": 0,
+            "products_created": 0,
+            "products_updated": 0,
             "parse_events_count": 0,
         }
 
@@ -789,97 +636,80 @@ class ImportService:
 
         return results
 
-    async def _create_bundle_items(
+    async def _create_or_update_product(
         self,
         supplier_id: UUID,
         import_batch_id: UUID,
-        raw_row: RawRow,
+        title: str,
         raw_name: str,
-        expanded: list[tuple[object, str]],
+        flower_type: str | None,
+        variety: str | None,
+        origin_country: str | None,
+        color: str | None,
+        length_cm: int | None,
+        pack_type: str | None,
+        pack_qty: int | None,
+        price: Decimal,
         summary: Dict,
-    ) -> list:
-        """Create SupplierItem records for each expanded bundle variety.
+    ) -> Product:
+        """Create or update a Product by stable key (supplier_id + raw_name + length + pack_type).
 
-        Returns list of (supplier_item, variety_norm) tuples for OfferCandidate creation.
+        Returns the Product instance.
         """
-        items = []
-        for variety_norm, synthetic_name in expanded:
-            # Build attributes for this variety
-            attrs = {
-                "origin_country": variety_norm.origin_country,
-                "colors": variety_norm.colors or [],
-                "flower_type": variety_norm.flower_type,
-                "subtype": variety_norm.flower_subtype,
-                "variety": variety_norm.variety,
-                "farm": variety_norm.farm,
-                "clean_name": variety_norm.clean_name,
-                "origin": "bundle_expansion",
-                "bundle_source": raw_name,
-            }
-            attrs = {k: v for k, v in attrs.items() if v is not None}
-            sources = {k: "parser" for k in attrs.keys()}
-            attrs["_sources"] = sources
+        stable_key = generate_stable_key(
+            supplier_id=supplier_id,
+            raw_name=raw_name,
+            raw_group=f"{length_cm}_{pack_type}",
+        )
 
-            name_norm = normalize_name(synthetic_name)
-            stable_key = generate_stable_key(
+        # Lookup existing product by raw_name match for same supplier
+        result = await self.db.execute(
+            select(Product).where(
+                Product.supplier_id == supplier_id,
+                Product.raw_name == raw_name,
+                Product.length_cm == length_cm,
+                Product.pack_type == pack_type,
+            )
+        )
+        product = result.scalar_one_or_none()
+
+        if product:
+            # Update existing product
+            product.title = title
+            product.flower_type = flower_type or product.flower_type
+            product.variety = variety or product.variety
+            product.origin_country = origin_country or product.origin_country
+            product.color = color or product.color
+            product.pack_qty = pack_qty or product.pack_qty
+            product.price = price
+            product.import_batch_id = import_batch_id
+            if product.status == "deleted":
+                product.status = "active"
+                product.is_active = True
+            summary["products_updated"] += 1
+        else:
+            product = Product(
                 supplier_id=supplier_id,
-                raw_name=synthetic_name,
-                raw_group=None,
+                title=title,
+                flower_type=flower_type,
+                variety=variety,
+                origin_country=origin_country,
+                color=color,
+                length_cm=length_cm,
+                pack_type=pack_type,
+                pack_qty=pack_qty,
+                price=price,
+                currency="RUB",
+                status="active",
+                is_active=True,
+                import_batch_id=import_batch_id,
+                raw_name=raw_name,
             )
+            self.db.add(product)
+            await self.db.flush()
+            summary["products_created"] += 1
 
-            # Create or update SupplierItem
-            result = await self.db.execute(
-                select(SupplierItem).where(
-                    SupplierItem.supplier_id == supplier_id,
-                    SupplierItem.stable_key == stable_key,
-                )
-            )
-            supplier_item = result.scalar_one_or_none()
-
-            if supplier_item:
-                supplier_item.last_import_batch_id = import_batch_id
-                supplier_item.raw_name = synthetic_name
-                supplier_item.name_norm = name_norm
-                if supplier_item.status == "deleted":
-                    supplier_item.status = "active"
-                    supplier_item.deleted_at = None
-
-                # Merge attributes preserving manual edits
-                existing_attrs = supplier_item.attributes or {}
-                locked_fields = existing_attrs.get("_locked", [])
-                existing_sources = existing_attrs.get("_sources", {})
-                merged = dict(attrs)
-                merged_sources = dict(sources)
-                for field in locked_fields:
-                    if field in existing_attrs:
-                        merged[field] = existing_attrs[field]
-                        merged_sources[field] = existing_sources.get(field, "manual")
-                for field, source in existing_sources.items():
-                    if source == "manual" and field in existing_attrs and field not in locked_fields:
-                        merged[field] = existing_attrs[field]
-                        merged_sources[field] = "manual"
-                merged["_sources"] = merged_sources
-                merged["_locked"] = locked_fields
-                supplier_item.attributes = merged
-                summary["supplier_items_updated"] += 1
-            else:
-                supplier_item = SupplierItem(
-                    supplier_id=supplier_id,
-                    stable_key=stable_key,
-                    last_import_batch_id=import_batch_id,
-                    raw_name=synthetic_name,
-                    raw_group=None,
-                    name_norm=name_norm,
-                    attributes=attrs,
-                    status="active",
-                )
-                self.db.add(supplier_item)
-                await self.db.flush()
-                summary["supplier_items_created"] += 1
-
-            items.append((supplier_item, variety_norm))
-
-        return items
+        return product
 
     async def _process_single_row(
         self,
@@ -982,7 +812,11 @@ class ImportService:
         if section_context:
             attributes["section_context"] = section_context
 
-        # Bundle auto-expansion: split into individual items
+        # Build title from clean_name or raw_name
+        title = normalized.clean_name or raw_name
+        color = normalized.colors[0] if normalized.colors else None
+
+        # Bundle auto-expansion: split into individual products
         if normalized.is_bundle_list and normalized.bundle_varieties:
             expanded = self._build_expanded_varieties(
                 normalized, raw_name, section_context=section_context,
@@ -1000,143 +834,43 @@ class ImportService:
             )
             summary["parse_events_count"] += 1
 
-            items = await self._create_bundle_items(
-                supplier_id, import_batch_id, raw_row, raw_name, expanded, summary,
-            )
-            for supplier_item, variety_norm in items:
+            for variety_norm, synthetic_name in expanded:
                 v_length = variety_norm.length_cm or length_cm
-                validation, validation_notes = self._validate_offer(
-                    price_data["price_min"], price_data["price_max"], v_length,
-                )
-                offer_candidate = OfferCandidate(
-                    supplier_item_id=supplier_item.id,
+                v_title = variety_norm.clean_name or synthetic_name
+                v_color = (variety_norm.colors[0] if variety_norm.colors else None) or color
+                await self._create_or_update_product(
+                    supplier_id=supplier_id,
                     import_batch_id=import_batch_id,
-                    raw_row_id=raw_row.id,
+                    title=v_title,
+                    raw_name=synthetic_name,
+                    flower_type=variety_norm.flower_type,
+                    variety=variety_norm.variety,
+                    origin_country=variety_norm.origin_country or origin_country,
+                    color=v_color,
                     length_cm=v_length,
                     pack_type=None,
                     pack_qty=pack_qty,
-                    price_type=price_data["price_type"],
-                    price_min=price_data["price_min"],
-                    price_max=price_data["price_max"],
-                    currency="RUB",
-                    tier_min_qty=None,
-                    tier_max_qty=None,
-                    availability="unknown",
-                    stock_qty=None,
-                    validation=validation,
-                    validation_notes=validation_notes,
+                    price=Decimal(str(price_data["price_min"])),
+                    summary=summary,
                 )
-                self.db.add(offer_candidate)
-                summary["offer_candidates_created"] += 1
             return
 
-        # Non-bundle warnings
-        if normalized.warnings:
-            attributes["warnings"] = normalized.warnings
-            if any("garbage" in w for w in normalized.warnings):
-                attributes["needs_review"] = True
-                attributes["review_reason"] = "garbage_text_detected"
-
-        # Remove None values
-        attributes = {k: v for k, v in attributes.items() if v is not None}
-
-        # Add source tracking metadata
-        sources = {k: "parser" for k in attributes.keys()}
-        attributes["_sources"] = sources
-
-        # Generate stable key
-        name_norm = normalize_name(raw_name)
-        stable_key = generate_stable_key(
+        # Create or update product
+        await self._create_or_update_product(
             supplier_id=supplier_id,
-            raw_name=raw_name,
-            raw_group=None,  # F1 format has no groups
-        )
-
-        # Create or update supplier_item
-        result = await self.db.execute(
-            select(SupplierItem).where(
-                SupplierItem.supplier_id == supplier_id,
-                SupplierItem.stable_key == stable_key,
-            )
-        )
-        supplier_item = result.scalar_one_or_none()
-
-        if supplier_item:
-            # Update existing - preserve locked fields and manual changes
-            supplier_item.last_import_batch_id = import_batch_id
-            supplier_item.raw_name = raw_name
-            supplier_item.name_norm = name_norm
-
-            # Restore to active if was deleted (re-import should reactivate)
-            if supplier_item.status == "deleted":
-                supplier_item.status = "active"
-                supplier_item.deleted_at = None
-
-            # Merge attributes: preserve locked fields and manual sources
-            existing_attrs = supplier_item.attributes or {}
-            locked_fields = existing_attrs.get("_locked", [])
-            existing_sources = existing_attrs.get("_sources", {})
-
-            # Start with new parser attributes
-            merged = dict(attributes)
-            merged_sources = dict(sources)
-
-            # Preserve locked fields from existing
-            for field in locked_fields:
-                if field in existing_attrs:
-                    merged[field] = existing_attrs[field]
-                    merged_sources[field] = existing_sources.get(field, "manual")
-
-            # Preserve manually edited fields (source=manual)
-            for field, source in existing_sources.items():
-                if source == "manual" and field in existing_attrs and field not in locked_fields:
-                    merged[field] = existing_attrs[field]
-                    merged_sources[field] = "manual"
-
-            merged["_sources"] = merged_sources
-            merged["_locked"] = locked_fields
-            supplier_item.attributes = merged
-            summary["supplier_items_updated"] += 1
-        else:
-            # Create new
-            supplier_item = SupplierItem(
-                supplier_id=supplier_id,
-                stable_key=stable_key,
-                last_import_batch_id=import_batch_id,
-                raw_name=raw_name,
-                raw_group=None,
-                name_norm=name_norm,
-                attributes=attributes,
-                status="active",
-            )
-            self.db.add(supplier_item)
-            await self.db.flush()
-            summary["supplier_items_created"] += 1
-
-        # Create offer_candidate
-        validation, validation_notes = self._validate_offer(
-            price_data["price_min"], price_data["price_max"], length_cm,
-        )
-        offer_candidate = OfferCandidate(
-            supplier_item_id=supplier_item.id,
             import_batch_id=import_batch_id,
-            raw_row_id=raw_row.id,
+            title=title,
+            raw_name=raw_name,
+            flower_type=normalized.flower_type,
+            variety=normalized.variety,
+            origin_country=origin_country,
+            color=color,
             length_cm=length_cm,
-            pack_type=None,  # F1 format doesn't have pack_type in MVP
+            pack_type=None,
             pack_qty=pack_qty,
-            price_type=price_data["price_type"],
-            price_min=price_data["price_min"],
-            price_max=price_data["price_max"],
-            currency="RUB",
-            tier_min_qty=None,
-            tier_max_qty=None,
-            availability="unknown",
-            stock_qty=None,
-            validation=validation,
-            validation_notes=validation_notes,
+            price=Decimal(str(price_data["price_min"])),
+            summary=summary,
         )
-        self.db.add(offer_candidate)
-        summary["offer_candidates_created"] += 1
 
     async def _process_matrix_row(
         self,
@@ -1149,17 +883,16 @@ class ImportService:
         summary: Dict,
     ) -> None:
         """
-        Process a matrix format row - one product with multiple price columns.
+        Process a matrix format row — creates one Product per price column.
 
         Matrix format example:
             Наименование | 40 см Бак | 40 см Упак | 50 см Бак
             Роза         | 60        | 65         | 70
 
-        Creates one SupplierItem and multiple OfferCandidates.
+        Creates N Products (one per valid price column).
         """
         cells = row_data["cells"]
 
-        # First column is product name
         raw_name = cells[0].strip() if cells else ""
         if not raw_name:
             await self._create_parse_event(
@@ -1172,20 +905,10 @@ class ImportService:
             summary["parse_events_count"] += 1
             return
 
-        # Extract attributes using rich name normalizer
         normalized = normalize_name_rich(raw_name)
         origin_country = normalized.origin_country or extract_origin_country(raw_name)
-
-        # Build attributes with all extracted data and source tracking
-        attributes = {
-            "origin_country": origin_country,
-            "colors": normalized.colors if normalized.colors else [],
-            "flower_type": normalized.flower_type,
-            "subtype": normalized.flower_subtype,  # кустовая, спрей, пионовидная
-            "variety": normalized.variety,
-            "farm": normalized.farm,
-            "clean_name": normalized.clean_name,
-        }
+        title = normalized.clean_name or raw_name
+        color = normalized.colors[0] if normalized.colors else None
 
         # Bundle auto-expansion for matrix format
         if normalized.is_bundle_list and normalized.bundle_varieties:
@@ -1203,13 +926,10 @@ class ImportService:
             )
             summary["parse_events_count"] += 1
 
-            items = await self._create_bundle_items(
-                supplier_id, import_batch_id, raw_row, raw_name, expanded, summary,
-            )
-
-            # Create OfferCandidates: each variety × each price column
-            for supplier_item, variety_norm in items:
-                candidates_created = 0
+            # Each variety × each price column = N×M products
+            for variety_norm, synthetic_name in expanded:
+                v_title = variety_norm.clean_name or synthetic_name
+                v_color = (variety_norm.colors[0] if variety_norm.colors else None) or color
                 for col_idx, length_cm, pack_type in matrix_columns:
                     if col_idx >= len(cells):
                         continue
@@ -1219,104 +939,25 @@ class ImportService:
                     price_data = parse_price(raw_price)
                     if price_data["error"] or price_data["price_min"] is None:
                         continue
-                    validation, validation_notes = self._validate_offer(
-                        price_data["price_min"], price_data["price_max"], length_cm,
-                    )
-                    offer_candidate = OfferCandidate(
-                        supplier_item_id=supplier_item.id,
+                    await self._create_or_update_product(
+                        supplier_id=supplier_id,
                         import_batch_id=import_batch_id,
-                        raw_row_id=raw_row.id,
+                        title=v_title,
+                        raw_name=synthetic_name,
+                        flower_type=variety_norm.flower_type,
+                        variety=variety_norm.variety,
+                        origin_country=variety_norm.origin_country or origin_country,
+                        color=v_color,
                         length_cm=length_cm,
                         pack_type=pack_type,
                         pack_qty=None,
-                        price_type=price_data["price_type"],
-                        price_min=price_data["price_min"],
-                        price_max=price_data["price_max"],
-                        currency="RUB",
-                        tier_min_qty=None,
-                        tier_max_qty=None,
-                        availability="unknown",
-                        stock_qty=None,
-                        validation=validation,
-                        validation_notes=validation_notes,
+                        price=Decimal(str(price_data["price_min"])),
+                        summary=summary,
                     )
-                    self.db.add(offer_candidate)
-                    candidates_created += 1
-                summary["offer_candidates_created"] += candidates_created
             return
 
-        # Non-bundle warnings
-        if normalized.warnings:
-            attributes["warnings"] = normalized.warnings
-            if any("garbage" in w for w in normalized.warnings):
-                attributes["needs_review"] = True
-                attributes["review_reason"] = "garbage_text_detected"
-
-        # Remove None values
-        attributes = {k: v for k, v in attributes.items() if v is not None}
-
-        # Add source tracking metadata
-        sources = {k: "parser" for k in attributes.keys()}
-        attributes["_sources"] = sources
-
-        # Generate stable key and create/update SupplierItem
-        name_norm = normalize_name(raw_name)
-        stable_key = generate_stable_key(
-            supplier_id=supplier_id,
-            raw_name=raw_name,
-            raw_group=None,
-        )
-
-        result = await self.db.execute(
-            select(SupplierItem).where(
-                SupplierItem.supplier_id == supplier_id,
-                SupplierItem.stable_key == stable_key,
-            )
-        )
-        supplier_item = result.scalar_one_or_none()
-
-        if supplier_item:
-            supplier_item.last_import_batch_id = import_batch_id
-            supplier_item.raw_name = raw_name
-            if supplier_item.status == "deleted":
-                supplier_item.status = "active"
-                supplier_item.deleted_at = None
-            supplier_item.name_norm = name_norm
-
-            existing_attrs = supplier_item.attributes or {}
-            locked_fields = existing_attrs.get("_locked", [])
-            existing_sources = existing_attrs.get("_sources", {})
-            merged = dict(attributes)
-            merged_sources = dict(sources)
-            for field in locked_fields:
-                if field in existing_attrs:
-                    merged[field] = existing_attrs[field]
-                    merged_sources[field] = existing_sources.get(field, "manual")
-            for field, source in existing_sources.items():
-                if source == "manual" and field in existing_attrs and field not in locked_fields:
-                    merged[field] = existing_attrs[field]
-                    merged_sources[field] = "manual"
-            merged["_sources"] = merged_sources
-            merged["_locked"] = locked_fields
-            supplier_item.attributes = merged
-            summary["supplier_items_updated"] += 1
-        else:
-            supplier_item = SupplierItem(
-                supplier_id=supplier_id,
-                stable_key=stable_key,
-                last_import_batch_id=import_batch_id,
-                raw_name=raw_name,
-                raw_group=None,
-                name_norm=name_norm,
-                attributes=attributes,
-                status="active",
-            )
-            self.db.add(supplier_item)
-            await self.db.flush()
-            summary["supplier_items_created"] += 1
-
-        # Create OfferCandidate for each non-empty price column
-        candidates_created = 0
+        # Non-bundle: one product per price column
+        products_created = 0
         for col_idx, length_cm, pack_type in matrix_columns:
             if col_idx >= len(cells):
                 continue
@@ -1338,33 +979,24 @@ class ImportService:
                 summary["parse_events_count"] += 1
                 continue
 
-            validation, validation_notes = self._validate_offer(
-                price_data["price_min"], price_data["price_max"], length_cm,
-            )
-            offer_candidate = OfferCandidate(
-                supplier_item_id=supplier_item.id,
+            await self._create_or_update_product(
+                supplier_id=supplier_id,
                 import_batch_id=import_batch_id,
-                raw_row_id=raw_row.id,
+                title=title,
+                raw_name=raw_name,
+                flower_type=normalized.flower_type,
+                variety=normalized.variety,
+                origin_country=origin_country,
+                color=color,
                 length_cm=length_cm,
                 pack_type=pack_type,
                 pack_qty=None,
-                price_type=price_data["price_type"],
-                price_min=price_data["price_min"],
-                price_max=price_data["price_max"],
-                currency="RUB",
-                tier_min_qty=None,
-                tier_max_qty=None,
-                availability="unknown",
-                stock_qty=None,
-                validation=validation,
-                validation_notes=validation_notes,
+                price=Decimal(str(price_data["price_min"])),
+                summary=summary,
             )
-            self.db.add(offer_candidate)
-            candidates_created += 1
+            products_created += 1
 
-        summary["offer_candidates_created"] += candidates_created
-
-        if candidates_created == 0:
+        if products_created == 0:
             await self._create_parse_event(
                 parse_run_id=parse_run_id,
                 raw_row_id=raw_row.id,
@@ -1394,116 +1026,8 @@ class ImportService:
         )
         self.db.add(event)
 
-    async def _auto_create_sku_mappings(
-        self,
-        supplier_id: UUID,
-        import_batch_id: UUID,
-    ) -> Dict:
-        """
-        Auto-create SKU mappings for supplier items from import batch.
-
-        For each supplier_item without a confirmed mapping:
-        1. Find or create NormalizedSKU based on flower_type + variety
-        2. Create SKUMapping with status='confirmed'
-
-        Args:
-            supplier_id: Supplier UUID
-            import_batch_id: Import batch UUID
-
-        Returns:
-            Dict with counts: skus_created, mappings_created, skipped
-        """
-        from decimal import Decimal
-
-        result = {
-            "skus_created": 0,
-            "mappings_created": 0,
-            "skipped": 0,
-        }
-
-        # Find supplier items from this batch without confirmed mappings
-        stmt = (
-            select(SupplierItem)
-            .outerjoin(
-                SKUMapping,
-                (SKUMapping.supplier_item_id == SupplierItem.id)
-                & (SKUMapping.status == "confirmed"),
-            )
-            .where(
-                SupplierItem.supplier_id == supplier_id,
-                SupplierItem.last_import_batch_id == import_batch_id,
-                SKUMapping.id.is_(None),  # No confirmed mapping
-            )
-        )
-        items_result = await self.db.execute(stmt)
-        supplier_items = items_result.scalars().all()
-
-        for item in supplier_items:
-            attrs = item.attributes or {}
-            flower_type = attrs.get("flower_type")
-            variety = attrs.get("variety")
-
-            if not flower_type:
-                # Can't create SKU without flower_type
-                result["skipped"] += 1
-                continue
-
-            # Find or create NormalizedSKU
-            sku_stmt = select(NormalizedSKU).where(
-                NormalizedSKU.product_type == flower_type,
-                NormalizedSKU.variety == variety,
-            )
-            sku_result = await self.db.execute(sku_stmt)
-            sku = sku_result.scalar_one_or_none()
-
-            if not sku:
-                # Create new NormalizedSKU
-                title_parts = [flower_type]
-                if variety:
-                    title_parts.append(variety)
-                title = " ".join(title_parts)
-
-                sku = NormalizedSKU(
-                    product_type=flower_type,
-                    variety=variety,
-                    color=None,
-                    title=title,
-                    meta={},
-                )
-                self.db.add(sku)
-                await self.db.flush()
-                result["skus_created"] += 1
-
-            # Create confirmed mapping (with savepoint for race condition safety)
-            mapping = SKUMapping(
-                supplier_item_id=item.id,
-                normalized_sku_id=sku.id,
-                method="rule",
-                confidence=Decimal("0.900"),
-                status="confirmed",
-            )
-            try:
-                async with self.db.begin_nested():
-                    self.db.add(mapping)
-                    await self.db.flush()
-                result["mappings_created"] += 1
-            except IntegrityError:
-                result["skipped"] += 1
-
-        await self.db.flush()
-        return result
-
     async def get_import_summary(self, import_batch_id: UUID) -> Optional[Dict]:
-        """
-        Get import summary with counts.
-
-        Args:
-            import_batch_id: Import batch UUID
-
-        Returns:
-            Summary dict or None if not found
-        """
-        # Get import batch
+        """Get import summary with counts."""
         result = await self.db.execute(
             select(ImportBatch).where(ImportBatch.id == import_batch_id)
         )
@@ -1512,26 +1036,16 @@ class ImportService:
         if not batch:
             return None
 
-        # Count raw rows
         raw_rows_count = await self.db.scalar(
             select(func.count(RawRow.id)).where(RawRow.import_batch_id == import_batch_id)
         )
 
-        # Count supplier items
-        supplier_items_count = await self.db.scalar(
-            select(func.count(SupplierItem.id)).where(
-                SupplierItem.last_import_batch_id == import_batch_id
+        products_count = await self.db.scalar(
+            select(func.count(Product.id)).where(
+                Product.import_batch_id == import_batch_id
             )
         )
 
-        # Count offer candidates
-        offer_candidates_count = await self.db.scalar(
-            select(func.count(OfferCandidate.id)).where(
-                OfferCandidate.import_batch_id == import_batch_id
-            )
-        )
-
-        # Count parse events
         parse_events_count = await self.db.scalar(
             select(func.count(ParseEvent.id))
             .join(ParseRun)
@@ -1542,7 +1056,6 @@ class ImportService:
             "batch_id": batch.id,
             "status": batch.status,
             "raw_rows_count": raw_rows_count or 0,
-            "supplier_items_count": supplier_items_count or 0,
-            "offer_candidates_count": offer_candidates_count or 0,
+            "products_count": products_count or 0,
             "parse_events_count": parse_events_count or 0,
         }

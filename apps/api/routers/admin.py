@@ -1614,7 +1614,7 @@ async def reparse_import_batch(
     logger.info(
         "reparse_completed",
         batch_id=str(import_batch_id),
-        items_count=summary.supplier_items_count if summary else 0,
+        products_count=summary.get("products_count", 0) if summary else 0,
     )
 
     if not summary:
