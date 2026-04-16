@@ -68,6 +68,41 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 
+async def _deactivate_offers_for_items(db: AsyncSession, item_ids: list[UUID]) -> int:
+    """Deactivate published offers linked to given supplier_items via sku_mappings.
+
+    Returns the number of deactivated offers.
+    """
+    from apps.api.models.normalized import SKUMapping, Offer
+
+    # Find (supplier_id, normalized_sku_id) pairs through sku_mappings
+    mapping_result = await db.execute(
+        select(SupplierItem.supplier_id, SKUMapping.normalized_sku_id)
+        .join(SKUMapping, SKUMapping.supplier_item_id == SupplierItem.id)
+        .where(SupplierItem.id.in_(item_ids))
+    )
+    pairs = mapping_result.all()
+    if not pairs:
+        return 0
+
+    # Deactivate matching offers
+    from sqlalchemy import update, tuple_
+    result = await db.execute(
+        update(Offer)
+        .where(
+            tuple_(Offer.supplier_id, Offer.normalized_sku_id).in_(
+                [(p.supplier_id, p.normalized_sku_id) for p in pairs]
+            ),
+            Offer.is_active == True,  # noqa: E712
+        )
+        .values(is_active=False)
+    )
+    count = result.rowcount
+    if count > 0:
+        logger.info("offers_deactivated", count=count, item_ids=[str(i) for i in item_ids])
+    return count
+
+
 # Pydantic schemas
 class SupplierCreate(BaseModel):
     """Schema for creating a supplier."""
@@ -2096,12 +2131,28 @@ async def delete_offer_candidate(
 
     # Delete the candidate
     await db.delete(candidate)
+
+    # Check if parent item has any remaining variants
+    remaining = await db.execute(
+        select(func.count()).select_from(OfferCandidate)
+        .where(OfferCandidate.supplier_item_id == supplier_item_id)
+        .where(OfferCandidate.id != candidate_id)
+    )
+    remaining_count = remaining.scalar() or 0
+
+    # If no variants left, deactivate offers for the parent item
+    offers_deactivated = 0
+    if remaining_count == 0:
+        offers_deactivated = await _deactivate_offers_for_items(db, [supplier_item_id])
+
     await db.commit()
 
     logger.info(
         "offer_candidate_deleted",
         candidate_id=str(deleted_id),
         supplier_item_id=str(supplier_item_id),
+        remaining_variants=remaining_count,
+        offers_deactivated=offers_deactivated,
     )
 
     return VariantDeleteResponse(
@@ -2156,12 +2207,16 @@ async def delete_supplier_item(
     item.status = "deleted"
     item.deleted_at = datetime.utcnow()
 
+    # Deactivate published offers linked to this item
+    deactivated = await _deactivate_offers_for_items(db, [item_id])
+
     await db.commit()
 
     logger.info(
         "supplier_item_deleted",
         item_id=str(item_id),
         supplier_id=str(item.supplier_id),
+        offers_deactivated=deactivated,
     )
 
     return ItemActionResponse(
@@ -2190,12 +2245,16 @@ async def hide_supplier_item(
 
     item.status = "hidden"
 
+    # Deactivate published offers linked to this item
+    deactivated = await _deactivate_offers_for_items(db, [item_id])
+
     await db.commit()
 
     logger.info(
         "supplier_item_hidden",
         item_id=str(item_id),
         supplier_id=str(item.supplier_id),
+        offers_deactivated=deactivated,
     )
 
     return ItemActionResponse(
@@ -2223,12 +2282,37 @@ async def restore_supplier_item(
     item.status = "active"
     item.deleted_at = None
 
+    # Reactivate offers linked to this item
+    from apps.api.models.normalized import SKUMapping, Offer
+    from sqlalchemy import update as sa_update, tuple_
+
+    mapping_result = await db.execute(
+        select(SupplierItem.supplier_id, SKUMapping.normalized_sku_id)
+        .join(SKUMapping, SKUMapping.supplier_item_id == SupplierItem.id)
+        .where(SupplierItem.id == item_id)
+    )
+    pairs = mapping_result.all()
+    reactivated = 0
+    if pairs:
+        res = await db.execute(
+            sa_update(Offer)
+            .where(
+                tuple_(Offer.supplier_id, Offer.normalized_sku_id).in_(
+                    [(p.supplier_id, p.normalized_sku_id) for p in pairs]
+                ),
+                Offer.is_active == False,  # noqa: E712
+            )
+            .values(is_active=True)
+        )
+        reactivated = res.rowcount
+
     await db.commit()
 
     logger.info(
         "supplier_item_restored",
         item_id=str(item_id),
         supplier_id=str(item.supplier_id),
+        offers_reactivated=reactivated,
     )
 
     return ItemActionResponse(
@@ -2512,6 +2596,9 @@ async def bulk_delete_supplier_items(
         .values(status="deleted", deleted_at=datetime.utcnow())
     )
 
+    # Deactivate published offers
+    await _deactivate_offers_for_items(db, list(request.item_ids))
+
     await db.commit()
 
     affected = result.rowcount
@@ -2545,6 +2632,9 @@ async def bulk_hide_supplier_items(
         .values(status="hidden")
     )
 
+    # Deactivate published offers
+    await _deactivate_offers_for_items(db, list(request.item_ids))
+
     await db.commit()
 
     affected = result.rowcount
@@ -2570,13 +2660,33 @@ async def bulk_restore_supplier_items(
     """
     Bulk restore supplier items (set to active).
     """
-    from sqlalchemy import update
+    from sqlalchemy import update, tuple_
+    from apps.api.models.normalized import SKUMapping, Offer
 
     result = await db.execute(
         update(SupplierItem)
         .where(SupplierItem.id.in_(request.item_ids))
         .values(status="active", deleted_at=None)
     )
+
+    # Reactivate offers linked to these items
+    mapping_result = await db.execute(
+        select(SupplierItem.supplier_id, SKUMapping.normalized_sku_id)
+        .join(SKUMapping, SKUMapping.supplier_item_id == SupplierItem.id)
+        .where(SupplierItem.id.in_(request.item_ids))
+    )
+    pairs = mapping_result.all()
+    if pairs:
+        await db.execute(
+            update(Offer)
+            .where(
+                tuple_(Offer.supplier_id, Offer.normalized_sku_id).in_(
+                    [(p.supplier_id, p.normalized_sku_id) for p in pairs]
+                ),
+                Offer.is_active == False,  # noqa: E712
+            )
+            .values(is_active=True)
+        )
 
     await db.commit()
 
