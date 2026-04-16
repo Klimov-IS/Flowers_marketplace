@@ -32,6 +32,7 @@ export interface Offer {
   // Enriched from supplier_item attributes
   origin_country: string | null;
   colors: string[];
+  photo_url: string | null;
 }
 
 export interface OffersResponse {

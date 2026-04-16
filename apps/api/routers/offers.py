@@ -70,6 +70,7 @@ class OfferDetail(BaseModel):
     # Enriched from supplier_item attributes
     origin_country: str | None = None
     colors: list[str] = []
+    photo_url: str | None = None
 
     class Config:
         from_attributes = True
@@ -230,19 +231,17 @@ async def list_offers(
     result = await db.execute(query)
     offers = result.scalars().all()
 
-    # Get supplier_item attributes for enrichment
-    # Build a map of (supplier_id, normalized_sku_id) -> attributes
-    supplier_item_attrs: dict[tuple, dict] = {}
+    # Get supplier_item attributes + photo for enrichment
+    # Build a map of (supplier_id, normalized_sku_id) -> {attributes, photo_url}
+    supplier_item_extras: dict[tuple, dict] = {}
     if offers:
-        # Get all unique (supplier_id, normalized_sku_id) pairs
-        offer_keys = [(o.supplier_id, o.normalized_sku_id) for o in offers]
-
         # Query supplier_items through sku_mappings
         attrs_query = (
             select(
                 SupplierItem.supplier_id,
                 SKUMapping.normalized_sku_id,
                 SupplierItem.attributes,
+                SupplierItem.photo_url,
             )
             .join(SKUMapping, SKUMapping.supplier_item_id == SupplierItem.id)
             .where(SKUMapping.status == MappingStatus.CONFIRMED.value)
@@ -251,8 +250,11 @@ async def list_offers(
 
         for row in attrs_result:
             key = (row.supplier_id, row.normalized_sku_id)
-            if key not in supplier_item_attrs:
-                supplier_item_attrs[key] = row.attributes or {}
+            if key not in supplier_item_extras:
+                supplier_item_extras[key] = {
+                    "attributes": row.attributes or {},
+                    "photo_url": row.photo_url,
+                }
 
     # Build response
     offer_details = []
@@ -260,12 +262,14 @@ async def list_offers(
         # Use display_title if available, fallback to sku.title
         title = offer.display_title or offer.normalized_sku.title
 
-        # Get enriched attributes from supplier_item
-        attrs = supplier_item_attrs.get((offer.supplier_id, offer.normalized_sku_id), {})
+        # Get enriched attributes + photo from supplier_item
+        extras = supplier_item_extras.get((offer.supplier_id, offer.normalized_sku_id), {})
+        attrs = extras.get("attributes", {})
         origin_country = attrs.get("origin_country")
         colors = attrs.get("colors", [])
         if isinstance(colors, str):
             colors = [colors]
+        photo_url = extras.get("photo_url")
 
         offer_details.append(
             OfferDetail(
@@ -296,6 +300,7 @@ async def list_offers(
                 published_at=offer.published_at,
                 origin_country=origin_country,
                 colors=colors,
+                photo_url=photo_url,
             )
         )
 

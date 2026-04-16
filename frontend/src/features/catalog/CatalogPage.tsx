@@ -16,10 +16,19 @@ import {
 import { addToCart } from '../buyer/cartSlice';
 import { useDebounce } from '../../hooks/useDebounce';
 import FilterSidebar, { MobileFilterDrawer } from './components/FilterSidebar';
-import { getFlowerImage, getDefaultFlowerImage } from '../../utils/flowerImages';
+import { getFlowerImage } from '../../utils/flowerImages';
 import { formatTier } from '../../utils/catalogFormatters';
 import type { OffersResponse, ProductFilters } from '../../types/product';
 import type { AppDispatch } from '../../app/store';
+
+function resolvePhotoUrl(url: string): string {
+  const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+  let resolved = url;
+  if (basePath && url.startsWith('/uploads')) {
+    resolved = basePath + url;
+  }
+  return resolved;
+}
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -516,12 +525,12 @@ export default function CatalogPage() {
                       <div className="relative overflow-hidden">
                         <div className="aspect-[4/5] bg-gray-100 overflow-hidden flex items-end justify-center">
                           <img
-                            src={getFlowerImage(offer.sku.product_type)}
+                            src={offer.photo_url ? resolvePhotoUrl(offer.photo_url) : getFlowerImage(offer.sku.product_type)}
                             alt={offer.display_title || offer.sku.title}
-                            className="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105"
+                            className={`transition-transform duration-300 group-hover:scale-105 ${offer.photo_url ? 'w-full h-full object-cover' : 'max-w-full max-h-full object-contain'}`}
                             loading="lazy"
                             onError={(e) => {
-                              (e.target as HTMLImageElement).src = getDefaultFlowerImage();
+                              (e.target as HTMLImageElement).src = getFlowerImage(offer.sku.product_type);
                             }}
                           />
                         </div>
