@@ -60,8 +60,9 @@ export default function AssortmentTab({ supplierId }: AssortmentTabProps) {
     q: debouncedSearch || undefined,
     page,
     per_page: perPage,
-    status: statusFilter !== 'all' ? [statusFilter] : undefined,
     ...filterParams,
+    // Status dropdown overrides column filter
+    ...(statusFilter !== 'all' ? { status: [statusFilter] } : {}),
     sort_by: sort.field || undefined,
     sort_dir: sort.direction || undefined,
   });
