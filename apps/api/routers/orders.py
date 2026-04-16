@@ -25,7 +25,8 @@ logger = get_logger(__name__)
 class OrderItemCreate(BaseModel):
     """Schema for order item in create request."""
 
-    offer_id: UUID
+    offer_id: UUID | None = None  # Legacy (offers-based flow)
+    product_id: UUID | None = None  # New (products-based flow)
     quantity: int
     notes: str | None = None
 
@@ -51,8 +52,9 @@ class OrderItemResponse(BaseModel):
     """Schema for order item response."""
 
     id: UUID
-    offer_id: UUID
-    normalized_sku_id: UUID
+    offer_id: UUID | None = None
+    normalized_sku_id: UUID | None = None
+    product_id: UUID | None = None
     product_name: str | None = None
     quantity: int
     unit_price: Decimal
@@ -121,10 +123,18 @@ class OrderListResponse(BaseModel):
 
 
 async def _enrich_order_items(db: AsyncSession, order: Order) -> None:
-    """Load offer relationship for each item and set product_name."""
+    """Load relationships for each item and set product_name."""
+    from apps.api.models.product import Product
+
     for item in order.items:
-        await db.refresh(item, ["offer"])
-        item.product_name = item.offer.display_title if item.offer and item.offer.display_title else None
+        if item.product_id:
+            await db.refresh(item, ["product"])
+            item.product_name = item.product.title if item.product else None
+        elif item.offer_id:
+            await db.refresh(item, ["offer"])
+            item.product_name = item.offer.display_title if item.offer and item.offer.display_title else None
+        else:
+            item.product_name = None
 
 
 # Endpoints
@@ -154,17 +164,29 @@ async def create_order(
     order_service = OrderService(db)
 
     try:
-        # Convert Pydantic models to dicts
         items_data = [item.model_dump() for item in order_data.items]
 
-        order = await order_service.create_order(
-            buyer_id=current_user.id,
-            items=items_data,
-            delivery_address=order_data.delivery_address,
-            delivery_date=order_data.delivery_date,
-            delivery_type=order_data.delivery_type,
-            notes=order_data.notes,
-        )
+        # Route to product-based or offer-based flow
+        use_products = any(item.get("product_id") for item in items_data)
+
+        if use_products:
+            order = await order_service.create_order_from_products(
+                buyer_id=current_user.id,
+                items=items_data,
+                delivery_address=order_data.delivery_address,
+                delivery_date=order_data.delivery_date,
+                delivery_type=order_data.delivery_type,
+                notes=order_data.notes,
+            )
+        else:
+            order = await order_service.create_order(
+                buyer_id=current_user.id,
+                items=items_data,
+                delivery_address=order_data.delivery_address,
+                delivery_date=order_data.delivery_date,
+                delivery_type=order_data.delivery_type,
+                notes=order_data.notes,
+            )
 
         await db.commit()
         await db.refresh(order, ["items", "buyer", "supplier"])
@@ -282,7 +304,8 @@ async def get_order(
 class ValidateCartRequest(BaseModel):
     """Schema for cart validation."""
 
-    offer_ids: List[UUID]
+    offer_ids: List[UUID] = []
+    product_ids: List[UUID] = []
 
 
 class ValidateCartResponse(BaseModel):
@@ -297,7 +320,25 @@ async def validate_cart(
     data: ValidateCartRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Check which offer_ids are still active."""
+    """Check which offer_ids/product_ids are still active."""
+    from apps.api.models.product import Product
+
+    # Product-based validation (new)
+    if data.product_ids:
+        if not data.product_ids:
+            return ValidateCartResponse(valid=[], invalid=[])
+        result = await db.execute(
+            select(Product.id).where(
+                Product.id.in_(data.product_ids),
+                Product.is_active == True,
+            )
+        )
+        active_ids = {row[0] for row in result.all()}
+        valid = [pid for pid in data.product_ids if pid in active_ids]
+        invalid = [pid for pid in data.product_ids if pid not in active_ids]
+        return ValidateCartResponse(valid=valid, invalid=invalid)
+
+    # Legacy offer-based validation
     if not data.offer_ids:
         return ValidateCartResponse(valid=[], invalid=[])
 

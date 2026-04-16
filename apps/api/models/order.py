@@ -55,11 +55,11 @@ class OrderItem(Base, UUIDMixin):
     order_id: Mapped[UUID] = mapped_column(
         ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    offer_id: Mapped[UUID] = mapped_column(
-        ForeignKey("offers.id"), nullable=False, index=True
+    offer_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("offers.id"), nullable=True, index=True
     )
-    normalized_sku_id: Mapped[UUID] = mapped_column(
-        ForeignKey("normalized_skus.id"), nullable=False
+    normalized_sku_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("normalized_skus.id"), nullable=True
     )
     product_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True
@@ -75,6 +75,6 @@ class OrderItem(Base, UUIDMixin):
 
     # Relationships
     order: Mapped["Order"] = relationship("Order", back_populates="items")
-    offer: Mapped["Offer"] = relationship("Offer")
-    normalized_sku: Mapped["NormalizedSKU"] = relationship("NormalizedSKU")
+    offer: Mapped["Offer | None"] = relationship("Offer")
+    normalized_sku: Mapped["NormalizedSKU | None"] = relationship("NormalizedSKU")
     product: Mapped["Product | None"] = relationship("Product")

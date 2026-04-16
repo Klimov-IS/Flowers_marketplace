@@ -17,6 +17,7 @@ from apps.api.models import (
     OrderItem,
     Supplier,
 )
+from apps.api.models.product import Product
 
 logger = structlog.get_logger()
 
@@ -463,3 +464,120 @@ class OrderService:
 
         log.info("order.metrics.complete", metrics=metrics)
         return metrics
+
+    async def create_order_from_products(
+        self,
+        buyer_id: UUID,
+        items: List[Dict],
+        delivery_address: str | None = None,
+        delivery_date: date | None = None,
+        delivery_type: str | None = None,
+        notes: str | None = None,
+    ) -> Order:
+        """Create order from product_ids (new flow).
+
+        Args:
+            buyer_id: Buyer UUID
+            items: List of dicts with product_id and quantity
+        """
+        log = logger.bind(buyer_id=str(buyer_id))
+        log.info("order.create_from_products.start", items_count=len(items))
+
+        # Validate buyer
+        result = await self.db.execute(select(Buyer).where(Buyer.id == buyer_id))
+        buyer = result.scalar_one_or_none()
+        if not buyer:
+            raise ValueError(f"Buyer not found: {buyer_id}")
+        if buyer.status != "active":
+            raise ValueError(f"Buyer is not active: {buyer.status}")
+
+        if not items:
+            raise ValueError("Order must have at least one item")
+
+        product_ids = [item["product_id"] for item in items]
+
+        # Fetch products
+        result = await self.db.execute(
+            select(Product).where(Product.id.in_(product_ids))
+        )
+        products = result.scalars().all()
+
+        if len(products) != len(product_ids):
+            found = {p.id for p in products}
+            missing = set(product_ids) - found
+            raise ValueError(f"Products not found: {missing}")
+
+        inactive = [p.id for p in products if not p.is_active]
+        if inactive:
+            raise ValueError(f"Products not active: {inactive}")
+
+        # Single supplier constraint
+        supplier_ids = {p.supplier_id for p in products}
+        if len(supplier_ids) != 1:
+            raise ValueError(
+                f"All items must be from the same supplier. Found: {len(supplier_ids)} suppliers"
+            )
+
+        supplier_id = supplier_ids.pop()
+        result = await self.db.execute(select(Supplier).where(Supplier.id == supplier_id))
+        supplier = result.scalar_one_or_none()
+        if not supplier or supplier.status != "active":
+            raise ValueError(f"Supplier not found or not active: {supplier_id}")
+
+        product_map = {p.id: p for p in products}
+
+        total_amount = Decimal("0")
+        order_items_data = []
+
+        for item in items:
+            product_id = item["product_id"]
+            quantity = item["quantity"]
+            if quantity <= 0:
+                raise ValueError(f"Quantity must be positive for product {product_id}")
+
+            product = product_map[product_id]
+            unit_price = product.price
+            total_price = unit_price * quantity
+            total_amount += total_price
+
+            order_items_data.append({
+                "product_id": product_id,
+                "product": product,
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "total_price": total_price,
+                "notes": item.get("notes"),
+            })
+
+        order = Order(
+            buyer_id=buyer_id,
+            supplier_id=supplier_id,
+            status="pending",
+            total_amount=total_amount,
+            currency=products[0].currency,
+            delivery_address=delivery_address,
+            delivery_date=delivery_date,
+            delivery_type=delivery_type or "delivery",
+            notes=notes,
+        )
+        self.db.add(order)
+        await self.db.flush()
+
+        for item_data in order_items_data:
+            product = item_data["product"]
+            order_item = OrderItem(
+                order_id=order.id,
+                offer_id=product.legacy_offer_id,  # None for new products
+                normalized_sku_id=None,
+                product_id=item_data["product_id"],
+                quantity=item_data["quantity"],
+                unit_price=item_data["unit_price"],
+                total_price=item_data["total_price"],
+                notes=item_data.get("notes"),
+            )
+            self.db.add(order_item)
+
+        await self.db.flush()
+        await self.db.refresh(order, ["items", "buyer", "supplier"])
+        log.info("order.create_from_products.complete", order_id=str(order.id))
+        return order

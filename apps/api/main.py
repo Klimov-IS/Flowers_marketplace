@@ -14,6 +14,7 @@ from apps.api.config import settings
 from apps.api.logging_config import get_logger, setup_logging
 from apps.api.routers import (
     admin,
+    admin_products,
     auth,
     buyers,
     catalog,
@@ -22,6 +23,7 @@ from apps.api.routers import (
     normalization,
     offers,
     orders,
+    products,
     publish,
     skus,
     supplier_orders,
@@ -136,7 +138,9 @@ app.include_router(publish.router, prefix="/admin/publish", tags=["publish"], de
 app.include_router(buyers.router, tags=["buyers"])  # Buyer management (has own auth)
 app.include_router(orders.router, tags=["orders"])  # Retail order endpoints
 app.include_router(supplier_orders.router, prefix="/admin", tags=["supplier-orders"], dependencies=_supplier_auth)
-app.include_router(offers.router, tags=["offers"])  # No prefix - public endpoint
+app.include_router(offers.router, tags=["offers"])  # No prefix - public endpoint (legacy)
+app.include_router(products.router, tags=["products"])  # New public catalog
+app.include_router(admin_products.router, prefix="/admin", tags=["admin-products"], dependencies=_supplier_auth)
 app.include_router(catalog.router, prefix="/admin/catalog", tags=["catalog"], dependencies=_supplier_auth)
 app.include_router(telegram.router)  # Internal Telegram bot API (has own token auth)
 
