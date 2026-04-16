@@ -807,26 +807,20 @@ async def get_flat_items(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
-    # Get the latest published import batch for this supplier
-    # to only show offer_candidates from the most recent import
-    latest_batch_sql = text("""
-        SELECT id FROM import_batches
-        WHERE supplier_id = :supplier_id AND status = 'published'
-        ORDER BY imported_at DESC
-        LIMIT 1
-    """)
-    latest_batch_result = await db.execute(latest_batch_sql, {"supplier_id": supplier_id})
-    latest_batch_row = latest_batch_result.first()
-    latest_batch_id = latest_batch_row.id if latest_batch_row else None
-
     # Build dynamic WHERE clause
     where_clauses = ["si.supplier_id = :supplier_id"]
     params = {"supplier_id": supplier_id}
 
-    # Only show offer_candidates from the latest import batch OR manually created (import_batch_id IS NULL)
-    if latest_batch_id:
-        where_clauses.append("(oc.import_batch_id = :latest_batch_id OR oc.import_batch_id IS NULL)")
-        params["latest_batch_id"] = latest_batch_id
+    # Show offer_candidates from each item's latest batch OR manually created (NULL batch).
+    # This ensures ALL items are visible (not just those from the single latest global batch),
+    # so users can manage and delete items that still have active offers.
+    where_clauses.append("""(oc.import_batch_id IS NULL OR oc.import_batch_id = (
+        SELECT oc_latest.import_batch_id FROM offer_candidates oc_latest
+        JOIN import_batches ib_latest ON ib_latest.id = oc_latest.import_batch_id
+        WHERE oc_latest.supplier_item_id = oc.supplier_item_id
+        ORDER BY ib_latest.imported_at DESC
+        LIMIT 1
+    ))""")
 
     # Status filter
     if status:
@@ -1060,20 +1054,6 @@ async def get_assortment_metrics(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
-    # Get the latest published import batch
-    latest_batch_sql = text("""
-        SELECT id FROM import_batches
-        WHERE supplier_id = :supplier_id AND status = 'published'
-        ORDER BY imported_at DESC
-        LIMIT 1
-    """)
-    latest_batch_result = await db.execute(latest_batch_sql, {"supplier_id": supplier_id})
-    latest_batch_row = latest_batch_result.first()
-    latest_batch_id = latest_batch_row.id if latest_batch_row else None
-
-    if not latest_batch_id:
-        return AssortmentMetricsResponse()
-
     metrics_sql = text("""
         SELECT
             COUNT(*) as total_items,
@@ -1097,13 +1077,18 @@ async def get_assortment_metrics(
         FROM offer_candidates oc
         JOIN supplier_items si ON oc.supplier_item_id = si.id
         WHERE si.supplier_id = :supplier_id
-          AND (oc.import_batch_id = :latest_batch_id OR oc.import_batch_id IS NULL)
+          AND (oc.import_batch_id IS NULL OR oc.import_batch_id = (
+              SELECT oc_latest.import_batch_id FROM offer_candidates oc_latest
+              JOIN import_batches ib_latest ON ib_latest.id = oc_latest.import_batch_id
+              WHERE oc_latest.supplier_item_id = oc.supplier_item_id
+              ORDER BY ib_latest.imported_at DESC
+              LIMIT 1
+          ))
           AND si.status = ANY(:status_list)
     """)
 
     result = await db.execute(metrics_sql, {
         "supplier_id": supplier_id,
-        "latest_batch_id": latest_batch_id,
         "status_list": ["active", "hidden"],
     })
     row = result.first()
