@@ -33,6 +33,9 @@ VITE_BASE_PATH=/flower/ VITE_API_BASE_URL=/flower/api npm run build
 cp -r public/images dist/
 cd ..
 
+# Ensure uploads directory exists
+mkdir -p uploads/photos
+
 # Restart services
 echo "Restarting services..."
 sudo systemctl daemon-reload
@@ -41,7 +44,9 @@ sudo systemctl enable flower-api
 sudo systemctl restart flower-bot
 sudo systemctl enable flower-bot
 
-# Reload nginx
+# Sync nginx config from repo
+echo "Updating nginx config..."
+sudo cp infra/nginx-wb-reputation.conf /etc/nginx/sites-available/wb-reputation
 sudo nginx -t && sudo systemctl reload nginx
 
 echo "=== DEPLOY COMPLETE ==="
