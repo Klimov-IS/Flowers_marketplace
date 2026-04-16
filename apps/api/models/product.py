@@ -29,9 +29,9 @@ class Product(Base, UUIDMixin, TimestampMixin):
     )
 
     # Display
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
     flower_type: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
-    variety: Mapped[str | None] = mapped_column(String(150), nullable=True, index=True)
+    variety: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
 
     # Attributes
     length_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
