@@ -20,15 +20,12 @@ from apps.api.routers import (
     catalog,
     dictionary,
     health,
-    normalization,
-    offers,
     orders,
     products,
-    publish,
-    skus,
     supplier_orders,
     telegram,
 )
+# Deprecated routers removed: offers, skus, normalization, publish
 
 # Setup logging
 setup_logging()
@@ -132,14 +129,10 @@ app.include_router(health.router, tags=["health"])
 app.include_router(auth.router)  # /auth/* - authentication endpoints
 app.include_router(admin.router, prefix="/admin", tags=["admin"], dependencies=_supplier_auth)
 app.include_router(dictionary.router, prefix="/admin/dictionary", tags=["dictionary"], dependencies=_supplier_auth)
-app.include_router(skus.router, prefix="/admin/skus", tags=["skus"], dependencies=_supplier_auth)
-app.include_router(normalization.router, prefix="/admin/normalization", tags=["normalization"], dependencies=_supplier_auth)
-app.include_router(publish.router, prefix="/admin/publish", tags=["publish"], dependencies=_supplier_auth)
 app.include_router(buyers.router, tags=["buyers"])  # Buyer management (has own auth)
 app.include_router(orders.router, tags=["orders"])  # Retail order endpoints
 app.include_router(supplier_orders.router, prefix="/admin", tags=["supplier-orders"], dependencies=_supplier_auth)
-app.include_router(offers.router, tags=["offers"])  # No prefix - public endpoint (legacy)
-app.include_router(products.router, tags=["products"])  # New public catalog
+app.include_router(products.router, tags=["products"])  # Public catalog
 app.include_router(admin_products.router, prefix="/admin", tags=["admin-products"], dependencies=_supplier_auth)
 app.include_router(catalog.router, prefix="/admin/catalog", tags=["catalog"], dependencies=_supplier_auth)
 app.include_router(telegram.router)  # Internal Telegram bot API (has own token auth)
