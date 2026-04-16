@@ -61,6 +61,9 @@ class OrderItem(Base, UUIDMixin):
     normalized_sku_id: Mapped[UUID] = mapped_column(
         ForeignKey("normalized_skus.id"), nullable=False
     )
+    product_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(
         Numeric(precision=10, scale=2), nullable=False
@@ -74,3 +77,4 @@ class OrderItem(Base, UUIDMixin):
     order: Mapped["Order"] = relationship("Order", back_populates="items")
     offer: Mapped["Offer"] = relationship("Offer")
     normalized_sku: Mapped["NormalizedSKU"] = relationship("NormalizedSKU")
+    product: Mapped["Product | None"] = relationship("Product")

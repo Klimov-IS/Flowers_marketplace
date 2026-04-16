@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from apps.api.models.geo import City
     from apps.api.models.normalized import Offer
     from apps.api.models.order import Order
+    from apps.api.models.product import Product
 
 
 class SupplierStatus(str, Enum):
@@ -60,3 +61,4 @@ class Supplier(Base, UUIDMixin, TimestampMixin):
     city: Mapped["City | None"] = relationship("City", back_populates="suppliers")
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="supplier")
     offers: Mapped[list["Offer"]] = relationship("Offer", back_populates="supplier")
+    products: Mapped[list["Product"]] = relationship("Product", back_populates="supplier")
